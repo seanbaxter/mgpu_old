@@ -1,0 +1,17 @@
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/574/trunk/b40c/segmented_scan/downsweep
+END
+cta.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/574/trunk/b40c/segmented_scan/downsweep/cta.cuh
+END
+kernel.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/svn/!svn/ver/568/trunk/b40c/segmented_scan/downsweep/kernel.cuh
+END

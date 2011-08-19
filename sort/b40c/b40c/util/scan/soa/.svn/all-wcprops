@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/!svn/ver/569/trunk/b40c/util/scan/soa
+END
+serial_soa_scan.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 62
+/svn/!svn/ver/556/trunk/b40c/util/scan/soa/serial_soa_scan.cuh
+END
+cooperative_soa_scan.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/569/trunk/b40c/util/scan/soa/cooperative_soa_scan.cuh
+END
+warp_soa_scan.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/568/trunk/b40c/util/scan/soa/warp_soa_scan.cuh
+END

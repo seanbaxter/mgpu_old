@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/581/trunk/b40c/graph/bfs/microbench/expand_serial
+END
+cta.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/581/trunk/b40c/graph/bfs/microbench/expand_serial/cta.cuh
+END
+kernel_policy.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 81
+/svn/!svn/ver/581/trunk/b40c/graph/bfs/microbench/expand_serial/kernel_policy.cuh
+END
+kernel.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/!svn/ver/581/trunk/b40c/graph/bfs/microbench/expand_serial/kernel.cuh
+END

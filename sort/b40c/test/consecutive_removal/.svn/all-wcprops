@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/svn/!svn/ver/575/trunk/test/consecutive_removal
+END
+test_consecutive_removal.cu
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/svn/!svn/ver/558/trunk/test/consecutive_removal/test_consecutive_removal.cu
+END
+test_consecutive_removal.h
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/svn/!svn/ver/558/trunk/test/consecutive_removal/test_consecutive_removal.h
+END
+Makefile
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/575/trunk/test/consecutive_removal/Makefile
+END

@@ -1,0 +1,41 @@
+K 25
+svn:wc:ra_dav:version-url
+V 38
+/svn/!svn/ver/555/trunk/test/reduction
+END
+test_reduction.cu
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/555/trunk/test/reduction/test_reduction.cu
+END
+test_reduction.h
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/555/trunk/test/reduction/test_reduction.h
+END
+compare_reduction.cu
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/555/trunk/test/reduction/compare_reduction.cu
+END
+simple_reduction.cu
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/555/trunk/test/reduction/simple_reduction.cu
+END
+tune_reduction.cu
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/!svn/ver/547/trunk/test/reduction/tune_reduction.cu
+END
+Makefile
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/svn/!svn/ver/534/trunk/test/reduction/Makefile
+END

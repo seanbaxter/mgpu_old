@@ -1,0 +1,19 @@
+LIBRARY	"mgpusort"
+EXPORTS
+	sortStatusString
+	
+	sortCreateEngine
+	sortLoadKernel
+	sortIncEngine
+	sortReleaseEngine
+	
+	sortCreateData
+	sortDestroyData
+	sortAllocData
+	sortFreeData
+	
+	sortArray
+	sortArrayEx
+	sortHost
+	sortDevice
+	

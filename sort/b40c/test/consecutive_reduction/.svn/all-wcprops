@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/575/trunk/test/consecutive_reduction
+END
+compare_consecutive_reduction.cu
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/svn/!svn/ver/568/trunk/test/consecutive_reduction/compare_consecutive_reduction.cu
+END
+test_consecutive_reduction.h
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/svn/!svn/ver/568/trunk/test/consecutive_reduction/test_consecutive_reduction.h
+END
+test_consecutive_reduction.cu
+K 25
+svn:wc:ra_dav:version-url
+V 80
+/svn/!svn/ver/575/trunk/test/consecutive_reduction/test_consecutive_reduction.cu
+END
+Makefile
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/575/trunk/test/consecutive_reduction/Makefile
+END

@@ -1,0 +1,58 @@
+10
+
+dir
+604
+http://back40computing.googlecode.com/svn/trunk/b40c
+http://back40computing.googlecode.com/svn
+
+
+
+2011-07-12T14:33:11.414552Z
+604
+duane.merrill
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+f28d7702-48ea-1802-4fdf-2413024927d0
+
+segmented_scan
+dir
+
+graph
+dir
+
+consecutive_reduction
+dir
+
+scan
+dir
+
+partition
+dir
+
+copy
+dir
+
+consecutive_removal
+dir
+
+reduction
+dir
+
+util
+dir
+
+radix_sort
+dir
+
