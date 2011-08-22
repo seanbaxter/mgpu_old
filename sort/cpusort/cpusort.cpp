@@ -40,20 +40,20 @@ void Sort1Pass(uint* keys, uint bit, uint numBits, size_t count) {
 	// Iterate over the keys again, and add their relative offsets to the
 	// excScan offset corresponding to their bucket. In the GPU version, 
 	// this work is accomplished with the histogram and sort passes.
-	std::vector<uint> scatter(count);
 	std::vector<uint> sorted(count);
 	for(size_t i(0); i < count; ++i) {
 		uint key = mask & (keys[i]>> bit);
 
-		// Retrieve and increment the running count of keys in this bucket.
+		// Retrieve and running count of keys in this bucket.
 		uint rel = counts[key];
-		++counts[key];
 
 		// Add the exclusive scan of total key counts with the relative offset
 		// to get the scatter offset.
-		uint offset = excScan[key] + rel;
-		scatter[i] = offset;
-		sorted[offset] = keys[i];
+		uint scatter = excScan[key] + rel;
+		sorted[scatter] = keys[i];
+
+		// Increment the running count.
+		counts[key] = rel + 1;
 	}
 
 	// Copy the sorted array into keys and return.
@@ -75,7 +75,9 @@ void Sort1(uint* keys, size_t count) {
 // relative offsets. The blocks are then processed independently once again,
 // and scatter like the sequential version.
 
-void Sort2Block1(const uint* keys, uint bit, uint numBits, size_t count, 
+// Returns the count for each radix digit in the block. Corresponds to the count
+// kernel in the CUDA implementation.
+void Sort2CountPass(const uint* keys, uint bit, uint numBits, size_t count, 
 	uint* counts) {
 
 	// Compute the histogram of radix digits for this block only. This
@@ -87,8 +89,11 @@ void Sort2Block1(const uint* keys, uint bit, uint numBits, size_t count,
 	}
 }
 
-void Sort2Block2(const uint* keys, uint* sorted, uint bit, uint numBits,
-	size_t count, const uint* bucketOffsets) {
+// Adds the relative offsets for each digit within the block with the global
+// offset of each digit and scatters. Corresponds to the sort kernel in the
+// CUDA implementation.
+void Sort2SortPass(const uint* keys, uint* sorted, uint bit, uint numBits,
+	size_t count, const uint* digitOffsets) {
 
 	// Compute the histogram of radix digits for this block only. This
 	// corresponds exactly to the count kernel in the GPU implementation.
@@ -97,14 +102,21 @@ void Sort2Block2(const uint* keys, uint* sorted, uint bit, uint numBits,
 	std::vector<uint> counts(numBuckets);
 
 	for(size_t i(0); i < count; ++i) {
+		// Extract the key 
 		uint key = mask & (keys[i]>> bit);
-		uint scatter = counts[key] + bucketOffsets[key];
-		++counts[key];
+		uint rel = counts[key];
+		uint scatter = rel + digitOffsets[key];
 
-		sorted[scatter] = keys[i];		
+		sorted[scatter] = keys[i];
+
+		counts[key] = 1 + rel;
 	}
 }
 
+// Runs a three-phase histogram sort.
+// 1) For each block, compute that block's digit count into its own section of
+// countsBlock. This part can be done in parallel.
+// 2a) 
 void Sort2Pass(uint* keys, uint bit, uint numBits, size_t count, 
 	uint blockSize) {
 
@@ -116,7 +128,7 @@ void Sort2Pass(uint* keys, uint bit, uint numBits, size_t count,
 	// executed in parallel.
 	for(uint block(0); block < numBlocks; ++block) {
 		uint index = block * blockSize;
-		Sort2Block1(keys + index, bit, numBits, 
+		Sort2CountPass(keys + index, bit, numBits, 
 			std::min(count - index, blockSize),
 			&countsBlock[block * numBuckets]);
 	}
@@ -152,7 +164,7 @@ void Sort2Pass(uint* keys, uint bit, uint numBits, size_t count,
 				excScanBlock[block * numBuckets + i];
 		
 		uint index = block * blockSize;
-		Sort2Block2(keys + index, &sorted[0], bit, numBits, 
+		Sort2SortPass(keys + index, &sorted[0], bit, numBits, 
 			std::min(count - index, blockSize), &bucketOffsets[0]);
 	}
 
@@ -175,6 +187,10 @@ int main(int argc, char** argv) {
 	for(size_t i(0); i < NumElements; ++i)
 		keys[i] = r(mt19937);
 
-	Sort1(&keys[0], NumElements);
+	Sort2(&keys[0], NumElements, 64);
+	for(int i(0); i < NumElements; ++i) {
+		printf("0x%08x ", keys[i]);
+		if((3 & i) == 3) printf("\n");
+	}
 }
 

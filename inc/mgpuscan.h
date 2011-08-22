@@ -22,5 +22,6 @@ scanStatus_t scanCreateEngine(const char* cubin, scanEngine_t* engine);
 scanStatus_t scanDestroyEngine(scanEngine_t engine);
 
 scanStatus_t scanArray(scanEngine_t engine, CUdeviceptr data, int count,
-	bool inclusive); 
+	unsigned int* scanTotal, bool inclusive); 
+
 

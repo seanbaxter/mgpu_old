@@ -327,7 +327,7 @@ void COUNT_FUNC(const uint* keys_global, uint bit, uint numElements,
 
 	if(tid < NUM_WARPS * NUM_CHANNELS) {
 		// write to a segment-aligned block.
-		const uint WriteSpacing = RoundUp(NUM_WARPS * NUM_CHANNELS, WARP_SIZE);
+		const uint WriteSpacing = ROUND_UP(NUM_WARPS * NUM_CHANNELS, WARP_SIZE);
 		counts_global[block * WriteSpacing + tid] = counts_shared[tid];
 	}
 }

@@ -15,7 +15,8 @@ int main(int argc, char** argv) {
 	result = CreateCuContext(device, 0, &context);
 
 	scanEngine_t engine;
-	scanStatus_t status = scanCreateEngine("globalscan.cubin", &engine);
+	scanStatus_t status = scanCreateEngine("../mgpuscan/globalscan.cubin", 
+		&engine);
 
 	int count = 1<< 19;
 	std::vector<int> vals(count);
@@ -27,7 +28,8 @@ int main(int argc, char** argv) {
 	DeviceMemPtr deviceMem;
 	result = context->MemAlloc(vals, &deviceMem);
 
-	status = scanArray(engine, deviceMem->Handle(), count, false);
+	uint scanTotal;
+	status = scanArray(engine, deviceMem->Handle(), count, &scanTotal, false);
 	std::vector<int> deviceScan;
 	deviceMem->ToHost(deviceScan);
 

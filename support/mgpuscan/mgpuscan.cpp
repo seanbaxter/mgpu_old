@@ -37,7 +37,8 @@ scanStatus_t scanCreateEngine(const char* cubin, scanEngine_t* engine) {
 	// Launch 4 256-thread blocks per SM.
 	e->numBlocks = 4 * numSMs;
 
-	result = e->context->MemAlloc<uint>(e->numBlocks, &e->blockScanMem);
+	// Allocate a uint per thread block plus a uint for the scan total.
+	result = e->context->MemAlloc<uint>(e->numBlocks + 1, &e->blockScanMem);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_DEVICE_ALLOC_FAILED;
 
 	result = e->context->MemAlloc<uint2>(e->numBlocks, &e->rangeMem);
@@ -52,7 +53,7 @@ scanStatus_t scanDestroyEngine(scanEngine_t engine) {
 }
 
 scanStatus_t scanArray(scanEngine_t engine, CUdeviceptr data, int count,
-	bool inclusive) {
+	uint* scanTotal, bool inclusive) {
 
 	if(!engine) return SCAN_STATUS_INVALID_VALUE;
 
@@ -82,6 +83,12 @@ scanStatus_t scanArray(scanEngine_t engine, CUdeviceptr data, int count,
 	callStack.Push(engine->blockScanMem, numBlocks);
 	result = engine->pass[1]->Launch(1, 1, callStack);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
+
+	// Retrieve the scan total from the end of blockScanMem.
+	if(scanTotal)
+		engine->blockScanMem->ToHostByte(scanTotal, sizeof(uint) * numBlocks,
+			sizeof(uint));
+
 
 	callStack.Reset();
 	callStack.Push(data, engine->rangeMem, engine->blockScanMem, 

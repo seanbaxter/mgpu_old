@@ -30,13 +30,6 @@
 
 typedef unsigned int uint;
 
-DEVICE uint DivUp(uint x, uint y) {
-	return (x + y - 1) / y;
-}
-
-DEVICE uint RoundUp(uint x, uint y) {
-	return ~(y - 1) & (x + y - 1);
-}
 
 // retrieve numBits bits from x starting at bit
 DEVICE uint bfe(uint x, uint bit, uint numBits) {

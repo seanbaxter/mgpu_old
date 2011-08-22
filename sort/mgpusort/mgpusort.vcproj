@@ -179,11 +179,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\mgpusort.def"
+				RelativePath=".\mgpusort.cpp"
 				>
 			</File>
 			<File
-				RelativePath=".\sortdll.cpp"
+				RelativePath=".\mgpusort.def"
 				>
 			</File>
 			<File

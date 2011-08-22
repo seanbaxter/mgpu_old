@@ -129,8 +129,11 @@ extern "C" __global__ void GlobalScanPass2(uint* blockTotals_global,
 	if(tid < numBlocks) x = blockTotals_global[tid];
 
 	// Subtract the value from the inclusive scan for the exclusive scan.
-	uint scan = Multiscan(tid, x).x - x;
-	if(tid < numBlocks) blockTotals_global[tid] = scan;
+	uint2 scan = Multiscan(tid, x);
+	if(tid < numBlocks) blockTotals_global[tid] = scan.x - x;
+	
+	// Have the first thread in the block set the scan total.
+	if(!tid) blockTotals_global[numBlocks] = scan.y;
 }
 
 

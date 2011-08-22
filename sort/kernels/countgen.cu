@@ -13,21 +13,21 @@
 // 2 6 2 6 2 6 2 6 2 6 2 6 2 6 2 6  2 6 2 6 2 6 2 6 2 6 2 6 2 6 2 6 
 // 3 7 3 7 3 7 3 7 3 7 3 7 3 7 3 7  3 7 3 7 3 7 3 7 3 7 3 7 3 7 3 7
 
-// Reduce counts adds the bottom halves and top halves and re-orders:
+// GatherSums adds the bottom halves and top halves and re-orders:
 // 0 2 4 6 0 2 4 6 0 2 4 6 0 2 4 6  0 2 4 6 0 2 4 6 0 2 4 6 0 2 4 6 
 // 1 3 5 7 1 3 5 7 1 3 5 7 1 3 5 7  1 3 5 7 1 3 5 7 1 3 5 7 1 3 5 7
 
-// The number of rows has been cut in half, so the following call will
-// add and re-order for this:
+// The number of rows has been cut in half, so the following call will add and
+// re-order for this:
 // 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7  0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
 
-// A final parallel scan pass gets the final counter values, as there
-// is no more sequential scan opportunity to exploit.
+// A final parallel scan pass gets the final counter values, as there is no more
+// sequential scan opportunity to exploit.
 
-// The warp is cut into halves - threads in the first half add the top rows
-// of the right half columns into their own top halevs, and write at 2 * lane.
-// Threads in the right half add the bottom rows of the left half into their
-// own bottom halves, and write at 2 * lane + 1 - WARP_SIZE.
+// The warp is cut into halves - threads in the first half add the top rows of 
+// the right half columns into their own top halevs, and write at 2 * lane.
+// Threads in the right half add the bottom rows of the left half into their own
+// bottom halves, and write at 2 * lane + 1 - WARP_SIZE.
 
 // mode behavior:
 // 0 - simply add the values together and store in the target column
@@ -35,14 +35,15 @@
 //		low values at i and the high values at i + halfHeight
 // 2 - unpack the values into ushorts, then add and store like in 1.
 
-// If valuesPerThread >= 128, uncomment this. This define is safe when NUM_VALUES <= 2048.
+// If valuesPerThread >= 128, uncomment this. This define is safe when
+// NUM_VALUES <= 2048.
 #define GATHER_SUM_MODE 1		// change to 2 for larger blocks.
 
-// Have to use a template here because of bugs in the compiler. We could allocate an
-// array of registers on the count kernel side and pass them by "address" to GatherSums,
-// but then NVCC generates dynamic local stores, instead of static shared stores.
-// With the template parameter we can allocate temporary register storage inside 
-// GatherSums.
+// Have to use a template here because of bugs in the compiler. We could 
+// allocate an array of registers on the count kernel side and pass them by
+// "address" to GatherSums, but then NVCC generates dynamic local stores, 
+// instead of static shared stores. With the template parameter we can allocate
+// temporary register storage inside GatherSums.
 
 template<int ColHeight>
 DEVICE2 void GatherSums(uint lane, int mode, volatile uint* data) {
@@ -53,10 +54,10 @@ DEVICE2 void GatherSums(uint lane, int mode, volatile uint* data) {
 	uint halfHeight = ColHeight / 2;
 	uint odd = 1 & lane;
 
-	// Swap the two column pointers to resolve bank conflicts. Even columns
-	// read from the left source first, and odd columns read from the right
-	// source first. All these support terms need only be computed once per
-	// lane. The compiler should eliminate all the redundant expressions.
+	// Swap the two column pointers to resolve bank conflicts. Even columns read
+	// from the left source first, and odd columns read from the right source 
+	// first. All these support terms need only be computed once per lane. The 
+	// compiler should eliminate all the redundant expressions.
 	volatile uint* source1 = data + sourceLane;
 	volatile uint* source2 = source1 + WARP_SIZE / 2;
 	volatile uint* sourceA = odd ? source2 : source1;

@@ -12,6 +12,28 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "testsort", "testsort\testso
 		{95A4DD2F-0AFE-4AFB-83AE-8F6050EC2386} = {95A4DD2F-0AFE-4AFB-83AE-8F6050EC2386}
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kernels", "kernels", "{E3BE9707-9669-417B-98B5-912EF4599D84}"
+	ProjectSection(SolutionItems) = preProject
+		kernels\common.cu = kernels\common.cu
+		kernels\count.cu = kernels\count.cu
+		kernels\countgen.cu = kernels\countgen.cu
+		kernels\hist1.cu = kernels\hist1.cu
+		kernels\hist2.cu = kernels\hist2.cu
+		kernels\hist3.cu = kernels\hist3.cu
+		kernels\hist3_64.cu = kernels\hist3_64.cu
+		kernels\histgen.cu = kernels\histgen.cu
+		kernels\histogram.cu = kernels\histogram.cu
+		kernels\params.cu = kernels\params.cu
+		kernels\sort.cu = kernels\sort.cu
+		kernels\sortcommon.cu = kernels\sortcommon.cu
+		kernels\sortgen.cu = kernels\sortgen.cu
+		kernels\sortgeneric.cu = kernels\sortgeneric.cu
+		kernels\sortscan1.cu = kernels\sortscan1.cu
+		kernels\sortscan2.cu = kernels\sortscan2.cu
+		kernels\sortscan3.cu = kernels\sortscan3.cu
+		kernels\sortstore.cu = kernels\sortstore.cu
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -31,7 +53,6 @@ Global
 		{98C06C17-3CB2-495D-A6C6-85783B8D20B5}.Release|Win32.ActiveCfg = Release|Win32
 		{98C06C17-3CB2-495D-A6C6-85783B8D20B5}.Release|Win32.Build.0 = Release|Win32
 		{69A0D03C-DF15-4793-91D3-74FF091DB92F}.Debug|Win32.ActiveCfg = Debug|Win32
-		{69A0D03C-DF15-4793-91D3-74FF091DB92F}.Debug|Win32.Build.0 = Debug|Win32
 		{69A0D03C-DF15-4793-91D3-74FF091DB92F}.Release|Win32.ActiveCfg = Release|Win32
 		{69A0D03C-DF15-4793-91D3-74FF091DB92F}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
