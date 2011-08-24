@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
 
 	// Create some test data in an std::vector. Generate uints with 32 random
 	// bits.
-	int NumElements = 1000;
+	int NumElements = 128;
 	std::tr1::uniform_int<uint> r(0, 0xffffffff);
 
 	std::vector<uint> hostData(NumElements);
@@ -89,6 +89,5 @@ int main(int argc, char** argv) {
 	// Print the unsorted values to screen.
 	printf("\n\n%d sorted values:\n", NumElements);
 	PrintArrayToScreen(&hostData[0], NumElements);
-
 }
 

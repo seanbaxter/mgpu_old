@@ -26,7 +26,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 Modern GPU library code for CUDA
-(C) 2011 Sean Baxter (lightborn@gmail.com)
+(C) 2011 Sean Baxter (email sean at moderngpu)
 http://www.moderngpu.com/
 
 Code and website currently under construction. Check back for a large online

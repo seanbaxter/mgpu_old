@@ -253,7 +253,12 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c) {
 	return true;
 }
 
-bool BenchmarkBitPass(CuContext* context, sortEngine_t engine) {
+// BenchmarkBitPass benchmarks the individual bit pass speeds. The results are
+// returned in a simple format that can be parsed by tablegen to create optimal
+// multi-pass algorithms for sorting keys of any size.
+bool BenchmarkBitPass(CuContext* context, sortEngine_t engine, 
+	const char* tableSuffix) {
+
 	printf("Normalized throughputs for all MGPU simple output kernels.\n");
 	for(int valueCount(0); valueCount <= 1; ++valueCount) {
 		printf("Num values = %d\n", valueCount);
