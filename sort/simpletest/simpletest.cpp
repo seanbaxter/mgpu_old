@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 		hostData[i] = r(mt19937);
 
 	// Print the unsorted values to screen.
-	printf("%d unsorted values:\n");
+	printf("%d unsorted values:\n", NumElements);
 	PrintArrayToScreen(&hostData[0], NumElements);
 
 	// Let MGPU allocate device memory for the source and destination buffers.
@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
 	sortDestroyData(deviceData);
 
 	// Print the unsorted values to screen.
-	printf("\n\n%d sorted values:\n");
+	printf("\n\n%d sorted values:\n", NumElements);
 	PrintArrayToScreen(&hostData[0], NumElements);
 
 }
