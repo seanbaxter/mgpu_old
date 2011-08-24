@@ -42,6 +42,7 @@
 #include "sortstore.cu"
 #include "sortgeneric.cu"
 
+#ifndef SCATTER_INPLACE
 
 #define DETECT_SORTED
 
@@ -75,8 +76,9 @@
 #define SCATTER_LIST_NAME RadixSort_ee_6_scatter_shared
 #include "sort.cu"
 
-
 #undef DETECT_SORTED
+
+#endif // SCATTER_INPLACE
 
 #define NUM_BITS 1
 #define SORT_FUNC RadixSort_1

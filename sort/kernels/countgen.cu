@@ -2,7 +2,6 @@
 #define NUM_WARPS NUM_COUNT_WARPS
 
 #include "common.cu"
-#include <sm_11_atomic_functions.h>		// atomicAdd()
 
 #define NUM_THREADS (NUM_WARPS * WARP_SIZE)
 

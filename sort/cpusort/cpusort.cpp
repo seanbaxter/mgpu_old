@@ -114,9 +114,6 @@ void Sort2SortPass(const uint* keys, uint* sorted, uint bit, uint numBits,
 }
 
 // Runs a three-phase histogram sort.
-// 1) For each block, compute that block's digit count into its own section of
-// countsBlock. This part can be done in parallel.
-// 2a) 
 void Sort2Pass(uint* keys, uint bit, uint numBits, size_t count, 
 	uint blockSize) {
 
@@ -124,6 +121,8 @@ void Sort2Pass(uint* keys, uint bit, uint numBits, size_t count,
 	uint numBlocks = (count + blockSize - 1) / blockSize;
 	std::vector<uint> countsBlock(numBuckets * numBlocks);
 
+	////////////////////////////////////////////////////////////////////////////
+	// PARALLEL PART - MAY BE RUN IN A THREAD POOL
 	// Compute the radix digit histogram for each block. This operation can be
 	// executed in parallel.
 	for(uint block(0); block < numBlocks; ++block) {
@@ -133,39 +132,48 @@ void Sort2Pass(uint* keys, uint bit, uint numBits, size_t count,
 			&countsBlock[block * numBuckets]);
 	}
 
-	// This reduction pass sums counts together and begins computing the key
-	// relative offsets. This corresponds to hist1 and hist2.
-	std::vector<uint> countsGlobal(numBuckets),
-		excScanBlock(numBlocks * numBuckets);
+	////////////////////////////////////////////////////////////////////////////
+	// REDUCTION PART - EXECUTES SEQUENTIALLY
+	// Add up the countsBlock into countsGlobal. This corresponds to histogram
+	// pass 1 of the device code.
+	std::vector<uint> countsGlobal(numBuckets);
 	for(uint block(0); block < numBlocks; ++block) {
-		for(uint i(0); i < numBuckets; ++i) {
-			uint index = block * numBuckets + i;
-			excScanBlock[index] = countsGlobal[i];
-			countsGlobal[i] += countsBlock[index];
+		uint blockOffset = block * numBuckets;
+		for(uint digit(0); digit < numBuckets; ++digit)
+			countsGlobal[digit] += countsBlock[blockOffset + digit];
+	}
+
+	// Run an exclusive scan over the digit counts for the entire sequence.
+	// This corresponds to histogram pass 2 of the device code.
+	std::vector<uint> excScanGlobal(numBuckets);
+	for(uint digit(1); digit < numBuckets; ++digit)
+		excScanGlobal[digit] = excScanGlobal[digit - 1] + 
+			countsGlobal[digit - 1];
+
+	// Run an exclusive scan over the counts for each block, and add in the
+	// excScanGlobal. Corresponds to histogram pass 3 of the device code.
+	std::vector<uint> excScanBlock(numBuckets * numBlocks);
+	std::vector<uint> digitOffsets(numBuckets);
+	for(uint block(0); block < numBlocks; ++block) {
+		uint blockOffset = block * numBuckets;
+		for(uint digit(0); digit < numBuckets; ++digit) {
+			excScanBlock[blockOffset + digit] = 
+				digitOffsets[digit] + excScanGlobal[digit];
+			digitOffsets[digit] += countsBlock[blockOffset + digit];
 		}
 	}
 
-	// Compute the exclusive scan of the count totals. This corresponds to 
-	// hist2.
-	std::vector<uint> excScanGlobal(numBuckets);
-	uint prev = 0;
-	for(uint i(0); i < numBuckets; ++i) {
-		excScanGlobal[i] = prev;
-		prev += countsGlobal[i];
-	}
+	////////////////////////////////////////////////////////////////////////////
+	// PARALLEL PART - MAY BE RUN IN A THREAD POOL
+	// Allocate temporary storage for the sorted keys and call Sort2SortPass
+	// with the per-block offsets for each radix digit.
 
-	// Sort each block in parallel. Add excScanGlobal to excScanBlock for each
-	// bucket, then scatter the values to the target array.
 	std::vector<uint> sorted(count);
 	for(uint block(0); block < numBlocks; ++block) {
-		std::vector<uint> bucketOffsets(numBuckets);
-		for(uint i(0); i < numBuckets; ++i)
-			bucketOffsets[i] = excScanGlobal[i] +
-				excScanBlock[block * numBuckets + i];
-		
-		uint index = block * blockSize;
-		Sort2SortPass(keys + index, &sorted[0], bit, numBits, 
-			std::min(count - index, blockSize), &bucketOffsets[0]);
+		uint keyIndex = block * blockSize;
+		Sort2SortPass(keys + keyIndex, &sorted[0], bit, numBits, 
+			std::min(count - keyIndex, blockSize), 
+			&excScanBlock[block * numBuckets]);
 	}
 
 	// Copy the sorted array into keys and return.
@@ -190,7 +198,7 @@ int main(int argc, char** argv) {
 	Sort2(&keys[0], NumElements, 64);
 	for(int i(0); i < NumElements; ++i) {
 		printf("0x%08x ", keys[i]);
-		if((3 & i) == 3) printf("\n");
+		 printf("\n");
 	}
 }
 

@@ -136,7 +136,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="cuda.lib"
 				LinkIncremental="1"
-				ModuleDefinitionFile="mgpusort.lib"
+				ModuleDefinitionFile="mgpusort.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"

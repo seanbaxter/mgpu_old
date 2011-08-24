@@ -54,21 +54,26 @@ __shared__ volatile uint scatterList_shared[SCATTER_STRUCT_SIZE];
 extern "C" __global__ __launch_bounds__(NUM_THREADS, NUM_BLOCKS)
 
 #ifdef VALUE_TYPE_NONE
-void SORT_FUNC(const uint* keys_global_in, const uint* bucketCodes_global,
-	uint bit, uint* keys_global_out) {
+void SORT_FUNC(const uint* keys_global_in, uint firstBlock,
+	const uint* bucketCodes_global, uint bit, uint* keys_global_out) {
 
 #elif defined(VALUE_TYPE_INDEX)
-void SORT_FUNC(const uint* keys_global_in, const uint* bucketCodes_global,
-	uint bit, uint* keys_global_out, uint* index_global_out) {
+void SORT_FUNC(const uint* keys_global_in, uint firstBlock,
+	const uint* bucketCodes_global, uint bit, uint* keys_global_out,
+	uint* index_global_out) {
 
 #elif defined(VALUE_TYPE_SINGLE)
-void SORT_FUNC(const uint* keys_global_in, const uint* bucketCodes_global,
-	uint bit, uint* keys_global_out, 
+void SORT_FUNC(const uint* keys_global_in, uint firstBlock,
+	const uint* bucketCodes_global, uint bit, uint* keys_global_out, 
 	const uint* value1_global_in, uint* value1_global_out) {
 
 #elif defined(VALUE_TYPE_MULTI)
-void SORT_FUNC(const uint* keys_global_in, const uint* bucketCodes_global,
-	uint bit, uint* keys_global_out, uint numValueStreams,
+	// For VALUE_TYPE_MULTI, we have to pass each of the pointers in as 
+	// individual arguments, not as arrays, or CUDA generates much worse code,
+	// full of unified addressing instructions.
+void SORT_FUNC(const uint* keys_global_in, uint firstBlock,
+	const uint* bucketCodes_global, uint bit, uint* keys_global_out,
+	uint numValueStreams,
 //	const uint* values_global_in[6], uint* values_global_out[6]
 	const uint* values1_global_in, const uint* values2_global_in,
 	const uint* values3_global_in, const uint* values4_global_in,
@@ -83,12 +88,13 @@ void SORT_FUNC(const uint* keys_global_in, const uint* bucketCodes_global,
 	// LOAD FUSED KEYS AND REINDEX INTO SHIFTED ORDER
 
 	uint tid = threadIdx.x;
-	uint block = blockIdx.x;
+	uint block = blockIdx.x + firstBlock;
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
 
 	uint* debug_global_out = keys_global_out + NUM_VALUES * block;
 
+#ifndef SCATTER_INPLACE
 #if SCATTER_STRUCT_SIZE <= NUM_THREADS
 	// Load the scatter (transaction) structure.
 	uint globalStructOffset = SCATTER_STRUCT_SIZE * block;
@@ -106,7 +112,7 @@ void SORT_FUNC(const uint* keys_global_in, const uint* bucketCodes_global,
 				bucketCodes_global[globalStructOffset + listOffset];		
 	}
 #endif
-
+#endif // SCATTER_INPLACE
 	// Load the keys and, if sorting values, create fused keys. Store into 
 	// shared mem with a WARP_SIZE + 1 stride between warp rows, so that loads
 	// into thread order occur without bank conflicts.
@@ -146,10 +152,7 @@ void SORT_FUNC(const uint* keys_global_in, const uint* bucketCodes_global,
 #endif
 	__syncthreads();
 
-#ifndef SCATTER_INPLACE
 	uint isEarlyDetect = *earlyExit_shared;
-#endif
-
 	if(!isEarlyDetect) {
 
 #endif // DETECT_SORTED

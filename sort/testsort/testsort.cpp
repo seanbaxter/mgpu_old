@@ -74,18 +74,22 @@ const int ElementCounts[7] = {
 	10000000,
 	80000000,
 	70000000
-};*/
-const int ElementCounts[7] = {
-	35<< 20,
-	25<<20,
-	16<<20,
-	12<<20,
-	10<<20,
-	8<<20,
-	7<<20
 };
-const int NumIterations = 10;
-const int NumTests = 8;
+const int NumIterations = 15;
+const int NumTests = 5;
+*/
+
+const int ElementCounts[7] = {
+	500000,
+	500000,
+	500000,
+	500000,
+	500000,
+	500000,
+	500000
+};
+const int NumIterations = 100;
+const int NumTests = 5;
 
 #endif
 
@@ -251,7 +255,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c) {
 
 bool BenchmarkBitPass(CuContext* context, sortEngine_t engine) {
 	printf("Normalized throughputs for all MGPU simple output kernels.\n");
-	for(int valueCount(0); valueCount <= 6; ++valueCount) {
+	for(int valueCount(0); valueCount <= 1; ++valueCount) {
 		printf("Num values = %d\n", valueCount);
 		for(int numThreads(128); numThreads <= 256; numThreads *= 2) {
 			printf("Num threads = %d\n", numThreads);
@@ -310,8 +314,8 @@ int main(int argc, char** argv) {
 	// value arrays with MGPU, and compare the results.
 
 	// Test for all value counts.
-//	BenchmarkBitPass(context, engine);
-
+	BenchmarkBitPass(context, engine);
+/*
 	for(int valueCount(0); valueCount <= 1; ++valueCount) {
 		int numElements = ElementCounts[abs(valueCount)];
 		switch(valueCount) {
@@ -320,12 +324,13 @@ int main(int argc, char** argv) {
 			case 1: printf("Sorting keys/single value\n"); break;
 			default: printf("Sorting keys/%d values\n", valueCount); break;
 		}
-		printf("%d elements / %d iterations\n", numElements, NumIterations);
+		printf("%d elements / %d iterations / %d tests.\n", numElements,
+			NumIterations, NumTests);
 
 		// Test for all bit sizes.
-		for(int numBits(20); numBits <= 32; ++numBits) {
+		for(int numBits(1); numBits <= 32; ++numBits) {
 
-			printf("%d bits\t", numBits);
+			printf("%2d bits  ", numBits);
 
 			Throughput mgpu = { 0 }, b40c = { 0 };
 			BenchmarkTerms terms = { 0 };
@@ -338,15 +343,20 @@ int main(int argc, char** argv) {
 			terms.numTests = NumTests;
 			Benchmark(terms, mgpu, b40c);			
 
-			printf("\tMGPU: %8.2lf M/s", mgpu.elementsPerSec / 1.0e6);
+			printf("MGPU:(%8.2lf, %7.2lf) M/s",
+				mgpu.elementsPerSec / 1.0e6,
+				mgpu.normElementsPerSec / 1.0e6);
 			if(b40c.elementsPerSec) {
-				printf("\tB40C: %8.2lf M/s", b40c.elementsPerSec / 1.0e6);
-				printf("\t(%1.3lfx)", mgpu.elementsPerSec / 
+				printf("  B40C:(%8.2lf, %7.2lf) M/s", 
+					b40c.elementsPerSec / 1.0e6, 
+					b40c.normElementsPerSec / 1.0e6);
+				printf("  (%1.3lfx)", mgpu.elementsPerSec / 
 					b40c.elementsPerSec);
 			}
 			printf("\n");
 		}
+		printf("\n");
 	}
-
+*/
 	sortReleaseEngine(engine);
 }

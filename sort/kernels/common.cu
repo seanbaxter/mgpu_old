@@ -24,6 +24,7 @@
 
 #include <device_functions.h>
 #include <vector_functions.h>
+#include <sm_11_atomic_functions.h>		// atomicAdd()
 
 #define DEVICE extern "C" __device__ __forceinline
 #define DEVICE2 __device__ __forceinline

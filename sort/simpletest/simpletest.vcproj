@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="testsort"
-	ProjectGUID="{69A0D03C-DF15-4793-91D3-74FF091DB92F}"
-	RootNamespace="testsort"
+	Name="simpletest"
+	ProjectGUID="{27750B1E-5143-493C-92A1-753096992FF8}"
+	RootNamespace="simpletest"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -14,9 +14,6 @@
 		/>
 	</Platforms>
 	<ToolFiles>
-		<DefaultToolFile
-			FileName="NvCudaRuntimeApi.v4.0.rules"
-		/>
 	</ToolFiles>
 	<Configurations>
 		<Configuration
@@ -31,11 +28,6 @@
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="Cudart Build Rule"
-				Include="../b40c/"
-				Runtime="3"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -68,7 +60,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="$(OutDir)/mgpusort.lib cuda.lib cudart.lib"
+				AdditionalDependencies="$(OutDir)/mgpusort.lib cuda.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -111,11 +103,6 @@
 				Name="VCCustomBuildTool"
 			/>
 			<Tool
-				Name="Cudart Build Rule"
-				Include="../b40c/"
-				Runtime="2"
-			/>
-			<Tool
 				Name="VCXMLDataGeneratorTool"
 			/>
 			<Tool
@@ -146,7 +133,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="cuda.lib cudart.lib"
+				AdditionalDependencies="$(OutDir)/mgpusort.lib cuda.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -190,11 +177,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\mgputest.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\testsort.cpp"
+				RelativePath=".\simpletest.cpp"
 				>
 			</File>
 		</Filter>
@@ -204,11 +187,11 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath=".\benchmark.h"
+				RelativePath="..\..\util\cucpp.h"
 				>
 			</File>
 			<File
-				RelativePath="..\..\util\cucpp.h"
+				RelativePath="..\..\util\util.h"
 				>
 			</File>
 		</Filter>
@@ -218,32 +201,6 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 		</Filter>
-		<File
-			RelativePath=".\b40ctest.cu"
-			>
-			<FileConfiguration
-				Name="Debug|Win32"
-				>
-				<Tool
-					Name="Cudart Build Rule"
-					Arch1="20"
-					Arch2="0"
-				/>
-			</FileConfiguration>
-		</File>
-		<File
-			RelativePath=".\thrusttest.cu"
-			>
-			<FileConfiguration
-				Name="Debug|Win32"
-				>
-				<Tool
-					Name="Cudart Build Rule"
-					Arch1="20"
-					Arch2="0"
-				/>
-			</FileConfiguration>
-		</File>
 	</Files>
 	<Globals>
 	</Globals>

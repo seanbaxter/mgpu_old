@@ -468,36 +468,47 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 			callStack);
 		if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 
+
 		// Run the sort kernel
-		callStack.Reset();
-		callStack.Push(data->keys[0], engine->bucketCodes, firstBit, 
-			data->keys[1]);
-		
-		switch(valueCode) {
-			case 1:		// VALUE_TYPE_INDEX
-				callStack.Push(data->values1[1]); 
-				break;
-			case 2:		// VALUE_TYPE_SINGLE
-				callStack.Push(data->values1[0], data->values1[1]);
-				break;
-			case 3:		// VALUE_TYPE_MULTI
-				callStack.Push(data->valueCount,
-					// Six values_global_in
-					data->values1[0], data->values2[0], data->values3[0],
-					data->values4[0], data->values5[0], data->values6[0],
-					
-					// Six values_global_out
-					data->values1[1], data->values2[1], data->values3[1],
-					data->values4[1], data->values5[1], data->values6[1]);
-				break;
+		// Because the max grid size is only 65535 in any dimension, large
+		// sorts require multiple kernel launche.
+		int MaxGridSize = 65535;
+		int numSortLaunches = DivUp(terms.numSortBlocks, MaxGridSize);
+
+		for(int launch(0); launch < numSortLaunches; ++launch) {
+			int block = MaxGridSize * launch;
+			int numBlocks = std::min(MaxGridSize, terms.numSortBlocks - block);
+
+			callStack.Reset();
+			callStack.Push(data->keys[0], block, engine->bucketCodes, firstBit, 
+				data->keys[1]);
+			
+			switch(valueCode) {
+				case 1:		// VALUE_TYPE_INDEX
+					callStack.Push(data->values1[1]); 
+					break;
+				case 2:		// VALUE_TYPE_SINGLE
+					callStack.Push(data->values1[0], data->values1[1]);
+					break;
+				case 3:		// VALUE_TYPE_MULTI
+					callStack.Push(data->valueCount,
+						// Six values_global_in
+						data->values1[0], data->values2[0], data->values3[0],
+						data->values4[0], data->values5[0], data->values6[0],
+						
+						// Six values_global_out
+						data->values1[1], data->values2[1], data->values3[1],
+						data->values4[1], data->values5[1], data->values6[1]);
+					break;
+			}
+
+			CuFunction* sortFunc = *earlyExitCode ? 
+				sort->eeFunctions[numBits - 1].get() :
+				sort->functions[numBits - 1].get();
+
+			result = sortFunc->Launch(numBlocks, 1, callStack);
+			if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 		}
-
-		CuFunction* sortFunc = *earlyExitCode ? 
-			sort->eeFunctions[numBits - 1].get() :
-			sort->functions[numBits - 1].get();
-
-		result = sortFunc->Launch(terms.numSortBlocks, 1, callStack);
-		if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 
 		// Swap the source and target buffers in the data structure.
 		std::swap(data->keys[0], data->keys[1]);

@@ -55,9 +55,9 @@ int main(int argc, char** argv) {
 			IntPair regBytes = RegBytes(blockSize, numBlocks);
 			double occupancy = 100.0 * (numBlocks * blockSize) / MaxOccupancy;
 			int intsPerThread = regBytes.second / (4 * blockSize);
-			printf("%4d x %d (%6.2f%%): %d regs, %5d bytes (%3d ints/thread) %d\n",
+			printf("%4d x %d (%6.2f%%): %d regs, %5d bytes (%3d ints/thread)\n",
 				blockSize, numBlocks, occupancy, regBytes.first, 
-				regBytes.second, intsPerThread, numBlocks * regBytes.second);
+				regBytes.second, intsPerThread);
 		}
 		printf("\n");
 	}

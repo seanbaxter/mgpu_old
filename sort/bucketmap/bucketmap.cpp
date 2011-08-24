@@ -17,7 +17,7 @@ typedef std::pair<uint, uint> UintPair;
 const uint WARP_SIZE = 32;
 
 // random number generator - make global to prevent re-initialization.
-std::tr1::mt19937 engine;
+std::tr1::mt19937 mt19937;
 
 uint NumTransactions(uint histOffset, uint keyCount) {
 	uint start = ~(WARP_SIZE - 1) & histOffset;
@@ -93,7 +93,7 @@ Pair ComputeTransactionCounts(int numBits, int numValues) {
 	
 	std::vector<int> bucketCounts(numBuckets);
 	for(int i(0); i < numValues; ++i) {
-		keys[i] = r(engine);
+		keys[i] = r(mt19937);
 		++bucketCounts[keys[i]];
 	}
 	std::sort(keys.begin(), keys.end());
@@ -105,7 +105,7 @@ Pair ComputeTransactionCounts(int numBits, int numValues) {
 		gather[i] = lastGather;
 		lastGather += bucketCounts[i];
 
-		scatter[i] = r2(engine);
+		scatter[i] = r2(mt19937);
 	}
 
 	Pair transCountPair = CountTransactions(&keys[0], &gather[0], &scatter[0],
@@ -116,44 +116,13 @@ Pair ComputeTransactionCounts(int numBits, int numValues) {
 
 int main() {
 
+	const int FirstTest = 512;
 	const int NumTests = 3;				// 512, 1024, 2048
 	const int MaxBits = 7;				// 1 - 7 inclusive
-	const int NumValueCounts = 7;		// 0 - 6 inclusive
-	const int NumIters = 30;
+	const int NumIterations = 100;
 
-	double optTransPerWarp[NumTests][MaxBits];
-	double simpleTransPerWarp[NumTests][MaxBits];
-	for(int numValuesLog(0); numValuesLog < NumTests; ++numValuesLog) {
-		int numValues = 512 * (1<< numValuesLog);
-		int numWarps = numValues / WARP_SIZE;
-
-		for(int numBits(1); numBits <= MaxBits; ++numBits) {
-			int maxTrans = 0;
-			double optTotal = 0, simpleTotal = 0;
-
-			for(int i(0); i < NumIters; ++i) {
-				Pair pair = ComputeTransactionCounts(numBits, numValues);
-				optTotal += pair.first;
-				simpleTotal += pair.second;
-
-				maxTrans = std::max(pair.first, maxTrans);
-			}
-			int target = numValues / 32 + (1<< numBits);
-
-			printf("warps = %d   buckets = %3d   target = %3d   "
-				"actual = %3d   delta = %2d\n", 
-				numValues / 32,
-				1<< numBits,
-				target,
-				maxTrans,
-				maxTrans - target);
-
-			optTransPerWarp[numValuesLog][numBits - 1] = 
-				optTotal / (NumIters * numWarps);
-			simpleTransPerWarp[numValuesLog][numBits - 1] = 
-				simpleTotal / (NumIters * numWarps);
-		}
-	}
+	printf("Calculating average transaction behavior for MGPU Sort library.\n");
+	printf("Each test run over %d iterations.\n\n", NumIterations);
 
 	// Display with vals first, then numBits, then block size.
 	for(int vals(0); vals <= 6; ++vals) {
@@ -162,12 +131,19 @@ int main() {
 		for(int numBits(1); numBits <= MaxBits; ++numBits) {
 			printf(" BITS=%d\n", numBits);
 
-			for(int numValuesLog(0); numValuesLog < NumTests; ++numValuesLog) {
-				int numValues = 512 * (1<< numValuesLog);
+			for(int test(0); test < NumTests; ++test) {
+				int numValues = FirstTest<< test;
+				int numWarps = numValues / WARP_SIZE;
 				printf("  VALS=%4d  ", numValues);
 
-				double opt = optTransPerWarp[numValuesLog][numBits - 1];
-				double simple = simpleTransPerWarp[numValuesLog][numBits - 1];
+				double opt = 0, simple = 0;
+				for(int it(0); it < NumIterations; ++it) {
+					Pair pair = ComputeTransactionCounts(numBits, numValues);
+					opt += pair.first;
+					simple += pair.second;
+				}
+				opt /= NumIterations * numWarps;
+				simple /= NumIterations * numWarps;
 
 				double optWrite = (1 + vals) * opt / numBits;
 				double optTotal = ((1 + vals) * (1 + opt) + 1) / numBits;
@@ -184,3 +160,5 @@ int main() {
 		}
 	}
 }
+
+

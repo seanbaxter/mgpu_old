@@ -10,6 +10,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "scantest", "scantest\scante
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "occupancy", "occupancy\occupancy.vcproj", "{2B540600-3FC7-4FEF-A795-E1674DAC6114}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "gemm", "gemm\gemm.vcproj", "{4FF4B3F1-BB68-476E-8819-A23CE1A9A3AB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -28,6 +30,10 @@ Global
 		{2B540600-3FC7-4FEF-A795-E1674DAC6114}.Debug|Win32.Build.0 = Debug|Win32
 		{2B540600-3FC7-4FEF-A795-E1674DAC6114}.Release|Win32.ActiveCfg = Release|Win32
 		{2B540600-3FC7-4FEF-A795-E1674DAC6114}.Release|Win32.Build.0 = Release|Win32
+		{4FF4B3F1-BB68-476E-8819-A23CE1A9A3AB}.Debug|Win32.ActiveCfg = Debug|Win32
+		{4FF4B3F1-BB68-476E-8819-A23CE1A9A3AB}.Debug|Win32.Build.0 = Debug|Win32
+		{4FF4B3F1-BB68-476E-8819-A23CE1A9A3AB}.Release|Win32.ActiveCfg = Release|Win32
+		{4FF4B3F1-BB68-476E-8819-A23CE1A9A3AB}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
