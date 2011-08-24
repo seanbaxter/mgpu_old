@@ -1,7 +1,11 @@
 #pragma once
 
 #ifdef WIN32
+
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif // NOMINMAX
+
 #include <windows.h>
 #define SORTAPI WINAPI
 #else
