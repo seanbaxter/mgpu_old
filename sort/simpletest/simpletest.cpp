@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
 	result = CreateCuContext(device, 0, &context);
 
 	// Initialize the MGPU Sort engine. This is the C interface, but you can 
-	// also us the RAII MgpuSort type in mgpusort.hpp. Pass the directory name
+	// also use the RAII MgpuSort type in mgpusort.hpp. Pass the directory name
 	// that holds the .cubin kernel files. If these aren't already built, use
 	// build_all.bat in /kernels.
 	sortEngine_t engine;
@@ -60,6 +60,12 @@ int main(int argc, char** argv) {
 	// we just want to sort keys, not key-value tuples.
 	sortData_t deviceData;
 	status = sortCreateData(engine, NumElements, 0, &deviceData);
+
+	// These are resetting the default values, but it's good to be sure that we
+	// are sorting over the desired bits in the key. For best performance only
+	// sort over the bits that actually differ.
+	deviceData->firstBit = 0;
+	deviceData->endBit = 32;
 
 	// Copy the host data to the device array. sortData_d::parity indicates
 	// which of the arrays holds the active data. The other array is temp
