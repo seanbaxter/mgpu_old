@@ -83,6 +83,9 @@ int main(int argc, char** argv) {
 	// Free the device arrays.
 	sortDestroyData(deviceData);
 
+	// Free the sort engine
+	sortReleaseEngine(engine);
+
 	// Print the unsorted values to screen.
 	printf("\n\n%d sorted values:\n", NumElements);
 	PrintArrayToScreen(&hostData[0], NumElements);
