@@ -74,6 +74,9 @@ int main(int argc, char** argv) {
 	cuMemcpyDtoH(&hostData[0], deviceData->keys[deviceData->parity],
 		sizeof(uint) * NumElements);
 
+	// Free the device arrays.
+	sortDestroyData(deviceData);
+
 	// Print the unsorted values to screen.
 	printf("\n\n%d sorted values:\n");
 	PrintArrayToScreen(&hostData[0], NumElements);
