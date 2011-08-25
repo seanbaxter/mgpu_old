@@ -230,12 +230,30 @@
 					Arch2="0"
 				/>
 			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|Win32"
+				>
+				<Tool
+					Name="Cudart Build Rule"
+					Arch1="20"
+					Arch2="0"
+				/>
+			</FileConfiguration>
 		</File>
 		<File
 			RelativePath=".\thrusttest.cu"
 			>
 			<FileConfiguration
 				Name="Debug|Win32"
+				>
+				<Tool
+					Name="Cudart Build Rule"
+					Arch1="20"
+					Arch2="0"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|Win32"
 				>
 				<Tool
 					Name="Cudart Build Rule"
