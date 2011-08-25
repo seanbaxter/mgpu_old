@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/graph/bfs
 http://back40computing.googlecode.com/svn
 
 
 
-2011-07-05T12:21:03.774724Z
-601
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -25,6 +25,9 @@ duane.merrill
 
 
 f28d7702-48ea-1802-4fdf-2413024927d0
+
+partition_compact
+dir
 
 problem_type.cuh
 file
@@ -60,13 +63,13 @@ duane.merrill@gmail.com
 
 2857
 
-partition_compact
+compact_expand_atomic
 dir
 
 expand_compact_atomic
 dir
 
-compact_expand_atomic
+compact_atomic
 dir
 
 enactor_two_phase.cuh
@@ -75,10 +78,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-f9ec3c39bc282040a9c61eef7538b1fb
-2011-07-05T12:21:03.774724Z
-601
+2011-08-25T08:01:51.000000Z
+bd665ab43097b13799b63f20d7828da2
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -101,10 +104,75 @@ duane.merrill
 
 
 
-12494
+13945
 
-compact_atomic
-dir
+enactor_contract_expand_gbarrier.cuh
+file
+
+
+
+
+2011-08-25T08:01:51.000000Z
+07affa584d487a113cd3ac4631e6eb12
+2011-08-22T16:17:04.264620Z
+654
+duane.merrill
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+9973
+
+enactor_expand_contract_gbarrier.cuh
+file
+
+
+
+
+2011-08-25T08:01:51.000000Z
+3fa0d886d37e6a4928c121b3bd779bda
+2011-08-22T16:17:04.264620Z
+654
+duane.merrill
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+9977
 
 csr_problem.cuh
 file
@@ -112,10 +180,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-48cb041e19cab44836151cb5d9724940
-2011-06-30T03:29:07.856515Z
-589
+2011-08-25T08:01:51.000000Z
+5c22873b8e9e0f470ae859c97f255da8
+2011-08-08T04:26:53.958713Z
+621
 duane.merrill
 
 
@@ -138,41 +206,7 @@ duane.merrill
 
 
 
-22568
-
-enactor_one_phase.cuh
-file
-
-
-
-
-2011-07-17T17:19:47.000000Z
-40d48574fe3a0b481c88a857e9bd20a0
-2011-07-05T12:21:03.774724Z
-601
-duane.merrill
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-8816
+23636
 
 enactor_multi_gpu.cuh
 file
@@ -180,10 +214,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-07dbd0471a528ce9beb58381ea77c188
-2011-07-05T12:21:03.774724Z
-601
+2011-08-25T08:01:51.000000Z
+5877b594e616ceff8e9361efbe514197
+2011-08-22T15:50:50.748308Z
+653
 duane.merrill
 
 
@@ -206,41 +240,7 @@ duane.merrill
 
 
 
-29706
-
-enactor_one_phase_ec.cuh
-file
-
-
-
-
-2011-07-17T17:19:47.000000Z
-3c24f753a5a0b306d3dbaf5c476ea251
-2011-07-05T06:36:11.258641Z
-597
-duane.merrill
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-8284
+28204
 
 enactor_base.cuh
 file
@@ -276,19 +276,16 @@ duane.merrill@gmail.com
 
 3111
 
-microbench
-dir
-
-enactor_hybrid.cuh
+enactor_contract_expand.cuh
 file
 
 
 
 
-2011-07-17T17:19:47.000000Z
-3b373f5f094888267c54590f43cd0365
-2011-07-05T12:21:03.774724Z
-601
+2011-08-25T08:01:51.000000Z
+892389a27492f455df1f167761185c1c
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -311,10 +308,81 @@ duane.merrill
 
 
 
-17778
+10776
+
+enactor_expand_contract.cuh
+file
+
+
+
+
+2011-08-25T08:01:51.000000Z
+10389d39b1cb3cb7366e4c5d9d83518e
+2011-08-01T05:57:25.938174Z
+611
+duane.merrill
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+9794
+
+microbench
+dir
 
 copy
 dir
+
+enactor_hybrid.cuh
+file
+
+
+
+
+2011-08-25T08:01:51.000000Z
+cbc650a6697552bc1c4bc3161a8e3f60
+2011-08-22T16:17:04.264620Z
+654
+duane.merrill
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+20108
 
 expand_atomic
 dir

@@ -97,6 +97,9 @@ struct CsrProblem
 		SizeT expand_queue_elements;
 		SizeT compact_queue_elements;
 
+		VertexId		*d_multigpu_vqueue;
+		SizeT 			multigpu_vqueue_elements;
+
 		// Vector of valid flags for elements in the frontier queue
 		ValidFlag 		*d_keep;
 
@@ -119,6 +122,8 @@ struct CsrProblem
 			d_keep(NULL),
 			expand_queue_elements(0),
 			compact_queue_elements(0),
+			d_multigpu_vqueue(NULL),
+			multigpu_vqueue_elements(0),
 			nodes(0),
 			edges(0),
 			stream(stream)
@@ -142,6 +147,7 @@ struct CsrProblem
 			if (frontier_queues.d_keys[1]) 		util::B40CPerror(cudaFree(frontier_queues.d_keys[1]), "GpuSlice cudaFree frontier_queues.d_keys[1] failed", __FILE__, __LINE__);
 			if (frontier_queues.d_values[0]) 	util::B40CPerror(cudaFree(frontier_queues.d_values[0]), "GpuSlice cudaFree frontier_queues.d_values[0] failed", __FILE__, __LINE__);
 			if (frontier_queues.d_values[1]) 	util::B40CPerror(cudaFree(frontier_queues.d_values[1]), "GpuSlice cudaFree frontier_queues.d_values[1] failed", __FILE__, __LINE__);
+			if (d_multigpu_vqueue) 				util::B40CPerror(cudaFree(d_multigpu_vqueue), "GpuSlice cudaFree d_multigpu_vqueue failed", __FILE__, __LINE__);
 
 	        // Destroy stream
 			if (stream) {
@@ -601,18 +607,39 @@ struct CsrProblem
 				}
 			}
 
-			// Allocate d_keep if necessary
-			if (!graph_slices[i]->d_keep) {
+			// Allocate multi-gpu structures
+			if (num_gpus > 1) {
 
-				printf("GPU %d keep flags: %lld elements (%lld bytes)\n",
-					graph_slices[i]->gpu,
-					(unsigned long long) graph_slices[i]->expand_queue_elements,
-					(unsigned long long) graph_slices[i]->expand_queue_elements * sizeof(ValidFlag));
+				// Allocate d_keep if necessary
+				if (!graph_slices[i]->d_keep) {
 
-				if (retval = util::B40CPerror(cudaMalloc(
-						(void**) &graph_slices[i]->d_keep,
-						graph_slices[i]->expand_queue_elements * sizeof(ValidFlag)),
-					"CsrProblem cudaMalloc d_keep failed", __FILE__, __LINE__)) break;
+					printf("GPU %d_keep flags: %lld elements (%lld bytes)\n",
+						graph_slices[i]->gpu,
+						(unsigned long long) graph_slices[i]->expand_queue_elements,
+						(unsigned long long) graph_slices[i]->expand_queue_elements * sizeof(ValidFlag));
+
+					if (retval = util::B40CPerror(cudaMalloc(
+							(void**) &graph_slices[i]->d_keep,
+							graph_slices[i]->expand_queue_elements * sizeof(ValidFlag)),
+						"CsrProblem cudaMalloc d_keep failed", __FILE__, __LINE__)) break;
+				}
+
+				// Allocate d_multigpu_vqueue if necessary
+				if (!graph_slices[i]->d_multigpu_vqueue) {
+
+					graph_slices[i]->multigpu_vqueue_elements = graph_slices[i]->nodes * 2;
+
+					printf("GPU %d_multigpu_vqueue: %lld elements (%lld bytes)\n",
+						graph_slices[i]->gpu,
+						(unsigned long long) graph_slices[i]->multigpu_vqueue_elements,
+						(unsigned long long) graph_slices[i]->multigpu_vqueue_elements * sizeof(VertexId));
+
+					if (retval = util::B40CPerror(cudaMalloc(
+							(void**) &graph_slices[i]->d_multigpu_vqueue,
+							graph_slices[i]->multigpu_vqueue_elements * sizeof(VertexId)),
+						"CsrProblem cudaMalloc d_multigpu_vqueue failed", __FILE__, __LINE__)) break;
+
+				}
 			}
 			printf("\n");
 

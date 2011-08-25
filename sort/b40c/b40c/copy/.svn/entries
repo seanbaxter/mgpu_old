@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/copy
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-22T08:13:56.721977Z
-568
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -100,10 +100,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-70a2ff9c154675e25ff03a74554170bd
-2011-06-22T08:13:56.721977Z
-568
+2011-08-25T08:01:51.000000Z
+c0806754d06ca5ef3ad74c2556e74c2c
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -126,7 +126,7 @@ duane.merrill
 
 
 
-9522
+9553
 
 policy.cuh
 file

@@ -310,7 +310,7 @@ struct Cta
 							tile->row_length[LOAD][VEC] = 0;
 						}
 
-						SizeT coop_offset 	= cta->smem_storage.state.warp_comm[warp_id][0] + lane_id;
+						SizeT coop_offset 	= cta->smem_storage.state.warp_comm[warp_id][0];
 						SizeT coop_rank 	= cta->smem_storage.state.warp_comm[warp_id][1] + lane_id;
 						SizeT coop_oob 		= cta->smem_storage.state.warp_comm[warp_id][2];
 
@@ -320,10 +320,11 @@ struct Cta
 						}
 
 						VertexId neighbor_id;
-						while (coop_offset < coop_oob) {
+						while (coop_offset  + B40C_WARP_THREADS(KernelPolicy::CUDA_ARCH) < coop_oob) {
+
 							// Gather
 							util::io::ModifiedLoad<KernelPolicy::COLUMN_READ_MODIFIER>::Ld(
-								neighbor_id, cta->d_column_indices + coop_offset);
+								neighbor_id, cta->d_column_indices + coop_offset + lane_id);
 
 							// Scatter neighbor
 							util::io::ModifiedStore<KernelPolicy::QUEUE_WRITE_MODIFIER>::St(
@@ -339,6 +340,21 @@ struct Cta
 							coop_rank += B40C_WARP_THREADS(KernelPolicy::CUDA_ARCH);
 						}
 
+						if (coop_offset + lane_id < coop_oob) {
+							// Gather
+							util::io::ModifiedLoad<KernelPolicy::COLUMN_READ_MODIFIER>::Ld(
+								neighbor_id, cta->d_column_indices + coop_offset + lane_id);
+
+							// Scatter neighbor
+							util::io::ModifiedStore<KernelPolicy::QUEUE_WRITE_MODIFIER>::St(
+								neighbor_id, cta->d_out + cta->smem_storage.state.coarse_enqueue_offset + coop_rank);
+
+							if (KernelPolicy::MARK_PARENTS) {
+								// Scatter parent
+								util::io::ModifiedStore<KernelPolicy::QUEUE_WRITE_MODIFIER>::St(
+									parent_id, cta->d_parent_out + cta->smem_storage.state.coarse_enqueue_offset + coop_rank);
+							}
+						}
 					}
 
 					// Next vector element

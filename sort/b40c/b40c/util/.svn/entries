@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/util
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-29T20:19:08.703504Z
-585
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -25,74 +25,6 @@ duane.merrill
 
 
 f28d7702-48ea-1802-4fdf-2413024927d0
-
-basic_utils.cuh
-file
-
-
-
-
-2011-07-17T17:19:48.000000Z
-a60464396057b3d3ad023986fd17b567
-2011-06-21T02:26:29.574035Z
-562
-duane.merrill
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-5172
-
-kernel_runtime_stats.cuh
-file
-
-
-
-
-2011-07-17T17:19:48.000000Z
-f2a60ddec82ff546a76b8dbe9a1d4dd7
-2011-06-23T17:41:53.263312Z
-577
-duane.merrill
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-7379
 
 random_bits.cuh
 file
@@ -128,6 +60,74 @@ duane.merrill@gmail.com
 
 2606
 
+kernel_runtime_stats.cuh
+file
+
+
+
+
+2011-07-17T17:19:48.000000Z
+f2a60ddec82ff546a76b8dbe9a1d4dd7
+2011-06-23T17:41:53.263312Z
+577
+duane.merrill
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+7379
+
+basic_utils.cuh
+file
+
+
+
+
+2011-07-17T17:19:48.000000Z
+a60464396057b3d3ad023986fd17b567
+2011-06-21T02:26:29.574035Z
+562
+duane.merrill
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+5172
+
 srts_soa_details.cuh
 file
 
@@ -161,40 +161,6 @@ duane.merrill
 
 
 4561
-
-device_intrinsics.cuh
-file
-
-
-
-
-2011-07-17T17:19:48.000000Z
-d4e3f2aa92e364c55eba8346144041cb
-2011-06-21T02:26:29.574035Z
-562
-duane.merrill
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-5023
 
 ping_pong_storage.cuh
 file
@@ -230,6 +196,43 @@ duane.merrill
 
 3777
 
+device_intrinsics.cuh
+file
+
+
+
+
+2011-08-25T08:01:51.000000Z
+5651d8464b539c1b0e30443d6c1d1e2e
+2011-08-22T04:46:44.629863Z
+650
+duane.merrill
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+5043
+
+scan
+dir
+
 global_barrier.cuh
 file
 
@@ -264,19 +267,16 @@ duane.merrill
 
 4694
 
-scan
-dir
-
 cta_work_distribution.cuh
 file
 
 
 
 
-2011-07-17T17:19:48.000000Z
-6442094f8f01077fe558a6290d056aa3
-2011-06-14T20:12:21.574592Z
-534
+2011-08-25T08:01:51.000000Z
+d9283941d3e19d6b9056fd195ab03035
+2011-08-12T04:09:23.502933Z
+628
 duane.merrill
 
 
@@ -299,7 +299,7 @@ duane.merrill
 
 
 
-5842
+5806
 
 error_utils.cuh
 file
@@ -307,10 +307,10 @@ file
 
 
 
-2011-07-17T17:19:48.000000Z
-fbde92c5474ab362e879a7c2db201028
-2011-06-19T06:25:11.682024Z
-553
+2011-08-25T08:01:51.000000Z
+4b37b36f444ba49f608d021b3b831115
+2011-08-24T14:37:56.767436Z
+658
 duane.merrill
 
 
@@ -333,7 +333,44 @@ duane.merrill
 
 
 
-1525
+1830
+
+reduction
+dir
+
+spine.cuh
+file
+
+
+
+
+2011-08-25T08:01:51.000000Z
+eb18806b00f5aa2036e1bfb9e86712b4
+2011-08-10T01:42:56.111682Z
+623
+duane.merrill
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+5491
 
 operators.cuh
 file
@@ -369,53 +406,16 @@ duane.merrill
 
 1974
 
-spine.cuh
-file
-
-
-
-
-2011-07-17T17:19:48.000000Z
-ca5d604f969670d2009bed2e0b28d49a
-2011-06-29T20:19:08.703504Z
-585
-duane.merrill
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-5483
-
-reduction
-dir
-
 enactor_base.cuh
 file
 
 
 
 
-2011-07-17T17:19:48.000000Z
-bf0b427b925b7b8eabab486dab1678c5
-2011-06-22T08:13:56.721977Z
-568
+2011-08-25T08:01:51.000000Z
+7e19de27eda6d3468a1312aad2792d78
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -438,7 +438,7 @@ duane.merrill
 
 
 
-13461
+13496
 
 vector_types.cuh
 file
@@ -687,11 +687,11 @@ file
 
 
 
-2011-07-17T17:19:48.000000Z
-693b5fe15d138c65f84651c08bcf99b0
-2011-06-08T14:55:12.535729Z
-526
-duane.merrill@gmail.com
+2011-08-25T08:01:51.000000Z
+15ea0f5fb8d78205a0578811d474dbbd
+2011-08-03T05:58:58.000356Z
+615
+duane.merrill
 
 
 
@@ -713,7 +713,7 @@ duane.merrill@gmail.com
 
 
 
-9570
+10105
 
 srts_details.cuh
 file

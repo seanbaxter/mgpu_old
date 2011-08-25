@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 50
-/svn/!svn/ver/575/trunk/b40c/consecutive_reduction
+/svn/!svn/ver/659/trunk/b40c/consecutive_reduction
 END
 soa_scan_operator.cuh
 K 25
@@ -25,7 +25,7 @@ enactor.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 62
-/svn/!svn/ver/568/trunk/b40c/consecutive_reduction/enactor.cuh
+/svn/!svn/ver/659/trunk/b40c/consecutive_reduction/enactor.cuh
 END
 policy.cuh
 K 25

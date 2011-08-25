@@ -31,8 +31,8 @@ const int ElementCounts[7] = {
 	70000000
 };
 const int NumIterations = 15;
-const int NumTests = 5;
-*/
+const int NumTests = 5;*/
+
 
 const int ElementCounts[7] = {
 	500000,

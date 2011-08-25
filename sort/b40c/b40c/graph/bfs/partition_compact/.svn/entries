@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/graph/bfs/partition_compact
 http://back40computing.googlecode.com/svn
 
 
 
-2011-07-05T06:36:11.258641Z
-597
+2011-08-22T15:50:50.748308Z
+653
 duane.merrill
 
 
@@ -38,10 +38,10 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-5a3751c5954f1fd0eeb3e8f64ed87c55
-2011-06-21T07:45:15.593369Z
-566
+2011-08-25T08:01:50.000000Z
+59bfd3bbf00efb6c253156b1c2d9e925
+2011-08-22T15:50:50.748308Z
+653
 duane.merrill
 
 
@@ -64,5 +64,5 @@ duane.merrill
 
 
 
-4894
+4925
 

@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/radix_sort/upsweep
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-21T07:45:15.593369Z
-566
+2011-08-15T18:03:01.749793Z
+647
 duane.merrill
 
 
@@ -32,10 +32,10 @@ file
 
 
 
-2011-07-17T17:19:48.000000Z
-bae04ce6afc7716fbf450196a570f96c
-2011-06-21T07:45:15.593369Z
-566
+2011-08-25T08:01:51.000000Z
+cf30ebd63e9dae8501ee813ec31c03ee
+2011-08-15T18:03:01.749793Z
+647
 duane.merrill
 
 
@@ -58,7 +58,7 @@ duane.merrill
 
 
 
-2098
+2336
 
 cta.cuh
 file

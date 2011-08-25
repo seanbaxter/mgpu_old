@@ -95,6 +95,17 @@ struct Tile
 	//---------------------------------------------------------------------
 
 	/**
+	 * Returns whether or not the key is valid.
+	 *
+	 * To be overloaded.
+	 */
+	template <typename Cta>
+	__device__ __forceinline__ SizeT ValidElements(Cta *cta, const SizeT &guarded_elements)
+	{
+		return guarded_elements;
+	}
+
+	/**
 	 * Returns the bin into which the specified key is to be placed.
 	 *
 	 * To be overloaded
@@ -756,15 +767,163 @@ struct Tile
 	// Partition/scattering specializations
 	//---------------------------------------------------------------------
 
+
+	template <
+		ScatterStrategy SCATTER_STRATEGY,
+		int dummy = 0>
+	struct PartitionTile;
+
+
+
 	/**
 	 * Specialized for two-phase scatter, keys-only
 	 */
 	template <
-		bool TWO_PHASE_SCATTER,
-		bool KEYS_ONLY = KernelPolicy::KEYS_ONLY,
-		int dummy = 0>
+		ScatterStrategy SCATTER_STRATEGY,
+		int dummy>
 	struct PartitionTile
 	{
+		enum {
+			MEM_BANKS 					= 1 << B40C_LOG_MEM_BANKS(__B40C_CUDA_ARCH__),
+			DIGITS_PER_SCATTER_PASS 	= KernelPolicy::WARPS * (B40C_WARP_THREADS(__B40C_CUDA_ARCH__) / (MEM_BANKS)),
+			SCATTER_PASSES 				= KernelPolicy::BINS / DIGITS_PER_SCATTER_PASS,
+		};
+
+		template <typename T>
+		static __device__ __forceinline__ void Nop(T &t) {}
+
+		/**
+		 * Warp based scattering that does not cross alignment boundaries, e.g., for SM1.0-1.1
+		 * coalescing rules
+		 */
+		template <int PASS, int SCATTER_PASSES>
+		struct WarpScatter
+		{
+			template <typename T, void Transform(T&), typename Cta>
+			static __device__ __forceinline__ void ScatterPass(
+				Cta *cta,
+				T *exchange,
+				T *d_out,
+				const SizeT &valid_elements)
+			{
+				const int LOG_STORE_TXN_THREADS = B40C_LOG_MEM_BANKS(__B40C_CUDA_ARCH__);
+				const int STORE_TXN_THREADS = 1 << LOG_STORE_TXN_THREADS;
+
+				int store_txn_idx = threadIdx.x & (STORE_TXN_THREADS - 1);
+				int store_txn_digit = threadIdx.x >> LOG_STORE_TXN_THREADS;
+
+				int my_digit = (PASS * DIGITS_PER_SCATTER_PASS) + store_txn_digit;
+
+				if (my_digit < KernelPolicy::BINS) {
+
+					int my_exclusive_scan = cta->smem_storage.bin_warpscan[1][my_digit - 1];
+					int my_inclusive_scan = cta->smem_storage.bin_warpscan[1][my_digit];
+					int my_digit_count = my_inclusive_scan - my_exclusive_scan;
+
+					int my_carry = cta->smem_storage.bin_carry[my_digit] + my_exclusive_scan;
+					int my_aligned_offset = store_txn_idx - (my_carry & (STORE_TXN_THREADS - 1));
+
+					while (my_aligned_offset < my_digit_count) {
+
+						if ((my_aligned_offset >= 0) && (my_exclusive_scan + my_aligned_offset < valid_elements)) {
+
+							T datum = exchange[my_exclusive_scan + my_aligned_offset];
+							Transform(datum);
+							d_out[my_carry + my_aligned_offset] = datum;
+						}
+						my_aligned_offset += STORE_TXN_THREADS;
+					}
+				}
+
+				WarpScatter<PASS + 1, SCATTER_PASSES>::template ScatterPass<T, Transform>(
+					cta,
+					exchange,
+					d_out,
+					valid_elements);
+			}
+		};
+
+		// Terminate
+		template <int SCATTER_PASSES>
+		struct WarpScatter<SCATTER_PASSES, SCATTER_PASSES>
+		{
+			template <typename T, void Transform(T&), typename Cta>
+			static __device__ __forceinline__ void ScatterPass(
+				Cta *cta,
+				T *exchange,
+				T *d_out,
+				const SizeT &valid_elements) {}
+		};
+
+		template <bool KEYS_ONLY, int dummy2 = 0>
+		struct ScatterValues
+		{
+			template <typename Cta, typename Tile>
+			static __device__ __forceinline__ void Invoke(
+				SizeT cta_offset,
+				const SizeT &guarded_elements,
+				const SizeT &valid_elements,
+				Cta *cta,
+				Tile *tile)
+			{
+				// Load values
+				tile->LoadValues(cta, cta_offset, guarded_elements);
+
+				// Scatter values to smem by local rank
+				util::io::ScatterTile<
+					KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
+					0,
+					KernelPolicy::THREADS,
+					util::io::st::NONE>::Scatter(
+						cta->smem_storage.value_exchange,
+						(ValueType (*)[1]) tile->values,
+						(int (*)[1]) tile->local_ranks);
+
+				__syncthreads();
+
+				if (SCATTER_STRATEGY == SCATTER_WARP_TWO_PHASE) {
+
+					WarpScatter<0, SCATTER_PASSES>::template ScatterPass<ValueType, Nop<ValueType> >(
+						cta,
+						cta->smem_storage.value_exchange,
+						cta->d_out_values,
+						valid_elements);
+
+					__syncthreads();
+
+				} else {
+
+					// Gather values linearly from smem (vec-1)
+					util::io::LoadTile<
+						KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
+						0,
+						KernelPolicy::THREADS,
+						util::io::ld::NONE,
+						false>::LoadValid(									// No need to check alignment
+							(ValueType (*)[1]) tile->values,
+							cta->smem_storage.value_exchange,
+							0);
+
+					__syncthreads();
+
+					// Scatter values to global bin partitions
+					tile->ScatterValues(cta, valid_elements);
+				}
+			}
+		};
+
+		template <int dummy2>
+		struct ScatterValues<true, dummy2>
+		{
+			template <typename Cta, typename Tile>
+			static __device__ __forceinline__ void Invoke(
+					SizeT cta_offset,
+					const SizeT &guarded_elements,
+					const SizeT &valid_elements,
+					Cta *cta,
+					Tile *tile) {}
+		};
+
 		template <typename Cta, typename Tile>
 		static __device__ __forceinline__ void Invoke(
 			SizeT cta_offset,
@@ -830,84 +989,85 @@ struct Tile
 
 			__syncthreads();
 
-			// Gather keys linearly from smem (vec-1)
-			util::io::LoadTile<
-				KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
-				0,
-				KernelPolicy::THREADS,
-				util::io::ld::NONE,
-				false>::LoadValid(									// No need to check alignment
-					(KeyType (*)[1]) tile->keys,
+			SizeT valid_elements = tile->ValidElements(cta, guarded_elements);
+
+			if (SCATTER_STRATEGY == SCATTER_WARP_TWO_PHASE) {
+
+				WarpScatter<0, SCATTER_PASSES>::template ScatterPass<KeyType, KernelPolicy::PostprocessKey>(
+					cta,
 					cta->smem_storage.key_exchange,
-					0);
+					cta->d_out_keys,
+					valid_elements);
 
-			__syncthreads();
+				__syncthreads();
 
-			// Compute global scatter offsets for gathered keys
-			IterateElements<0>::DecodeGlobalOffsets(cta, tile);
+			} else {
 
-			// Scatter keys to global bin partitions
-			tile->ScatterKeys(cta, guarded_elements);
+				// Gather keys linearly from smem (vec-1)
+				util::io::LoadTile<
+					KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
+					0,
+					KernelPolicy::THREADS,
+					util::io::ld::NONE,
+					false>::LoadValid(									// No need to check alignment
+						(KeyType (*)[1]) tile->keys,
+						cta->smem_storage.key_exchange,
+						0);
+
+				__syncthreads();
+
+				// Compute global scatter offsets for gathered keys
+				IterateElements<0>::DecodeGlobalOffsets(cta, tile);
+
+				// Scatter keys to global bin partitions
+				tile->ScatterKeys(cta, valid_elements);
+
+			}
+
+			// Partition values
+			ScatterValues<KernelPolicy::KEYS_ONLY>::Invoke(
+				cta_offset, guarded_elements, valid_elements, cta, tile);
 		}
 	};
 
 
 	/**
-	 * Specialized for two-phase scatter with values
+	 * Specialized for direct scatter
 	 */
 	template <int dummy>
-	struct PartitionTile<true, false, dummy>
+	struct PartitionTile<SCATTER_DIRECT, dummy>
 	{
-		template <typename Cta, typename Tile>
-		static __device__ __forceinline__ void Invoke(
-			SizeT cta_offset,
-			const SizeT &guarded_elements,
-			Cta *cta,
-			Tile *tile)
+		template <bool KEYS_ONLY, int dummy2 = 0>
+		struct ScatterValues
 		{
-			// Sort and scatter keys
-			PartitionTile<true, true>::Invoke(cta_offset, guarded_elements, cta, tile);
+			template <typename Cta, typename Tile>
+			static __device__ __forceinline__ void Invoke(
+				SizeT cta_offset,
+				const SizeT &guarded_elements,
+				const SizeT &valid_elements,
+				Cta *cta,
+				Tile *tile)
+			{
+				// Load values
+				tile->LoadValues(cta, cta_offset, guarded_elements);
 
-			// Load values
-			tile->LoadValues(cta, cta_offset, guarded_elements);
+				// Scatter values to global bin partitions
+				tile->ScatterValues(cta, valid_elements);
+			}
+		};
 
-			// Scatter values to smem by local rank
-			util::io::ScatterTile<
-				KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
-				0,
-				KernelPolicy::THREADS,
-				util::io::st::NONE>::Scatter(
-					cta->smem_storage.value_exchange,
-					(ValueType (*)[1]) tile->values,
-					(int (*)[1]) tile->local_ranks);
+		template <int dummy2>
+		struct ScatterValues<true, dummy2>
+		{
+			template <typename Cta, typename Tile>
+			static __device__ __forceinline__ void Invoke(
+					SizeT cta_offset,
+					const SizeT &guarded_elements,
+					const SizeT &valid_elements,
+					Cta *cta,
+					Tile *tile) {}
+		};
 
-			__syncthreads();
-
-			// Gather values linearly from smem (vec-1)
-			util::io::LoadTile<
-				KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
-				0,
-				KernelPolicy::THREADS,
-				util::io::ld::NONE,
-				false>::LoadValid(									// No need to check alignment
-					(ValueType (*)[1]) tile->values,
-					cta->smem_storage.value_exchange,
-					0);
-
-			__syncthreads();
-
-			// Scatter values to global bin partitions
-			tile->ScatterValues(cta, guarded_elements);
-		}
-	};
-
-
-	/**
-	 * Specialized for direct scatter, keys only
-	 */
-	template <int dummy>
-	struct PartitionTile<false, true, dummy>
-	{
 		template <typename Cta, typename Tile>
 		static __device__ __forceinline__ void Invoke(
 			SizeT cta_offset,
@@ -946,38 +1106,20 @@ struct Tile
 
 			__syncthreads();
 
+			SizeT valid_elements = tile->ValidElements(cta, guarded_elements);
+
 			// Update the scatter offsets in each load with the bin prefixes for the tile
 			IterateCycles<0>::UpdateGlobalOffsets(cta, tile);
 
 			// Scatter keys to global bin partitions
-			tile->ScatterKeys(cta, guarded_elements);
+			tile->ScatterKeys(cta, valid_elements);
+
+			// Partition values
+			ScatterValues<KernelPolicy::KEYS_ONLY>::Invoke(
+				cta_offset, guarded_elements, valid_elements, cta, tile);
 		}
 	};
 
-
-	/**
-	 * Specialized for direct scatter with values
-	 */
-	template <int dummy>
-	struct PartitionTile<false, false, dummy>
-	{
-		template <typename Cta, typename Tile>
-		static __device__ __forceinline__ void Invoke(
-			SizeT cta_offset,
-			const SizeT &guarded_elements,
-			Cta *cta,
-			Tile *tile)
-		{
-			// Sort and scatter keys
-			PartitionTile<false, true>::Invoke(cta_offset, guarded_elements, cta, tile);
-
-			// Load values
-			tile->LoadValues(cta, cta_offset, guarded_elements);
-
-			// Scatter values to global bin partitions
-			tile->ScatterValues(cta, guarded_elements);
-		}
-	};
 
 
 	//---------------------------------------------------------------------
@@ -993,7 +1135,7 @@ struct Tile
 		const SizeT &guarded_elements,
 		Cta *cta)
 	{
-		PartitionTile<KernelPolicy::TWO_PHASE_SCATTER>::Invoke(
+		PartitionTile<KernelPolicy::SCATTER_STRATEGY>::Invoke(
 			cta_offset,
 			guarded_elements,
 			cta,

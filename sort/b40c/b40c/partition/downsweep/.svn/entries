@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/partition/downsweep
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-22T08:13:56.721977Z
-568
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -32,10 +32,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-a68ac3654b96eabb254c24be4a8c675c
-2011-06-21T07:45:15.593369Z
-566
+2011-08-25T08:01:51.000000Z
+d5d3e6cd5fa2b162c6ee46726f579d8b
+2011-08-22T15:50:50.748308Z
+653
 duane.merrill
 
 
@@ -58,7 +58,7 @@ duane.merrill
 
 
 
-3907
+4081
 
 cta.cuh
 file
@@ -100,10 +100,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-878f9a69e0bd40788441f4b3b5ed66b5
-2011-06-22T08:13:56.721977Z
-568
+2011-08-25T08:01:51.000000Z
+47770096cea689ecda4595cce4e55b00
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -126,7 +126,7 @@ duane.merrill
 
 
 
-28863
+32811
 
 kernel_policy.cuh
 file
@@ -134,10 +134,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-8019ac5ce261215a8a8ffc8b5d7e169e
-2011-06-21T03:43:27.087450Z
-563
+2011-08-25T08:01:51.000000Z
+9d5426ddbd20fb305720e77a0f09c741
+2011-08-22T15:50:50.748308Z
+653
 duane.merrill
 
 
@@ -160,5 +160,5 @@ duane.merrill
 
 
 
-4543
+4686
 

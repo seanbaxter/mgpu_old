@@ -53,6 +53,11 @@ int BuildRandomRegularishGraph(
 	
 	csr_graph.template FromScratch<LOAD_VALUES>(nodes, edges);
 
+	time_t mark0 = time(NULL);
+	printf("  Selecting %llu random edges in COO format... ",
+		(unsigned long long) edges);
+	fflush(stdout);
+
 	SizeT total = 0;
     for (VertexId node = 0; node < nodes; node++) {
     	
@@ -71,6 +76,10 @@ int BuildRandomRegularishGraph(
     }
     
     csr_graph.row_offsets[nodes] = total; 	// last offset is always num_entries
+
+	time_t mark1 = time(NULL);
+	printf("Done selecting (%ds).\n", (int) (mark1 - mark0));
+	fflush(stdout);
 
 	// If unspecified, assign default source.  Otherwise verify source range.
 	if (src == -1) {

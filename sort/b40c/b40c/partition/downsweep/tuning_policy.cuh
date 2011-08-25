@@ -36,6 +36,16 @@ namespace downsweep {
 
 
 /**
+ * Types of scattering strategies
+ */
+enum ScatterStrategy {
+	SCATTER_DIRECT					= 0,
+	SCATTER_TWO_PHASE,
+	SCATTER_WARP_TWO_PHASE,
+};
+
+
+/**
  * Partitioning downsweep scan tuning policy.  This type encapsulates our
  * kernel-tuning parameters (they are reflected via the static fields).
  *
@@ -78,7 +88,7 @@ template <
 	int _LOG_RAKING_THREADS,
 	util::io::ld::CacheModifier _READ_MODIFIER,
 	util::io::st::CacheModifier _WRITE_MODIFIER,
-	bool _TWO_PHASE_SCATTER>
+	ScatterStrategy _SCATTER_STRATEGY>
 
 struct TuningPolicy : ProblemType
 {
@@ -93,7 +103,6 @@ struct TuningPolicy : ProblemType
 		LOG_LOADS_PER_CYCLE							= _LOG_LOADS_PER_CYCLE,
 		LOG_CYCLES_PER_TILE							= _LOG_CYCLES_PER_TILE,
 		LOG_RAKING_THREADS							= _LOG_RAKING_THREADS,
-		TWO_PHASE_SCATTER							= _TWO_PHASE_SCATTER,
 
 		SCHEDULE_GRANULARITY						= 1 << LOG_SCHEDULE_GRANULARITY,
 		THREADS										= 1 << LOG_THREADS,
@@ -102,6 +111,7 @@ struct TuningPolicy : ProblemType
 
 	static const util::io::ld::CacheModifier READ_MODIFIER 		= _READ_MODIFIER;
 	static const util::io::st::CacheModifier WRITE_MODIFIER 	= _WRITE_MODIFIER;
+	static const ScatterStrategy SCATTER_STRATEGY 				= _SCATTER_STRATEGY;
 };
 
 

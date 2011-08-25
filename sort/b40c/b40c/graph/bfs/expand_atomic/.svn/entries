@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/graph/bfs/expand_atomic
 http://back40computing.googlecode.com/svn
 
 
 
-2011-07-05T09:58:39.291165Z
-599
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -32,10 +32,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-e444f2648f542963b538eb1f561720f2
-2011-07-05T09:58:39.291165Z
-599
+2011-08-25T08:01:51.000000Z
+6517706155b882b7692b68b54c52c43c
+2011-08-08T03:19:22.027539Z
+620
 duane.merrill
 
 
@@ -58,7 +58,7 @@ duane.merrill
 
 
 
-19234
+19936
 
 kernel_policy.cuh
 file
@@ -66,10 +66,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-4982b10165242b03b404669b489db8d9
-2011-07-02T20:54:35.366620Z
-595
+2011-08-25T08:01:51.000000Z
+7c9f1c516e2936d9b2eca75da98fde80
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -92,7 +92,7 @@ duane.merrill
 
 
 
-8462
+8463
 
 kernel.cuh
 file

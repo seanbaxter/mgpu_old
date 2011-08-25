@@ -47,7 +47,7 @@
 
 // BFS includes
 #include <b40c/graph/bfs/csr_problem.cuh>
-#include <b40c/graph/bfs/microbench/enactor_microbench.cuh>
+#include <b40c/graph/bfs/microbench/enactor_gather_lookup.cuh>
 
 using namespace b40c;
 using namespace graph;
@@ -616,7 +616,7 @@ void RunTests(
 	VertexId* h_source_path 			= (VertexId*) malloc(sizeof(VertexId) * csr_graph.nodes);
 
 	// Allocate a BFS enactor (with maximum frontier-queue size the size of the edge-list)
-	bfs::microbench::EnactorMicrobench micobench_enactor(g_verbose);
+	bfs::microbench::EnactorGatherLookup micobench_enactor(g_verbose);
 
 	// Allocate problem on GPU
 	bfs::CsrProblem<VertexId, SizeT, MARK_PARENTS> csr_problem;

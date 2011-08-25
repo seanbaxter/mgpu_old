@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/test/bfs
 http://back40computing.googlecode.com/svn
 
 
 
-2011-07-06T17:08:55.357316Z
-603
+2011-08-23T20:56:47.501096Z
+657
 duane.merrill
 has-props
 
@@ -26,50 +26,16 @@ has-props
 
 f28d7702-48ea-1802-4fdf-2413024927d0
 
-run_random_tests.sh
-file
-
-
-
-
-2011-07-17T17:19:46.000000Z
-b899ce87d52217a03d03edd5fbffe35d
-2011-07-06T03:33:03.687571Z
-602
-duane.merrill
-has-props
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-936
-
 test_bfs.cu
 file
 
 
 
 
-2011-07-17T17:19:46.000000Z
-8dfadb0cf20d73c6730d43b2244dff99
-2011-07-05T12:21:03.774724Z
-601
+2011-08-25T08:01:50.000000Z
+c66ab6e69d2edef4e061e8e1a45e721e
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -92,109 +58,10 @@ duane.merrill
 
 
 
-29979
+31371
 
-run_tests.sh
-file
-
-
-
-
-2011-07-17T17:19:46.000000Z
-211b6bca272edcde1fd120067a32c755
-2011-07-06T03:33:03.687571Z
-602
-duane.merrill
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-114
-
-lookup_duty.sh
-file
-
-
-
-
-2011-07-17T17:19:46.000000Z
-42802b8d7f4926af146f5205247ce33b
-2011-06-30T00:58:51.940843Z
-588
-duane.merrill
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-2232
-
-gather_duty.sh
-file
-
-
-
-
-2011-07-17T17:19:46.000000Z
-ab1ad7b3a03bd57dda1abe6ca2cb8908
-2011-06-29T23:16:14.200437Z
-587
-duane.merrill
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-2238
+scripts
+dir
 
 microbench_bfs.cu
 file
@@ -202,10 +69,10 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-c80f862628680fa0be87b16aaf4843c3
-2011-06-28T08:06:54.984743Z
-583
+2011-08-25T08:01:50.000000Z
+6d49f39d312024919107d15a081bba9b
+2011-08-03T05:58:58.000356Z
+615
 duane.merrill
 
 
@@ -228,109 +95,7 @@ duane.merrill
 
 
 
-28612
-
-run_tests_1gpu.sh
-file
-
-
-
-
-2011-07-17T17:19:46.000000Z
-5839d8687d9250407332afa49cb0a743
-2011-07-06T17:08:55.357316Z
-603
-duane.merrill
-has-props
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-4790
-
-run_tests_2gpu.sh
-file
-
-
-
-
-2011-07-17T17:19:46.000000Z
-c35714d71e2776c22e50c13e2a8feee9
-2011-07-06T03:33:03.687571Z
-602
-duane.merrill
-has-props
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-3804
-
-run_tests_3gpu.sh
-file
-
-
-
-
-2011-07-17T17:19:46.000000Z
-2916e5c1ac2150e05f1670e4f3eb2468
-2011-07-06T03:33:03.687571Z
-602
-duane.merrill
-has-props
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-3652
+28617
 
 Makefile
 file
@@ -338,10 +103,10 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-a8c04379ae88291b38d7fd599eddf4b9
-2011-06-23T17:41:53.263312Z
-577
+2011-08-25T08:01:50.000000Z
+5bbaa4c27fb9f8f02116e8bf4d207827
+2011-08-03T05:58:58.000356Z
+615
 duane.merrill
 
 
@@ -364,20 +129,19 @@ duane.merrill
 
 
 
-5734
+6249
 
-run_tests_4gpu.sh
+microbench_cull.cu
 file
 
 
 
 
-2011-07-17T17:19:46.000000Z
-f6c46ef80e6bdd441687bbc0283a7b8f
-2011-07-06T03:33:03.687571Z
-602
+2011-08-25T08:01:50.000000Z
+3f673000f2a98006e53a8d9b1714a3a1
+2011-08-03T05:58:58.000356Z
+615
 duane.merrill
-has-props
 
 
 
@@ -398,5 +162,6 @@ has-props
 
 
 
-3804
+
+28661
 

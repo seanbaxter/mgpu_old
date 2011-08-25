@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/partition/upsweep
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-21T07:45:15.593369Z
-566
+2011-08-04T21:14:52.064739Z
+618
 duane.merrill
 
 
@@ -100,10 +100,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-a59510128eb0f5aafbbc364ee096d785
-2011-06-15T03:30:12.990554Z
-537
+2011-08-25T08:01:51.000000Z
+2d32531537dbf3f3148e4b195dfb0d77
+2011-08-04T21:14:52.064739Z
+618
 duane.merrill
 
 
@@ -126,7 +126,7 @@ duane.merrill
 
 
 
-8336
+8337
 
 aggregate_counters.cuh
 file

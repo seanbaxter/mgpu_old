@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/graph/bfs/partition_compact/upsweep
 http://back40computing.googlecode.com/svn
 
 
 
-2011-07-05T06:36:11.258641Z
-597
+2011-08-10T01:42:56.111682Z
+623
 duane.merrill
 
 
@@ -66,10 +66,10 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-70d8f1283f1a257bda77f2dc4e8367c8
-2011-07-05T06:36:11.258641Z
-597
+2011-08-25T08:01:50.000000Z
+0f9e76b7fb4b0906d97b9393ae93647a
+2011-08-10T01:42:56.111682Z
+623
 duane.merrill
 
 
@@ -92,7 +92,7 @@ duane.merrill
 
 
 
-9116
+9030
 
 kernel_policy.cuh
 file

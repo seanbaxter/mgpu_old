@@ -303,11 +303,11 @@ public:
 		fflush(stdout);
 
 		// Perform a single iteration to allocate any memory if needed, prime code caches, etc.
-		this->DEBUG = g_verbose;
+		this->ENACTOR_DEBUG = g_verbose;
 		if (this->template Enact<ProblemConfig>(d_dest, d_src, num_elements, g_max_ctas)) {
 			exit(1);
 		}
-		this->DEBUG = false;
+		this->ENACTOR_DEBUG = false;
 
 		// Perform the timed number of iterations
 

@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 23
-/svn/!svn/ver/604/trunk
+/svn/!svn/ver/660/trunk
 END
 LICENSE.TXT
 K 25
@@ -13,7 +13,7 @@ VERSION.TXT
 K 25
 svn:wc:ra_dav:version-url
 V 35
-/svn/!svn/ver/578/trunk/VERSION.TXT
+/svn/!svn/ver/655/trunk/VERSION.TXT
 END
 .cproject
 K 25
@@ -25,5 +25,5 @@ makedistro.sh
 K 25
 svn:wc:ra_dav:version-url
 V 37
-/svn/!svn/ver/270/trunk/makedistro.sh
+/svn/!svn/ver/627/trunk/makedistro.sh
 END

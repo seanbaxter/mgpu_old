@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 64
-/svn/!svn/ver/597/trunk/b40c/graph/bfs/partition_compact/upsweep
+/svn/!svn/ver/623/trunk/b40c/graph/bfs/partition_compact/upsweep
 END
 cta.cuh
 K 25
@@ -13,7 +13,7 @@ tile.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 73
-/svn/!svn/ver/597/trunk/b40c/graph/bfs/partition_compact/upsweep/tile.cuh
+/svn/!svn/ver/623/trunk/b40c/graph/bfs/partition_compact/upsweep/tile.cuh
 END
 kernel_policy.cuh
 K 25

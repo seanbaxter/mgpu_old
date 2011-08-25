@@ -1,13 +1,13 @@
 K 25
 svn:wc:ra_dav:version-url
 V 47
-/svn/!svn/ver/566/trunk/b40c/radix_sort/upsweep
+/svn/!svn/ver/647/trunk/b40c/radix_sort/upsweep
 END
 tuning_policy.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 65
-/svn/!svn/ver/566/trunk/b40c/radix_sort/upsweep/tuning_policy.cuh
+/svn/!svn/ver/647/trunk/b40c/radix_sort/upsweep/tuning_policy.cuh
 END
 cta.cuh
 K 25

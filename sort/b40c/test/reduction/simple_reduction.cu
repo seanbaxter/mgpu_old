@@ -85,12 +85,12 @@ int main(int argc, char** argv)
     b40c::DeviceInit(args);
 
 	typedef unsigned int T;
-	const int NUM_ELEMENTS = 10;
+	const int NUM_ELEMENTS = 34567;
 	Max<T> max_op;
 
 	// Allocate and initialize host problem data and host reference solution
-	T h_data[NUM_ELEMENTS];
-	T h_reference[1];
+	T *h_data = new T[NUM_ELEMENTS];
+	T *h_reference = new T[1];
 	for (int i = 0; i < NUM_ELEMENTS; i++) {
 		h_data[i] = i;
 		h_reference[0] = (i == 0) ?
@@ -107,7 +107,6 @@ int main(int argc, char** argv)
 	// Create a reduction enactor
 	b40c::reduction::Enactor reduction_enactor;
 	
-
 	//
 	// Example 1: Enact simple reduction using internal tuning heuristics
 	//
@@ -163,6 +162,9 @@ int main(int argc, char** argv)
 	reduction_enactor.Reduce<CustomPolicy>(d_dest, d_src, NUM_ELEMENTS, max_op);
 
 	printf("Custom reduction: "); b40c::CompareDeviceResults(h_reference, d_dest, 1); printf("\n");
+
+	delete h_data;
+	delete h_reference;
 
 	return 0;
 }

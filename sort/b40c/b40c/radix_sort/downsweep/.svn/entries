@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/radix_sort/downsweep
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-22T08:13:56.721977Z
-568
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -32,10 +32,10 @@ file
 
 
 
-2011-07-17T17:19:48.000000Z
-c5f8f80e631c45a765abfb0189ccc3b3
-2011-06-21T07:45:15.593369Z
-566
+2011-08-25T08:01:51.000000Z
+da302ca496526c13cb996dbf60be0a5d
+2011-08-22T15:50:50.748308Z
+653
 duane.merrill
 
 
@@ -58,7 +58,7 @@ duane.merrill
 
 
 
-2246
+2514
 
 cta.cuh
 file
@@ -100,10 +100,10 @@ file
 
 
 
-2011-07-17T17:19:48.000000Z
-83516b852c1f2e6629a46fdfc0b5c692
-2011-06-22T08:13:56.721977Z
-568
+2011-08-25T08:01:51.000000Z
+091dbbafe76a0851b91f00fbb7304dc5
+2011-08-22T16:17:04.264620Z
+654
 duane.merrill
 
 
@@ -126,7 +126,7 @@ duane.merrill
 
 
 
-3844
+3840
 
 kernel_policy.cuh
 file
@@ -134,10 +134,10 @@ file
 
 
 
-2011-07-17T17:19:48.000000Z
-cd689a471625c5348ac976cacb638e62
-2011-06-15T03:30:12.990554Z
-537
+2011-08-25T08:01:51.000000Z
+53fd831dc981728cc4327467e4688dd4
+2011-08-22T15:50:50.748308Z
+653
 duane.merrill
 
 
@@ -160,7 +160,7 @@ duane.merrill
 
 
 
-1686
+1987
 
 kernel.cuh
 file

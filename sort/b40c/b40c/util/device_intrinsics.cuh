@@ -91,7 +91,7 @@ __device__ __forceinline__ int TallyWarpVote(int predicate)
 	const int ACTIVE_WARPS = 1 << LOG_ACTIVE_WARPS;
 	const int ACTIVE_THREADS = 1 << LOG_ACTIVE_THREADS;
 
-	__shared__ int storage[ACTIVE_WARPS + 1][ACTIVE_THREADS];
+	__shared__ volatile int storage[ACTIVE_WARPS + 1][ACTIVE_THREADS];
 
 	int tid = threadIdx.x & (B40C_WARP_THREADS(__B40C_CUDA_ARCH__) - 1);
 	int wid = threadIdx.x >> B40C_LOG_WARP_THREADS(__B40C_CUDA_ARCH__);
@@ -105,14 +105,16 @@ __device__ __forceinline__ int TallyWarpVote(int predicate)
  * The best way to tally a warp-vote in the first warp
  */
 template <int LOG_ACTIVE_THREADS>
-__device__ __forceinline__ int TallyWarpVote(int predicate, int *storage)
+__device__ __forceinline__ int TallyWarpVote(
+	int predicate,
+	volatile int storage[2][1 << LOG_ACTIVE_THREADS])
 {
 #if __CUDA_ARCH__ >= 200
 	return __popc(__ballot(predicate));
 #else
 	return reduction::WarpReduce<LOG_ACTIVE_THREADS>::Invoke(
 		predicate, 
-		reinterpret_cast<int (*)[1 << LOG_ACTIVE_THREADS]>(storage));
+		storage);
 #endif
 }
 
@@ -142,7 +144,7 @@ __device__ __forceinline__ int WarpVoteAll(int predicate)
 	return __all(predicate);
 #else
 	const int ACTIVE_THREADS = 1 << LOG_ACTIVE_THREADS;
-	__shared__ int storage[ACTIVE_THREADS];
+	__shared__ volatile int storage[2][ACTIVE_THREADS];
 
 	return (TallyWarpVote<LOG_ACTIVE_THREADS>(predicate, storage) == ACTIVE_THREADS);
 #endif
@@ -172,7 +174,7 @@ __device__ __forceinline__ int WarpVoteAny(int predicate)
 	return __any(predicate);
 #else
 	const int ACTIVE_THREADS = 1 << LOG_ACTIVE_THREADS;
-	__shared__ int storage[ACTIVE_THREADS];
+	__shared__ volatile int storage[2][ACTIVE_THREADS];
 
 	return TallyWarpVote<LOG_ACTIVE_THREADS>(predicate, storage);
 #endif

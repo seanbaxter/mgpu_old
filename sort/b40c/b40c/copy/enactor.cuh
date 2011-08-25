@@ -289,7 +289,7 @@ cudaError_t Enactor::Copy(
 	util::CtaWorkDistribution<SizeT> work;
 	work.template Init<Policy::LOG_SCHEDULE_GRANULARITY>(num_elements, grid_size);
 
-	if (DEBUG) {
+	if (ENACTOR_DEBUG) {
 		PrintPassInfo<Policy>(work);
 	}
 
@@ -308,7 +308,7 @@ cudaError_t Enactor::Copy(
 		Kernel<<<work.grid_size, Policy::THREADS, dynamic_smem>>>(
 			d_src, d_dest, work, work_progress, extra_bytes);
 
-		if (DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor Kernel failed ", __FILE__, __LINE__))) break;
+		if (ENACTOR_DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor Kernel failed ", __FILE__, __LINE__, ENACTOR_DEBUG))) break;
 
 	} while (0);
 

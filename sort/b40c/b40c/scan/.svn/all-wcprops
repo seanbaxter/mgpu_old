@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 33
-/svn/!svn/ver/575/trunk/b40c/scan
+/svn/!svn/ver/659/trunk/b40c/scan
 END
 problem_type.cuh
 K 25
@@ -19,7 +19,7 @@ enactor.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 45
-/svn/!svn/ver/572/trunk/b40c/scan/enactor.cuh
+/svn/!svn/ver/659/trunk/b40c/scan/enactor.cuh
 END
 kernel_policy.cuh
 K 25

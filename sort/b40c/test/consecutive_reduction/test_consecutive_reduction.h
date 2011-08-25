@@ -137,7 +137,7 @@ double TimedConsecutiveReduction(
 
 	// Perform a single iteration to allocate any memory if needed, prime code caches, etc.
 	printf("\n");
-	enactor.DEBUG = true;
+	enactor.ENACTOR_DEBUG = true;
 	enactor.template Reduce<PROB_SIZE_GENRE>(
 		d_problem_storage,
 		num_elements,
@@ -146,7 +146,7 @@ double TimedConsecutiveReduction(
 		scan_op,
 		equality_op,
 		max_ctas);
-	enactor.DEBUG = false;
+	enactor.ENACTOR_DEBUG = false;
 
 	// Perform the timed number of iterations
 	GpuTimer timer;

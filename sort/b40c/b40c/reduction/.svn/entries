@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/reduction
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-23T02:13:39.057199Z
-575
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -137,10 +137,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-c3acd00745518e17c6e40736ad1ac4e9
-2011-06-22T08:13:56.721977Z
-568
+2011-08-25T08:01:51.000000Z
+db6da1bf637b353b9d248d829349e69d
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -163,7 +163,7 @@ duane.merrill
 
 
 
-13029
+13052
 
 kernel_policy.cuh
 file

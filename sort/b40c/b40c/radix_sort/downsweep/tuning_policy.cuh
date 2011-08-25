@@ -47,7 +47,7 @@ template <
 	bool CHECK_ALIGNMENT,
 	int LOG_BINS,
 	int LOG_SCHEDULE_GRANULARITY,
-	int CTA_OCCUPANCY,
+	int MAX_CTA_OCCUPANCY,
 	int LOG_THREADS,
 	int LOG_LOAD_VEC_SIZE,
 	int LOG_LOADS_PER_CYCLE,
@@ -55,7 +55,7 @@ template <
 	int LOG_RAKING_THREADS,
 	util::io::ld::CacheModifier READ_MODIFIER,
 	util::io::st::CacheModifier WRITE_MODIFIER,
-	bool TWO_PHASE_SCATTER,
+	partition::downsweep::ScatterStrategy SCATTER_STRATEGY,
 	bool _EARLY_EXIT>
 
 struct TuningPolicy :
@@ -65,7 +65,7 @@ struct TuningPolicy :
 		CHECK_ALIGNMENT,
 		LOG_BINS,
 		LOG_SCHEDULE_GRANULARITY,
-		CTA_OCCUPANCY,
+		MAX_CTA_OCCUPANCY,
 		LOG_THREADS,
 		LOG_LOAD_VEC_SIZE,
 		LOG_LOADS_PER_CYCLE,
@@ -73,10 +73,15 @@ struct TuningPolicy :
 		LOG_RAKING_THREADS,
 		READ_MODIFIER,
 		WRITE_MODIFIER,
-		TWO_PHASE_SCATTER>
+		SCATTER_STRATEGY>
 {
 	enum {
-		EARLY_EXIT									= _EARLY_EXIT,
+		EARLY_EXIT								= _EARLY_EXIT,
+
+		THREAD_OCCUPANCY						= B40C_SM_THREADS(CUDA_ARCH) >> LOG_THREADS,
+		CTA_OCCUPANCY  							= B40C_MIN(MAX_CTA_OCCUPANCY,
+													B40C_MIN(B40C_SM_CTAS(CUDA_ARCH), THREAD_OCCUPANCY)),
+		VALID									= (CTA_OCCUPANCY > 0),
 	};
 };
 

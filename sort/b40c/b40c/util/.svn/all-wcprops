@@ -1,19 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 33
-/svn/!svn/ver/585/trunk/b40c/util
-END
-basic_utils.cuh
-K 25
-svn:wc:ra_dav:version-url
-V 49
-/svn/!svn/ver/562/trunk/b40c/util/basic_utils.cuh
-END
-kernel_runtime_stats.cuh
-K 25
-svn:wc:ra_dav:version-url
-V 58
-/svn/!svn/ver/577/trunk/b40c/util/kernel_runtime_stats.cuh
+/svn/!svn/ver/659/trunk/b40c/util
 END
 random_bits.cuh
 K 25
@@ -21,23 +9,35 @@ svn:wc:ra_dav:version-url
 V 49
 /svn/!svn/ver/526/trunk/b40c/util/random_bits.cuh
 END
+kernel_runtime_stats.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/577/trunk/b40c/util/kernel_runtime_stats.cuh
+END
+basic_utils.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/svn/!svn/ver/562/trunk/b40c/util/basic_utils.cuh
+END
 srts_soa_details.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 54
 /svn/!svn/ver/568/trunk/b40c/util/srts_soa_details.cuh
 END
-device_intrinsics.cuh
-K 25
-svn:wc:ra_dav:version-url
-V 55
-/svn/!svn/ver/562/trunk/b40c/util/device_intrinsics.cuh
-END
 ping_pong_storage.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 55
 /svn/!svn/ver/578/trunk/b40c/util/ping_pong_storage.cuh
+END
+device_intrinsics.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/650/trunk/b40c/util/device_intrinsics.cuh
 END
 global_barrier.cuh
 K 25
@@ -49,13 +49,19 @@ cta_work_distribution.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 59
-/svn/!svn/ver/534/trunk/b40c/util/cta_work_distribution.cuh
+/svn/!svn/ver/628/trunk/b40c/util/cta_work_distribution.cuh
 END
 error_utils.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 49
-/svn/!svn/ver/553/trunk/b40c/util/error_utils.cuh
+/svn/!svn/ver/658/trunk/b40c/util/error_utils.cuh
+END
+spine.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/!svn/ver/623/trunk/b40c/util/spine.cuh
 END
 operators.cuh
 K 25
@@ -63,17 +69,11 @@ svn:wc:ra_dav:version-url
 V 47
 /svn/!svn/ver/559/trunk/b40c/util/operators.cuh
 END
-spine.cuh
-K 25
-svn:wc:ra_dav:version-url
-V 43
-/svn/!svn/ver/585/trunk/b40c/util/spine.cuh
-END
 enactor_base.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 50
-/svn/!svn/ver/568/trunk/b40c/util/enactor_base.cuh
+/svn/!svn/ver/659/trunk/b40c/util/enactor_base.cuh
 END
 vector_types.cuh
 K 25
@@ -81,17 +81,17 @@ svn:wc:ra_dav:version-url
 V 50
 /svn/!svn/ver/334/trunk/b40c/util/vector_types.cuh
 END
-cuda_properties.cuh
-K 25
-svn:wc:ra_dav:version-url
-V 53
-/svn/!svn/ver/526/trunk/b40c/util/cuda_properties.cuh
-END
 numeric_traits.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 52
 /svn/!svn/ver/338/trunk/b40c/util/numeric_traits.cuh
+END
+cuda_properties.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/526/trunk/b40c/util/cuda_properties.cuh
 END
 memset_kernel.cuh
 K 25
@@ -121,7 +121,7 @@ cta_work_progress.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 55
-/svn/!svn/ver/526/trunk/b40c/util/cta_work_progress.cuh
+/svn/!svn/ver/615/trunk/b40c/util/cta_work_progress.cuh
 END
 srts_details.cuh
 K 25

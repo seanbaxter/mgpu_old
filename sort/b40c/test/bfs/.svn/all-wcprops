@@ -1,71 +1,29 @@
 K 25
 svn:wc:ra_dav:version-url
 V 32
-/svn/!svn/ver/603/trunk/test/bfs
-END
-run_random_tests.sh
-K 25
-svn:wc:ra_dav:version-url
-V 52
-/svn/!svn/ver/602/trunk/test/bfs/run_random_tests.sh
+/svn/!svn/ver/657/trunk/test/bfs
 END
 test_bfs.cu
 K 25
 svn:wc:ra_dav:version-url
 V 44
-/svn/!svn/ver/601/trunk/test/bfs/test_bfs.cu
-END
-run_tests.sh
-K 25
-svn:wc:ra_dav:version-url
-V 45
-/svn/!svn/ver/602/trunk/test/bfs/run_tests.sh
-END
-lookup_duty.sh
-K 25
-svn:wc:ra_dav:version-url
-V 47
-/svn/!svn/ver/588/trunk/test/bfs/lookup_duty.sh
-END
-gather_duty.sh
-K 25
-svn:wc:ra_dav:version-url
-V 47
-/svn/!svn/ver/587/trunk/test/bfs/gather_duty.sh
+/svn/!svn/ver/654/trunk/test/bfs/test_bfs.cu
 END
 microbench_bfs.cu
 K 25
 svn:wc:ra_dav:version-url
 V 50
-/svn/!svn/ver/583/trunk/test/bfs/microbench_bfs.cu
-END
-run_tests_1gpu.sh
-K 25
-svn:wc:ra_dav:version-url
-V 50
-/svn/!svn/ver/603/trunk/test/bfs/run_tests_1gpu.sh
-END
-run_tests_2gpu.sh
-K 25
-svn:wc:ra_dav:version-url
-V 50
-/svn/!svn/ver/602/trunk/test/bfs/run_tests_2gpu.sh
-END
-run_tests_3gpu.sh
-K 25
-svn:wc:ra_dav:version-url
-V 50
-/svn/!svn/ver/602/trunk/test/bfs/run_tests_3gpu.sh
+/svn/!svn/ver/615/trunk/test/bfs/microbench_bfs.cu
 END
 Makefile
 K 25
 svn:wc:ra_dav:version-url
 V 41
-/svn/!svn/ver/577/trunk/test/bfs/Makefile
+/svn/!svn/ver/615/trunk/test/bfs/Makefile
 END
-run_tests_4gpu.sh
+microbench_cull.cu
 K 25
 svn:wc:ra_dav:version-url
-V 50
-/svn/!svn/ver/602/trunk/test/bfs/run_tests_4gpu.sh
+V 51
+/svn/!svn/ver/615/trunk/test/bfs/microbench_cull.cu
 END

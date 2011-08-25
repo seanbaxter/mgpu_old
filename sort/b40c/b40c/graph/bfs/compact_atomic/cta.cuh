@@ -408,12 +408,19 @@ struct Cta
 		}
 
 		/**
-		 * Culls vertices based upon local duplicate collisions
+		 * Culls duplicates within the warp
 		 */
-		__device__ __forceinline__ void LocalCull(Cta *cta)
+		__device__ __forceinline__ void WarpCull(Cta *cta)
+		{
+			Iterate<0, 0>::WarpCull(cta, this);
+		}
+
+		/**
+		 * Culls duplicates within recent CTA history
+		 */
+		__device__ __forceinline__ void HistoryCull(Cta *cta)
 		{
 			Iterate<0, 0>::HistoryCull(cta, this);
-			Iterate<0, 0>::WarpCull(cta, this);
 		}
 	};
 
@@ -505,8 +512,11 @@ struct Cta
 		// Cull using vertex visitation status
 		tile.VertexCull(this);
 
-		// Cull using local collision hashing
-		tile.LocalCull(this);
+		// Cull using local CTA collision hashing
+		tile.HistoryCull(this);
+
+		// Cull using local warp collision hashing
+		tile.WarpCull(this);
 
 		// Init valid flags and ranks
 		tile.InitFlags();

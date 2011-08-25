@@ -50,7 +50,6 @@ struct SweepPass
 		typename KernelPolicy::VertexId 		*&d_in,
 		typename KernelPolicy::VertexId 		*&d_out,
 		typename KernelPolicy::VertexId 		*&d_parent_in,
-		typename KernelPolicy::VertexId 		*&d_parent_out,
 		typename KernelPolicy::VertexId			*&d_source_path,
 		util::CtaWorkProgress 					&work_progress,
 		util::CtaWorkDistribution<typename KernelPolicy::SizeT> &work_decomposition)
@@ -76,7 +75,6 @@ struct SweepPass
 			d_in,
 			d_out,
 			d_parent_in,
-			d_parent_out,
 			d_source_path);
 
 		// Process full tiles
@@ -129,7 +127,6 @@ struct SweepPass <KernelPolicy, true>
 		typename KernelPolicy::VertexId 		*&d_in,
 		typename KernelPolicy::VertexId 		*&d_out,
 		typename KernelPolicy::VertexId 		*&d_parent_in,
-		typename KernelPolicy::VertexId 		*&d_parent_out,
 		typename KernelPolicy::VertexId			*&d_source_path,
 		util::CtaWorkProgress 					&work_progress,
 		util::CtaWorkDistribution<typename KernelPolicy::SizeT> &work_decomposition)
@@ -144,7 +141,6 @@ struct SweepPass <KernelPolicy, true>
 			d_in,
 			d_out,
 			d_parent_in,
-			d_parent_out,
 			d_source_path);
 
 		// Total number of elements in full tiles
@@ -184,7 +180,6 @@ void Kernel(
 	typename KernelPolicy::VertexId 		*d_in,
 	typename KernelPolicy::VertexId 		*d_out,
 	typename KernelPolicy::VertexId 		*d_parent_in,
-	typename KernelPolicy::VertexId 		*d_parent_out,
 	typename KernelPolicy::VertexId			*d_source_path,
 	util::CtaWorkProgress 					work_progress,
 	util::KernelRuntimeStats				kernel_stats)
@@ -226,7 +221,6 @@ void Kernel(
 		d_in,
 		d_out,
 		d_parent_in,
-		d_parent_out,
 		d_source_path,
 		work_progress,
 		work_decomposition);

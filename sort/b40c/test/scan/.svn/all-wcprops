@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 33
-/svn/!svn/ver/572/trunk/test/scan
+/svn/!svn/ver/660/trunk/test/scan
 END
 compare_scan.cu
 K 25
@@ -13,13 +13,13 @@ simple_scan.cu
 K 25
 svn:wc:ra_dav:version-url
 V 48
-/svn/!svn/ver/572/trunk/test/scan/simple_scan.cu
+/svn/!svn/ver/660/trunk/test/scan/simple_scan.cu
 END
 tune_scan.cu
 K 25
 svn:wc:ra_dav:version-url
 V 46
-/svn/!svn/ver/526/trunk/test/scan/tune_scan.cu
+/svn/!svn/ver/660/trunk/test/scan/tune_scan.cu
 END
 test_scan.cu
 K 25
@@ -31,7 +31,7 @@ test_scan.h
 K 25
 svn:wc:ra_dav:version-url
 V 45
-/svn/!svn/ver/572/trunk/test/scan/test_scan.h
+/svn/!svn/ver/660/trunk/test/scan/test_scan.h
 END
 Makefile
 K 25
@@ -43,5 +43,5 @@ struct_scan.cu
 K 25
 svn:wc:ra_dav:version-url
 V 48
-/svn/!svn/ver/572/trunk/test/scan/struct_scan.cu
+/svn/!svn/ver/647/trunk/test/scan/struct_scan.cu
 END

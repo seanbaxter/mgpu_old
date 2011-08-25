@@ -1,6 +1,6 @@
 /******************************************************************************
  * 
- * Scanright 2010-2011 Duane Merrill
+ * Copyright 2010-2011 Duane Merrill
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ int main(int argc, char** argv)
     }
 
     b40c::DeviceInit(args);
-    int num_elements = 77;
+    unsigned int num_elements = 77;
     bool verbose = args.CheckCmdLineFlag("v");
     bool keys_only = args.CheckCmdLineFlag("keys-only");
     args.GetCmdLineArgument("n", num_elements);
@@ -116,8 +116,10 @@ int main(int argc, char** argv)
 		printf("Small-problem keys-only sort: "); b40c::CompareDeviceResults(
 			h_reference_keys, sort_storage.d_keys[sort_storage.selector], num_elements, verbose, verbose); printf("\n");
 
-
+		//
 		// Example 3: small-problem-tuned sort over specific bit-range
+		//
+
 		cudaMemcpy(sort_storage.d_keys[sort_storage.selector], h_keys, sizeof(int) * num_elements, cudaMemcpyHostToDevice);
 		enactor.Sort<0, LOWER_BITS, b40c::radix_sort::SMALL_SIZE>(sort_storage, num_elements);
 
@@ -162,7 +164,10 @@ int main(int argc, char** argv)
 			h_reference_keys, sort_storage.d_keys[sort_storage.selector], num_elements, verbose, verbose); printf("\n");
 
 
+		//
 		// Example 3: small-problem-tuned sort over specific bit-range
+		//
+
 		cudaMemcpy(sort_storage.d_keys[sort_storage.selector], h_keys, sizeof(int) * num_elements, cudaMemcpyHostToDevice);
 		cudaMemcpy(sort_storage.d_values[sort_storage.selector], h_values, sizeof(int) * num_elements, cudaMemcpyHostToDevice);
 

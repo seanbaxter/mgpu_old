@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/consecutive_reduction
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-23T02:13:39.057199Z
-575
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -140,10 +140,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-d56442b8759b7fc50a69d6737df75c16
-2011-06-22T08:13:56.721977Z
-568
+2011-08-25T08:01:51.000000Z
+0803a5bb5a114ee0057f2decec6357a1
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -166,7 +166,7 @@ duane.merrill
 
 
 
-18479
+18540
 
 downsweep
 dir

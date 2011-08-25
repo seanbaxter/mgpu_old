@@ -42,13 +42,16 @@
 #include <b40c/graph/builder/grid3d.cuh>
 #include <b40c/graph/builder/market.cuh>
 #include <b40c/graph/builder/metis.cuh>
+#include <b40c/graph/builder/rmat.cuh>
 #include <b40c/graph/builder/random.cuh>
 #include <b40c/graph/builder/rr.cuh>
 
 // BFS includes
 #include <b40c/graph/bfs/csr_problem.cuh>
-#include <b40c/graph/bfs/enactor_one_phase.cuh>
-#include <b40c/graph/bfs/enactor_one_phase_ec.cuh>
+#include <b40c/graph/bfs/enactor_contract_expand_gbarrier.cuh>
+#include <b40c/graph/bfs/enactor_expand_contract_gbarrier.cuh>
+#include <b40c/graph/bfs/enactor_contract_expand.cuh>
+#include <b40c/graph/bfs/enactor_expand_contract.cuh>
 #include <b40c/graph/bfs/enactor_two_phase.cuh>
 #include <b40c/graph/bfs/enactor_hybrid.cuh>
 #include <b40c/graph/bfs/enactor_multi_gpu.cuh>
@@ -68,7 +71,6 @@ bool g_verbose2;
 bool g_undirected;
 bool g_quick;			// Whether or not to perform CPU traversal as reference
 bool g_uneven;
-
 
 /******************************************************************************
  * Housekeeping Routines
@@ -431,6 +433,10 @@ void DisplayStats(
 		if (avg_duty > 0) printf(	"\t\t[Duty %%]:        u: %.2f, s: %.2f, cv: %.4f\n",
 			stats.duty.mean, duty_stddev, duty_stddev / stats.duty.mean);
 
+		double time_stddev = sqrt(stats.rate.Update(m_teps));
+		printf(								"\t\t[Time (ms)]:   u: %.3f\n",
+			double(edges_visited) / stats.rate.mean / 1000.0);
+
 		double rate_stddev = sqrt(stats.rate.Update(m_teps));
 		printf(								"\t\t[Rate MiEdges/s]:   u: %.3f, s: %.3f, cv: %.4f\n", 
 			stats.rate.mean, rate_stddev, rate_stddev / stats.rate.mean);
@@ -453,6 +459,7 @@ template <
 	typename Value,
 	typename SizeT>
 cudaError_t TestGpuBfs(
+	int 									test_iteration,
 	BfsEnactor 								&enactor,
 	ProblemStorage 							&csr_problem,
 	VertexId 								src,
@@ -483,17 +490,23 @@ cudaError_t TestGpuBfs(
 		VertexId	search_depth = 0;
 		double		avg_duty = 0.0;
 
-		enactor.GetStatistics(total_queued, search_depth, avg_duty);
-		DisplayStats<ProblemStorage::ProblemType::MARK_PARENTS>(
-			stats,
-			src,
-			h_source_path,
-			reference_source_dist,
-			csr_graph,
-			elapsed,
-			search_depth,
-			total_queued,
-			avg_duty);
+		if (test_iteration < 0) {
+			printf("Warmup iteration: %.3f ms\n", elapsed);
+
+		} else {
+
+			enactor.GetStatistics(total_queued, search_depth, avg_duty);
+			DisplayStats<ProblemStorage::ProblemType::MARK_PARENTS>(
+				stats,
+				src,
+				h_source_path,
+				reference_source_dist,
+				csr_graph,
+				elapsed,
+				search_depth,
+				total_queued,
+				avg_duty);
+		}
 
 	} while (0);
 	
@@ -511,6 +524,7 @@ template<
 	typename Value,
 	typename SizeT>
 void SimpleReferenceBfs(
+	int 									test_iteration,
 	const CsrGraph<VertexId, Value, SizeT> 	&csr_graph,
 	VertexId 								*source_path,
 	VertexId 								src,
@@ -561,18 +575,25 @@ void SimpleReferenceBfs(
 	float elapsed = cpu_timer.ElapsedMillis();
 	search_depth++;
 
-//	Histogram(src, source_path, csr_graph, search_depth);
+	if (g_verbose) {
+		Histogram(src, source_path, csr_graph, search_depth);
+	}
 
-	DisplayStats<false, VertexId, Value, SizeT>(
-		stats,
-		src,
-		source_path,
-		NULL,						// No reference source path
-		csr_graph,
-		elapsed,
-		search_depth,
-		0,							// No redundant queuing
-		0);							// No barrier duty
+	if (test_iteration < 0) {
+		printf("Warmup iteration: %.3f ms\n", elapsed);
+
+	} else {
+		DisplayStats<false, VertexId, Value, SizeT>(
+			stats,
+			src,
+			source_path,
+			NULL,						// No reference source path
+			csr_graph,
+			elapsed,
+			search_depth,
+			0,							// No redundant queuing
+			0);							// No barrier duty
+	}
 }
 
 
@@ -600,11 +621,13 @@ void RunTests(
 	VertexId* h_source_path 			= (VertexId*) malloc(sizeof(VertexId) * csr_graph.nodes);
 
 	// Allocate a BFS enactor (with maximum frontier-queue size the size of the edge-list)
-	bfs::EnactorOnePhaseInCore 		one_phase_enactor_ec(g_verbose);
-	bfs::EnactorOnePhase 			one_phase_enactor(g_verbose);
-	bfs::EnactorTwoPhase			two_phase_enactor(g_verbose);
-	bfs::EnactorHybrid 				hybrid_enactor(g_verbose);
-	bfs::EnactorMultiGpu			multi_gpu_enactor(g_verbose);
+//	bfs::EnactorExpandContractGBarrier 		expand_contract_enactor(g_verbose);
+	bfs::EnactorExpandContract 				expand_contract_enactor(g_verbose);
+//	bfs::EnactorContractExpandGBarrier 		contract_expand_enactor(g_verbose);
+	bfs::EnactorContractExpand				contract_expand_enactor(g_verbose);
+	bfs::EnactorTwoPhase					two_phase_enactor(g_verbose);
+	bfs::EnactorHybrid 						hybrid_enactor(g_verbose);
+	bfs::EnactorMultiGpu					multi_gpu_enactor(g_verbose);
 
 	// Allocate problem on GPU
 	bfs::CsrProblem<VertexId, SizeT, MARK_PARENTS> csr_problem;
@@ -622,12 +645,12 @@ void RunTests(
 	}
 
 	// Initialize statistics
-	Stats stats[6];
+	Stats stats[7];
 	stats[0] = Stats("Simple CPU BFS");
-	stats[1] = Stats("One-phase GPU BFS (in-core)");
-	stats[2] = Stats("One-phase GPU BFS (out-of-core)");
+	stats[1] = Stats("One-phase expand-contract GPU BFS");
+	stats[2] = Stats("One-phase contract-expand GPU BFS");
 	stats[3] = Stats("Two-phase GPU BFS");
-	stats[4] = Stats("Hybrid GPU BFS");
+	stats[4] = Stats("Hybrid online-vertex + two-phase GPU BFS");
 	stats[5] = Stats("Multi-GPU BFS");
 	
 	printf("Running %s %s %s tests...\n\n",
@@ -637,7 +660,7 @@ void RunTests(
 	fflush(stdout);
 	
 	// Perform the specified number of test iterations
-	int test_iteration = 0;
+	int test_iteration = -1;
 	while (test_iteration < test_iterations) {
 	
 		// If randomized-src was specified, re-roll the src
@@ -647,17 +670,18 @@ void RunTests(
 
 		// Compute reference CPU BFS solution for source-distance
 		if (!g_quick) {
-			SimpleReferenceBfs(csr_graph, reference_source_dist, src, stats[0]);
+			SimpleReferenceBfs(test_iteration, csr_graph, reference_source_dist, src, stats[0]);
 			printf("\n");
 			fflush(stdout);
 		}
 
 		if (num_gpus == 1) {
-/* bit rot?
-			if (!csr_problem.uneven) {
-				// Perform one-phase in-core BFS implementation (single grid launch)
+
+			if ((!csr_problem.uneven) && (!MARK_PARENTS)) {
+				// Perform one-phase expand-contract BFS implementation (single grid launch)
 				if (TestGpuBfs<INSTRUMENT>(
-					one_phase_enactor_ec,
+					test_iteration,
+					expand_contract_enactor,
 					csr_problem,
 					src,
 					h_source_path,
@@ -668,12 +692,12 @@ void RunTests(
 				printf("\n");
 				fflush(stdout);
 			}
-*/
 
 			if (!csr_problem.uneven) {
-				// Perform one-phase out-of-core BFS implementation (single grid launch)
+				// Perform one-phase contract-expand BFS implementation (single grid launch)
 				if (TestGpuBfs<INSTRUMENT>(
-					one_phase_enactor,
+					test_iteration,
+					contract_expand_enactor,
 					csr_problem,
 					src,
 					h_source_path,
@@ -687,6 +711,7 @@ void RunTests(
 
 			// Perform two-phase out-of-core BFS implementation (BFS level grid launch)
 			if (TestGpuBfs<INSTRUMENT>(
+				test_iteration,
 				two_phase_enactor,
 				csr_problem,
 				src,
@@ -702,6 +727,7 @@ void RunTests(
 
 				// Perform hybrid-phase out-of-core BFS implementation
 				if (TestGpuBfs<INSTRUMENT>(
+					test_iteration,
 					hybrid_enactor,
 					csr_problem,
 					src,
@@ -714,21 +740,23 @@ void RunTests(
 				fflush(stdout);
 			}
 
-		}
+		} else {
 
-		if (!csr_problem.uneven) {
-			// Perform multi-GPU out-of-core BFS implementation
-			if (TestGpuBfs<INSTRUMENT>(
-				multi_gpu_enactor,
-				csr_problem,
-				src,
-				h_source_path,
-				(g_quick) ? (VertexId*) NULL : reference_source_dist,
-				csr_graph,
-				stats[5],
-				max_grid_size)) exit(1);
-			printf("\n");
-			fflush(stdout);
+			if (!csr_problem.uneven) {
+				// Perform multi-GPU out-of-core BFS implementation
+				if (TestGpuBfs<INSTRUMENT>(
+					test_iteration,
+					multi_gpu_enactor,
+					csr_problem,
+					src,
+					h_source_path,
+					(g_quick) ? (VertexId*) NULL : reference_source_dist,
+					csr_graph,
+					stats[5],
+					max_grid_size)) exit(1);
+				printf("\n");
+				fflush(stdout);
+			}
 		}
 
 		if (g_verbose2) {
@@ -810,6 +838,7 @@ int main( int argc, char** argv)
 			src = atoi(src_str);
 		}
 	}
+
 	g_undirected = args.CheckCmdLineFlag("undirected");
 	g_quick = args.CheckCmdLineFlag("quick");
 	mark_parents = args.CheckCmdLineFlag("mark-parents");
@@ -907,6 +936,24 @@ int main( int argc, char** argv)
 			return 1;
 		}
 
+	} else if (graph_type == "rmat") {
+		// Random graph of n nodes and m edges
+		if (graph_args < 3) { Usage(); return 1; }
+		SizeT nodes = atol(argv[2]);
+		SizeT edges = atol(argv[3]);
+		if (builder::BuildRmatGraph<false>(
+			nodes,
+			edges,
+			src,
+			csr_graph,
+			g_undirected,
+			0.45,
+			0.15,
+			0.15) != 0)
+		{
+			return 1;
+		}
+
 	} else if (graph_type == "random") {
 		// Random graph of n nodes and m edges
 		if (graph_args < 3) { Usage(); return 1; }
@@ -941,6 +988,7 @@ int main( int argc, char** argv)
 
 	// Run tests
 	if (instrumented) {
+
 		// Run instrumented kernel for runtime statistics
 		if (mark_parents) {
 			RunTests<VertexId, Value, SizeT, true, true>(
@@ -949,6 +997,7 @@ int main( int argc, char** argv)
 			RunTests<VertexId, Value, SizeT, true, false>(
 				csr_graph, src, randomized_src, test_iterations, max_grid_size, num_gpus, queue_sizing, stream_from_host);
 		}
+
 	} else {
 
 		// Run regular kernel 

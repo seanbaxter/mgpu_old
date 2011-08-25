@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/test/reduction
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-19T10:54:24.661776Z
-555
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 has-props
 
@@ -66,10 +66,10 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-15a6b74116832f25bcba9cf1003bdcd8
-2011-06-19T10:54:24.661776Z
-555
+2011-08-25T08:01:50.000000Z
+adfb73f72fe7a12de7f0aef4b0c98b61
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 
 
@@ -92,7 +92,7 @@ duane.merrill
 
 
 
-4665
+4681
 
 compare_reduction.cu
 file
@@ -134,10 +134,10 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-473d67c482baa53963c9105654bf29b5
-2011-06-19T10:54:24.661776Z
-555
+2011-08-25T08:01:50.000000Z
+97a9ff7041ddc17a43f7cb5389d9ace0
+2011-08-05T22:03:04.166768Z
+619
 duane.merrill
 
 
@@ -160,7 +160,7 @@ duane.merrill
 
 
 
-4831
+4889
 
 tune_reduction.cu
 file
@@ -168,10 +168,10 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-124b1e2b5f4d3b81eef76e8522d0f820
-2011-06-17T17:43:37.412902Z
-547
+2011-08-25T08:01:50.000000Z
+6d1f3dff25049e2f7051a2e73f0fa605
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 
 
@@ -194,7 +194,7 @@ duane.merrill
 
 
 
-14741
+14757
 
 Makefile
 file

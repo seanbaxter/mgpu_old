@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 33
-/svn/!svn/ver/568/trunk/b40c/copy
+/svn/!svn/ver/659/trunk/b40c/copy
 END
 cta.cuh
 K 25
@@ -19,7 +19,7 @@ enactor.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 45
-/svn/!svn/ver/568/trunk/b40c/copy/enactor.cuh
+/svn/!svn/ver/659/trunk/b40c/copy/enactor.cuh
 END
 policy.cuh
 K 25

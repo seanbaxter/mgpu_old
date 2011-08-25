@@ -1,6 +1,6 @@
 /******************************************************************************
  * 
- * Scanright 2010-2011 Duane Merrill
+ * Copyright 2010-2011 Duane Merrill
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,7 +132,7 @@ int main(int argc, char** argv)
 
 	// Create a scan enactor
 	b40c::scan::Enactor scan_enactor;
-	scan_enactor.DEBUG = verbose;
+	scan_enactor.ENACTOR_DEBUG = verbose;
 
 	//
 	// Example 1: Enact simple exclusive scan using internal tuning heuristics

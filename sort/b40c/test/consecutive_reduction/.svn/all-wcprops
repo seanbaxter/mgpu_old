@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 50
-/svn/!svn/ver/575/trunk/test/consecutive_reduction
+/svn/!svn/ver/660/trunk/test/consecutive_reduction
 END
 compare_consecutive_reduction.cu
 K 25
@@ -13,7 +13,7 @@ test_consecutive_reduction.h
 K 25
 svn:wc:ra_dav:version-url
 V 79
-/svn/!svn/ver/568/trunk/test/consecutive_reduction/test_consecutive_reduction.h
+/svn/!svn/ver/660/trunk/test/consecutive_reduction/test_consecutive_reduction.h
 END
 test_consecutive_reduction.cu
 K 25

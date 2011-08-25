@@ -121,7 +121,7 @@ double TimedSegmentedScan(
 
 	// Perform a single iteration to allocate any memory if needed, prime code caches, etc.
 	printf("\n");
-	enactor.DEBUG = true;
+	enactor.ENACTOR_DEBUG = true;
 	enactor.template Scan<PROB_SIZE_GENRE, EXCLUSIVE>(
 		d_dest,
 		d_src,
@@ -130,7 +130,7 @@ double TimedSegmentedScan(
 		scan_op,
 		identity_op,
 		max_ctas);
-	enactor.DEBUG = false;
+	enactor.ENACTOR_DEBUG = false;
 
 	// Perform the timed number of iterations
 	GpuTimer timer;

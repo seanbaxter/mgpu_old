@@ -170,15 +170,14 @@ bin/test_sort_$(NVCC_VERSION)_$(ARCH_SUFFIX) : test_sort.cu $(DEPS)
 
 	
 #-------------------------------------------------------------------------------
-# (make tune) Evaluates the space of sort configuration types
+# (make lars) Test driver for Lars
 #-------------------------------------------------------------------------------
 
+lars: bin/lars_demo_$(NVCC_VERSION)_$(ARCH_SUFFIX)
 
-
-#-------------------------------------------------------------------------------
-# (make compare) Compares sort performance against other libraries (e.g., Thrust)
-#-------------------------------------------------------------------------------
-
+bin/lars_demo_$(NVCC_VERSION)_$(ARCH_SUFFIX) : lars_demo.cu $(DEPS)
+	mkdir -p bin
+	$(NVCC) $(DEFINES) $(SM_TARGETS) -o bin/lars_demo_$(NVCC_VERSION)_$(ARCH_SUFFIX) lars_demo.cu $(NVCCFLAGS) $(ARCH) $(INC) -O3  
 
 
 #-------------------------------------------------------------------------------

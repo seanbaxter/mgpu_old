@@ -1,13 +1,13 @@
 K 25
 svn:wc:ra_dav:version-url
 V 43
-/svn/!svn/ver/560/trunk/test/segmented_scan
+/svn/!svn/ver/660/trunk/test/segmented_scan
 END
 tune_segmented_scan.cu
 K 25
 svn:wc:ra_dav:version-url
 V 66
-/svn/!svn/ver/547/trunk/test/segmented_scan/tune_segmented_scan.cu
+/svn/!svn/ver/660/trunk/test/segmented_scan/tune_segmented_scan.cu
 END
 test_segmented_scan.cu
 K 25
@@ -19,7 +19,7 @@ test_segmented_scan.h
 K 25
 svn:wc:ra_dav:version-url
 V 65
-/svn/!svn/ver/560/trunk/test/segmented_scan/test_segmented_scan.h
+/svn/!svn/ver/660/trunk/test/segmented_scan/test_segmented_scan.h
 END
 compare_segmented_scan.cu
 K 25
@@ -37,5 +37,5 @@ simple_segmented_scan.cu
 K 25
 svn:wc:ra_dav:version-url
 V 68
-/svn/!svn/ver/556/trunk/test/segmented_scan/simple_segmented_scan.cu
+/svn/!svn/ver/647/trunk/test/segmented_scan/simple_segmented_scan.cu
 END

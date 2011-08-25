@@ -76,7 +76,7 @@ struct LoadTile
 			VectorType *d_in_vectors)
 		{
 			ModifiedLoad<CACHE_MODIFIER>::Ld(vectors[LOAD], d_in_vectors);
-			Transform(data[LOAD][0]);		// Apply transform function with in_bounds = true
+			Transform(vectors[LOAD].x);		// Apply transform function with in_bounds = true
 
 			Iterate<LOAD, 1>::template LoadVector<T, Transform>(
 				data, vectors, d_in_vectors);

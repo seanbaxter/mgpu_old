@@ -1,8 +1,9 @@
 K 10
 svn:ignore
-V 14
+V 22
 bin
 eval
 duty
+scripts
 
 END

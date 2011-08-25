@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 46
-/svn/!svn/ver/566/trunk/b40c/partition/upsweep
+/svn/!svn/ver/618/trunk/b40c/partition/upsweep
 END
 tuning_policy.cuh
 K 25
@@ -19,7 +19,7 @@ cta.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 54
-/svn/!svn/ver/537/trunk/b40c/partition/upsweep/cta.cuh
+/svn/!svn/ver/618/trunk/b40c/partition/upsweep/cta.cuh
 END
 aggregate_counters.cuh
 K 25

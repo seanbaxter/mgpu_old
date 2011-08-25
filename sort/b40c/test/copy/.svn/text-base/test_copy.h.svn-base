@@ -59,10 +59,10 @@ double TimedCopy(
 	copy::Enactor copy_enactor;
 
 	// Perform a single iteration to allocate any memory if needed, prime code caches, etc.
-	copy_enactor.DEBUG = true;
+	copy_enactor.ENACTOR_DEBUG = true;
 	copy_enactor.template Copy<PROB_SIZE_GENRE>(
 		d_dest, d_src, num_elements * sizeof(T), max_ctas);
-	copy_enactor.DEBUG = false;
+	copy_enactor.ENACTOR_DEBUG = false;
 
 	// Perform the timed number of iterations
 	GpuTimer timer;

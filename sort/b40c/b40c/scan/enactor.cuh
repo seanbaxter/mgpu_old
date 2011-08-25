@@ -61,7 +61,7 @@ protected:
 	// Helper structures
 	//-----------------------------------------------------------------------------
 
-	template <typename ProblemType, typename Enactor>
+	template <typename ProblemType>
 	friend class Detail;
 
 
@@ -201,7 +201,7 @@ public:
 /**
  * Type for encapsulating operational details regarding an invocation
  */
-template <typename ProblemType, typename Enactor>
+template <typename ProblemType>
 struct Detail : ProblemType
 {
 	typedef typename ProblemType::T 			T;
@@ -359,7 +359,7 @@ cudaError_t Enactor::EnactPass(DetailType &detail)
 	util::CtaWorkDistribution<SizeT> work;
 	work.template Init<Downsweep::LOG_SCHEDULE_GRANULARITY>(detail.num_elements, sweep_grid_size);
 
-	if (DEBUG) {
+	if (ENACTOR_DEBUG) {
 		if (sweep_grid_size > 1) {
 			PrintPassInfo<Upsweep, Spine, Downsweep>(work, spine_elements);
 		} else {
@@ -381,7 +381,7 @@ cudaError_t Enactor::EnactPass(DetailType &detail)
 				detail.scan_op,
 				detail.identity_op);
 
-			if (DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor SingleKernel failed ", __FILE__, __LINE__))) break;
+			if (ENACTOR_DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor SingleKernel failed ", __FILE__, __LINE__, ENACTOR_DEBUG))) break;
 
 		} else {
 
@@ -410,7 +410,7 @@ cudaError_t Enactor::EnactPass(DetailType &detail)
 				detail.identity_op,
 				work);
 
-			if (DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor UpsweepKernel failed ", __FILE__, __LINE__))) break;
+			if (ENACTOR_DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor UpsweepKernel failed ", __FILE__, __LINE__, ENACTOR_DEBUG))) break;
 
 			// Spine scan
 			SpineKernel<<<grid_size[1], Spine::THREADS, dynamic_smem[1]>>>(
@@ -420,7 +420,7 @@ cudaError_t Enactor::EnactPass(DetailType &detail)
 				detail.scan_op,
 				detail.identity_op);
 
-			if (DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor SpineKernel failed ", __FILE__, __LINE__))) break;
+			if (ENACTOR_DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor SpineKernel failed ", __FILE__, __LINE__, ENACTOR_DEBUG))) break;
 
 			// Downsweep from spine
 			DownsweepKernel<<<grid_size[2], Downsweep::THREADS, dynamic_smem[2]>>>(
@@ -431,7 +431,7 @@ cudaError_t Enactor::EnactPass(DetailType &detail)
 				detail.identity_op,
 				work);
 
-			if (DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor DownsweepKernel failed ", __FILE__, __LINE__))) break;
+			if (ENACTOR_DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor DownsweepKernel failed ", __FILE__, __LINE__, ENACTOR_DEBUG))) break;
 		}
 	} while (0);
 
@@ -451,7 +451,7 @@ cudaError_t Enactor::Scan(
 	typename Policy::IdentityOp identity_op,
 	int max_grid_size)
 {
-	Detail<Policy, Enactor> detail(
+	Detail<Policy> detail(
 		this,
 		d_dest,
 		d_src,
@@ -491,7 +491,7 @@ cudaError_t Enactor::Scan(
 		EXCLUSIVE,
 		COMMUTATIVE> ProblemType;
 
-	Detail<ProblemType, Enactor> detail(
+	Detail<ProblemType> detail(
 		this,
 		d_dest,
 		d_src,

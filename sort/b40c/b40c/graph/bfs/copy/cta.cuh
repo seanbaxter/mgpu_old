@@ -63,7 +63,6 @@ struct Cta
 	VertexId 				*d_in;
 	VertexId 				*d_out;
 	VertexId 				*d_parent_in;
-	VertexId 				*d_parent_out;
 	VertexId				*d_source_path;
 
 	//---------------------------------------------------------------------
@@ -208,14 +207,12 @@ struct Cta
 		VertexId 				*d_in,
 		VertexId 				*d_out,
 		VertexId 				*d_parent_in,
-		VertexId 				*d_parent_out,
 		VertexId 				*d_source_path) :
 			iteration(iteration),
 			num_gpus(num_gpus),
 			d_in(d_in),
 			d_out(d_out),
 			d_parent_in(d_parent_in),
-			d_parent_out(d_parent_out),
 			d_source_path(d_source_path)
 	{}
 

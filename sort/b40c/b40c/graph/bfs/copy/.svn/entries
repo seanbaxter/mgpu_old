@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/graph/bfs/copy
 http://back40computing.googlecode.com/svn
 
 
 
-2011-07-05T09:58:39.291165Z
-599
+2011-08-08T04:26:53.958713Z
+621
 duane.merrill
 
 
@@ -32,10 +32,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-c1cd2ed08c3ad26ca7b1f69c534adb25
-2011-07-05T09:58:39.291165Z
-599
+2011-08-25T08:01:51.000000Z
+a47eb497c3d7044a4b3d88e4b6860d61
+2011-08-08T04:26:53.958713Z
+621
 duane.merrill
 
 
@@ -58,7 +58,7 @@ duane.merrill
 
 
 
-7079
+6989
 
 kernel_policy.cuh
 file
@@ -100,10 +100,10 @@ file
 
 
 
-2011-07-17T17:19:47.000000Z
-c6b9d475205b73bc8434233c6e3ba13b
-2011-07-05T09:58:39.291165Z
-599
+2011-08-25T08:01:51.000000Z
+957acb8a3c820089eb55a02e47fefd6b
+2011-08-08T04:26:53.958713Z
+621
 duane.merrill
 
 
@@ -126,5 +126,5 @@ duane.merrill
 
 
 
-7296
+7092
 

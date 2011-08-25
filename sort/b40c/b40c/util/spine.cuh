@@ -55,9 +55,8 @@ struct Spine
 	// GPU d_spine was allocated on
 	int gpu;
 
-	// Whether or not the spine is (a) allocated on the host and mapped
-	// into gpu memory, or (b) allocated on the gpu
-	bool host_mapped;
+	// Whether or not the spine has a shadow spine on the host
+	bool host_shadow;
 
 
 	//---------------------------------------------------------------------
@@ -72,22 +71,21 @@ struct Spine
 		h_spine(NULL),
 		spine_bytes(0),
 		gpu(B40C_INVALID_DEVICE),
-		host_mapped(false) {}
+		host_shadow(false) {}
 
 
 	/**
 	 * Constructor
 	 *
-	 * @param host_mapped
-	 * 		Whether or not the spine is (a) allocated on the host and mapped
-	 * 		into gpu memory, or (b) allocated on the gpu
+	 * @param host_shadow
+	 * 		Whether or not the spine has a shadow spine on the host
 	 */
-	Spine(bool host_mapped) :
+	Spine(bool host_shadow) :
 		d_spine(NULL),
 		h_spine(NULL),
 		spine_bytes(0),
 		gpu(B40C_INVALID_DEVICE),
-		host_mapped(host_mapped) {}
+		host_shadow(host_shadow) {}
 
 
 	/**
@@ -101,33 +99,34 @@ struct Spine
 			if (gpu == B40C_INVALID_DEVICE) return retval;
 
 			// Save current gpu
-			int current_gpu;
-			if (retval = util::B40CPerror(cudaGetDevice(&current_gpu),
-				"Spine cudaGetDevice failed: ", __FILE__, __LINE__)) break;
+		//	int current_gpu;
+		//	if (retval = util::B40CPerror(cudaGetDevice(&current_gpu),
+		//		"Spine cudaGetDevice failed: ", __FILE__, __LINE__)) break;
 #if CUDA_VERSION >= 4000
-		//	if (retval = util::B40CPerror(cudaSetDevice(gpu),
-		//		"Spine cudaSetDevice failed: ", __FILE__, __LINE__)) break;
+			if (retval = util::B40CPerror(cudaSetDevice(gpu),
+				"Spine cudaSetDevice failed: ", __FILE__, __LINE__)) break;
 #endif
-			if (host_mapped) {
-				if (h_spine) {
-					// Deallocate
-					if (retval = util::B40CPerror(cudaFreeHost((void *) h_spine),
-						"Spine cudaFreeHost h_spine failed", __FILE__, __LINE__)) break;
-
-					h_spine = NULL;
-				}
-			} else if (d_spine) {
+			if (d_spine) {
 				// Deallocate
 				if (retval = util::B40CPerror(cudaFree(d_spine),
 					"Spine cudaFree d_spine failed: ", __FILE__, __LINE__)) break;
+				d_spine = NULL;
 			}
+			if (h_spine) {
+				// Deallocate
+				if (retval = util::B40CPerror(cudaFreeHost((void *) h_spine),
+					"Spine cudaFreeHost h_spine failed", __FILE__, __LINE__)) break;
+
+				h_spine = NULL;
+			}
+
 #if CUDA_VERSION >= 4000
 			// Restore current gpu
 		//	if (retval = util::B40CPerror(cudaSetDevice(current_gpu),
 		//		"Spine cudaSetDevice failed: ", __FILE__, __LINE__)) break;
 #endif
-			d_spine 		= NULL;
-			gpu 			= B40C_INVALID_DEVICE;
+
+		//	gpu 			= B40C_INVALID_DEVICE;
 			spine_bytes	 	= 0;
 
 		} while (0);
@@ -169,43 +168,66 @@ struct Spine
 			size_t problem_spine_bytes = spine_elements * sizeof(T);
 
 			// Get current gpu
-			int current_gpu;
-			if (retval = util::B40CPerror(cudaGetDevice(&current_gpu),
-				"Spine cudaGetDevice failed: ", __FILE__, __LINE__)) break;
+		//	int current_gpu;
+		//	if (retval = util::B40CPerror(cudaGetDevice(&current_gpu),
+		//		"Spine cudaGetDevice failed: ", __FILE__, __LINE__)) break;
 
 			// Check if big enough and if lives on proper GPU
-			if ((problem_spine_bytes > spine_bytes) || (gpu != current_gpu)) {
+			if ((problem_spine_bytes > spine_bytes) /*|| (gpu != current_gpu)*/) {
 
 				// Deallocate if exists
 				if (retval = HostReset()) break;
 
 				// Remember device
-				gpu = current_gpu;
+			//	gpu = current_gpu;
 
 				// Reallocate
 				spine_bytes = problem_spine_bytes;
-				if (host_mapped) {
 
+				// Allocate on device
+				if (retval = util::B40CPerror(cudaMalloc((void**) &d_spine, spine_bytes),
+					"Spine cudaMalloc d_spine failed", __FILE__, __LINE__)) break;
+
+				if (host_shadow) {
 					// Allocate pinned memory for h_spine
 					int flags = cudaHostAllocMapped;
 					if (retval = util::B40CPerror(cudaHostAlloc((void **)&h_spine, problem_spine_bytes, flags),
 						"Spine cudaHostAlloc h_spine failed", __FILE__, __LINE__)) break;
-
-					// Map done into GPU space
-					if (retval = util::B40CPerror(cudaHostGetDevicePointer((void **)&d_spine, (void *) h_spine, 0),
-						"Spine cudaHostGetDevicePointer done failed", __FILE__, __LINE__)) break;
-
-				} else {
-
-					// Allocate on device
-					if (retval = util::B40CPerror(cudaMalloc((void**) &d_spine, spine_bytes),
-						"Spine cudaMalloc d_spine failed", __FILE__, __LINE__)) break;
 				}
 			}
 		} while (0);
 
 		return retval;
 	}
+
+
+	/**
+	 * Syncs the shadow host spine with device spine
+	 */
+	cudaError_t Sync(cudaStream_t stream)
+	{
+		return cudaMemcpyAsync(
+			h_spine,
+			d_spine,
+			spine_bytes,
+			cudaMemcpyDeviceToHost,
+			stream);
+	}
+
+
+	/**
+	 * Syncs the shadow host spine with device spine
+	 */
+	cudaError_t Sync()
+	{
+		return cudaMemcpy(
+			h_spine,
+			d_spine,
+			spine_bytes,
+			cudaMemcpyDeviceToHost);
+	}
+
+
 };
 
 } // namespace util

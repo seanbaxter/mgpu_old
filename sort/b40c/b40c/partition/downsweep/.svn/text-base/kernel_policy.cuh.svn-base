@@ -42,6 +42,10 @@ namespace downsweep {
 template <typename TuningPolicy>
 struct KernelPolicy : TuningPolicy
 {
+	typedef typename TuningPolicy::SizeT 		SizeT;
+	typedef typename TuningPolicy::KeyType 		KeyType;
+	typedef typename TuningPolicy::ValueType 	ValueType;
+
 	enum {
 
 		BINS 							= 1 << TuningPolicy::LOG_BINS,
@@ -94,10 +98,6 @@ struct KernelPolicy : TuningPolicy
 	 */
 	struct SmemStorage
 	{
-		typedef typename TuningPolicy::SizeT 		SizeT;
-		typedef typename TuningPolicy::KeyType 		KeyType;
-		typedef typename TuningPolicy::ValueType 	ValueType;
-
 		volatile int 					lanes_warpscan[SCAN_LANES_PER_CYCLE][3][Grid::RAKING_THREADS_PER_LANE];		// One warpscan per lane
 		volatile int 					bin_warpscan[2][BINS];
 
@@ -121,6 +121,11 @@ struct KernelPolicy : TuningPolicy
 	enum {
 		SMEM_BYTES						= sizeof(SmemStorage),
 	};
+
+
+	__device__ __forceinline__ static void PreprocessKey(KeyType &key) {}
+
+	__device__ __forceinline__ static void PostprocessKey(KeyType &key) {}
 };
 	
 

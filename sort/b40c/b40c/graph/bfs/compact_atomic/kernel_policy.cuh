@@ -163,7 +163,7 @@ struct KernelPolicy : _ProblemType
 			// Amount of storage we can use for hashing scratch space under target occupancy
 			FULL_OCCUPANCY_BYTES				= (B40C_SMEM_BYTES(CUDA_ARCH) / _MAX_CTA_OCCUPANCY)
 													- sizeof(State)
-													- 72,
+													- 128,
 
 			HISTORY_HASH_ELEMENTS				= FULL_OCCUPANCY_BYTES / sizeof(VertexId),
 		};

@@ -1,6 +1,5 @@
 // MGPU Sort simple test example. Remember to link with the sort library 
 // (mgpusort.lib is the import library on Windows).
-
 #include <cstdio>
 #include <vector>
 #include <random>
@@ -20,7 +19,6 @@ void PrintArrayToScreen(const uint* values, int numValues) {
 		printf("\n");
 	}
 }
-
 
 int main(int argc, char** argv) {
 
@@ -90,4 +88,3 @@ int main(int argc, char** argv) {
 	printf("\n\n%d sorted values:\n", NumElements);
 	PrintArrayToScreen(&hostData[0], NumElements);
 }
-

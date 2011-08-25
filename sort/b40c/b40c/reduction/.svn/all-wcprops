@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 38
-/svn/!svn/ver/575/trunk/b40c/reduction
+/svn/!svn/ver/659/trunk/b40c/reduction
 END
 problem_type.cuh
 K 25
@@ -25,7 +25,7 @@ enactor.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 50
-/svn/!svn/ver/568/trunk/b40c/reduction/enactor.cuh
+/svn/!svn/ver/659/trunk/b40c/reduction/enactor.cuh
 END
 kernel_policy.cuh
 K 25

@@ -116,7 +116,7 @@ struct Tile :
 	template <typename Cta>
 	__device__ __forceinline__ void ScatterKeys(
 		Cta *cta,
-		const SizeT &guarded_elements)
+		const SizeT &valid_elements)
 	{
 		// Scatter keys to global bin partitions
 		util::io::ScatterTile<
@@ -129,7 +129,7 @@ struct Tile :
 					cta->d_out_keys,
 					(KeyType (*)[1]) this->keys,
 					(SizeT (*)[1]) this->scatter_offsets,
-					guarded_elements);
+					valid_elements);
 	}
 };
 

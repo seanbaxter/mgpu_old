@@ -50,7 +50,7 @@ public:
 
 	// Debug level.  If set, the enactor blocks after kernel calls to check
 	// for successful launch/execution
-	bool DEBUG;
+	bool ENACTOR_DEBUG;
 
 
 	// The arch version of the code for the current device that actually have
@@ -219,8 +219,8 @@ protected:
 
 			if (cuda_props.device_sm_version < 120) {
 
-				// G80/G90: CTA occupancy times SM count
-				grid_size = cuda_props.device_props.multiProcessorCount * CTA_OCCUPANCY;
+				// G80/G90: double CTA occupancy times SM count
+				grid_size = cuda_props.device_props.multiProcessorCount * CTA_OCCUPANCY * 2;
 
 			} else if (cuda_props.device_sm_version < 200) {
 
@@ -468,9 +468,9 @@ protected:
 
 	EnactorBase() :
 #if	defined(__THRUST_SYNCHRONOUS) || defined(DEBUG) || defined(_DEBUG)
-			DEBUG(true)
+			ENACTOR_DEBUG(true)
 #else
-			DEBUG(false)
+			ENACTOR_DEBUG(false)
 #endif
 		{}
 

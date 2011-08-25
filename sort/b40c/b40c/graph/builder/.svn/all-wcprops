@@ -1,7 +1,7 @@
 K 25
 svn:wc:ra_dav:version-url
 V 42
-/svn/!svn/ver/604/trunk/b40c/graph/builder
+/svn/!svn/ver/630/trunk/b40c/graph/builder
 END
 metis.cuh
 K 25
@@ -19,7 +19,13 @@ rr.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 49
-/svn/!svn/ver/526/trunk/b40c/graph/builder/rr.cuh
+/svn/!svn/ver/630/trunk/b40c/graph/builder/rr.cuh
+END
+rmat.cuh
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/630/trunk/b40c/graph/builder/rmat.cuh
 END
 grid2d.cuh
 K 25

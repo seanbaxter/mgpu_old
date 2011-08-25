@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/test/copy
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-18T07:37:20.775367Z
-549
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 has-props
 
@@ -32,10 +32,10 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-26ea62750b26aa3d45d97a747577732b
-2011-06-18T07:37:20.775367Z
-549
+2011-08-25T08:01:50.000000Z
+2c2f2c05ae9c7df2336cb33ab82a9ec9
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 
 
@@ -58,7 +58,7 @@ duane.merrill
 
 
 
-3525
+3541
 
 test_copy.cu
 file
@@ -168,11 +168,11 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-bce80ea3918e82120670852eb1c88ccc
-2011-06-08T14:55:12.535729Z
-526
-duane.merrill@gmail.com
+2011-08-25T08:01:50.000000Z
+e1ef41259d3e0c2160f150d53e4dda74
+2011-08-24T14:46:28.525295Z
+660
+duane.merrill
 
 
 
@@ -194,7 +194,7 @@ duane.merrill@gmail.com
 
 
 
-12175
+12191
 
 Makefile
 file

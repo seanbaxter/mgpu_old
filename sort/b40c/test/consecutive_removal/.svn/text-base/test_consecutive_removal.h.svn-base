@@ -119,10 +119,10 @@ double TimedConsecutiveRemoval(
 
 	// Perform a single iteration to allocate any memory if needed, prime code caches, etc.
 	printf("\n");
-	enactor.DEBUG = true;
+	enactor.ENACTOR_DEBUG = true;
 	enactor.template Trim<PROB_SIZE_GENRE>(
 		d_problem_storage, num_elements, &h_num_compacted, d_num_compacted, equality_op, max_ctas);
-	enactor.DEBUG = false;
+	enactor.ENACTOR_DEBUG = false;
 
 	// Perform the timed number of iterations
 	GpuTimer timer;

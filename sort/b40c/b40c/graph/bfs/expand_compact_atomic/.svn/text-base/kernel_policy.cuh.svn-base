@@ -75,6 +75,7 @@ template <
 	bool _WORK_STEALING,
 	int _WARP_GATHER_THRESHOLD,
 	int _CTA_GATHER_THRESHOLD,
+	int _BITMASK_CULL_THRESHOLD,
 	int _LOG_SCHEDULE_GRANULARITY>
 
 struct KernelPolicy : _ProblemType
@@ -124,6 +125,7 @@ struct KernelPolicy : _ProblemType
 		WORK_STEALING					= _WORK_STEALING,
 		WARP_GATHER_THRESHOLD			= _WARP_GATHER_THRESHOLD,
 		CTA_GATHER_THRESHOLD			= _CTA_GATHER_THRESHOLD,
+		BITMASK_CULL_THRESHOLD 			= _BITMASK_CULL_THRESHOLD,
 	};
 
 
@@ -183,13 +185,14 @@ struct KernelPolicy : _ProblemType
 			// Amount of storage we can use for hashing scratch space under target occupancy
 			MAX_SCRATCH_BYTES_PER_CTA		= (B40C_SMEM_BYTES(CUDA_ARCH) / _MAX_CTA_OCCUPANCY)
 												- sizeof(State)
-												- 72,
+												- 128,
 
 			SCRATCH_ELEMENT_SIZE 			= (ProblemType::MARK_PARENTS) ?
 													sizeof(SizeT) + sizeof(VertexId) :			// Need both gather offset and parent
 													sizeof(SizeT),								// Just gather offset
 
 			HASH_ELEMENTS					= MAX_SCRATCH_BYTES_PER_CTA / sizeof(VertexId),
+			WARP_HASH_ELEMENTS				= 128,
 
 			OFFSET_ELEMENTS					= MAX_SCRATCH_BYTES_PER_CTA / SCRATCH_ELEMENT_SIZE,
 			PARENT_ELEMENTS					= (ProblemType::MARK_PARENTS) ?  OFFSET_ELEMENTS : 0,
@@ -205,7 +208,8 @@ struct KernelPolicy : _ProblemType
 				VertexId 					parent_scratch[PARENT_ELEMENTS];
 			};
 
-			VertexId 						vid_hashtable[HASH_ELEMENTS];
+			volatile VertexId 				warp_hashtable[WARPS][WARP_HASH_ELEMENTS];
+			VertexId 						cta_hashtable[HASH_ELEMENTS];
 		};
 	};
 

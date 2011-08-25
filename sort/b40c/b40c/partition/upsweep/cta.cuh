@@ -220,7 +220,7 @@ struct Cta
 
 		// Unroll batches of full tiles
 		const int UNROLLED_ELEMENTS = KernelPolicy::UNROLL_COUNT * KernelPolicy::TILE_ELEMENTS;
-		while (cta_offset < work_limits.out_of_bounds - UNROLLED_ELEMENTS) {
+		while (cta_offset  + UNROLLED_ELEMENTS < work_limits.out_of_bounds) {
 
 			UnrollTiles::template Iterate<KernelPolicy::UNROLL_COUNT>::ProcessTiles(
 				dispatch,
@@ -239,7 +239,7 @@ struct Cta
 		}
 
 		// Unroll single full tiles
-		while (cta_offset < work_limits.out_of_bounds - KernelPolicy::TILE_ELEMENTS) {
+		while (cta_offset + KernelPolicy::TILE_ELEMENTS < work_limits.out_of_bounds) {
 
 			UnrollTiles::template Iterate<1>::ProcessTiles(
 				dispatch,

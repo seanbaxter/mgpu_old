@@ -87,9 +87,6 @@ cudaError_t RunB40cBenchmark(Storage& storage, B40cTerms& terms,
 	b40c::radix_sort::Enactor enactor;
 	CuEventTimer timer;
 
-	// Disable diagnostics.
-	enactor.DEBUG = false;
-
 	for(int i(0); i < terms.iterations; ++i) {
 		if(!i || terms.reset) {
 			timer.Stop();

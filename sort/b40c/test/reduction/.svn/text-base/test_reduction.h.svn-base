@@ -96,10 +96,10 @@ double TimedReduction(
 		"TimedReduction cudaMemcpy d_src failed: ", __FILE__, __LINE__)) exit(1);
 
 	// Perform a single iteration to allocate any memory if needed, prime code caches, etc.
-	reduction_enactor.DEBUG = true;
+	reduction_enactor.ENACTOR_DEBUG = true;
 	reduction_enactor.template Reduce<PROB_SIZE_GENRE>(
 		d_dest, d_src, num_elements, reduction_op, max_ctas);
-	reduction_enactor.DEBUG = false;
+	reduction_enactor.ENACTOR_DEBUG = false;
 
 	// Perform the timed number of iterations
 	GpuTimer timer;

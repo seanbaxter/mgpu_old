@@ -29,9 +29,9 @@
 #include <b40c/util/error_utils.cuh>
 #include <b40c/util/spine.cuh>
 #include <b40c/util/arch_dispatch.cuh>
+#include <b40c/util/ping_pong_storage.cuh>
 
-#include <b40c/partition/problem_type.cuh>
-
+#include <b40c/radix_sort/problem_type.cuh>
 #include <b40c/radix_sort/policy.cuh>
 #include <b40c/radix_sort/pass_policy.cuh>
 #include <b40c/radix_sort/autotuned_policy.cuh>
@@ -71,8 +71,7 @@ protected:
 	template <
 		int _START_BIT,
 		int _NUM_BITS,
-		typename PingPongStorage,
-		typename SizeT>
+		typename _ProblemType>
 	friend class Detail;
 
 
@@ -119,7 +118,7 @@ public:
     virtual ~Enactor()
     {
    		if (d_selectors) {
-   			util::B40CPerror(cudaFree(d_selectors), "Enactor cudaFree d_selectors failed: ", __FILE__, __LINE__);
+   			util::B40CPerror(cudaFree(d_selectors), "Enactor cudaFree d_selectors failed: ", __FILE__, __LINE__, ENACTOR_DEBUG);
    		}
     }
 
@@ -251,13 +250,14 @@ public:
 	template <
 		int START_BIT,
 		int NUM_BITS,
-		typename Policy,
-		typename PingPongStorage,
-		typename SizeT>
+		typename Policy>
 	cudaError_t Sort(
-		PingPongStorage &problem_storage,
-		SizeT num_elements,
+		util::PingPongStorage<
+			typename Policy::OriginalKeyType,
+			typename Policy::ValueType> &problem_storage,
+		typename Policy::SizeT num_elements,
 		int max_grid_size = 0);
+
 };
 
 
@@ -272,25 +272,22 @@ public:
 template <
 	int _START_BIT,
 	int _NUM_BITS,
-	typename PingPongStorage,
-	typename SizeT>
+	typename _ProblemType>
 struct Detail
 {
 	static const int START_BIT 		= _START_BIT;
 	static const int NUM_BITS 		= _NUM_BITS;
 
-	// Key conversion trait type
-	typedef KeyTraits<typename PingPongStorage::KeyType> KeyTraits;
-
-	// Problem type is on unsigned keys (converted key type)
-	typedef partition::ProblemType<
-		typename KeyTraits::ConvertedKeyType,
-		typename PingPongStorage::ValueType,
-		SizeT> ProblemType;
+	// Problem type
+	typedef _ProblemType 														ProblemType;
+	typedef typename ProblemType::OriginalKeyType								StorageKeyType;
+	typedef typename ProblemType::ValueType										StorageValueType;
+	typedef typename ProblemType::SizeT											SizeT;
+	typedef typename util::PingPongStorage<StorageKeyType, StorageValueType> 	PingPongStorage;
 
 	// Problem data
 	Enactor 			*enactor;
-	PingPongStorage 	&problem_storage;
+	PingPongStorage		&problem_storage;
 	SizeT				num_elements;
 	int			 		max_grid_size;
 
@@ -440,7 +437,11 @@ struct PassIteration
 		template <typename Detail>
 		static cudaError_t Invoke(Detail &detail)
 		{
-			typedef PassPolicy<0, CURRENT_BIT, typename Detail::KeyTraits, NopKeyConversion> PassPolicy;
+			typedef PassPolicy<
+				0,
+				CURRENT_BIT,
+				typename Policy::KeyTraits,
+				NopKeyConversion> PassPolicy;
 
 			cudaError_t retval = detail.template EnactPass<Policy, PassPolicy>();
 			if (retval) return retval;
@@ -466,7 +467,11 @@ struct PassIteration
 		template <typename Detail>
 		static cudaError_t Invoke(Detail &detail)
 		{
-			typedef PassPolicy<LAST_PASS, CURRENT_BIT, NopKeyConversion, typename Detail::KeyTraits> PassPolicy;
+			typedef PassPolicy<
+				LAST_PASS,
+				CURRENT_BIT,
+				NopKeyConversion,
+				typename Policy::KeyTraits> PassPolicy;
 
 			return detail.template EnactPass<Policy, PassPolicy>();
 		}
@@ -484,7 +489,11 @@ struct PassIteration
 		template <typename Detail>
 		static cudaError_t Invoke(Detail &detail)
 		{
-			typedef PassPolicy<0, CURRENT_BIT, typename Detail::KeyTraits, typename Detail::KeyTraits> PassPolicy;
+			typedef PassPolicy<
+				0,
+				CURRENT_BIT,
+				typename Policy::KeyTraits,
+				typename Policy::KeyTraits> PassPolicy;
 
 			return detail.template EnactPass<Policy, PassPolicy>();
 		}
@@ -510,10 +519,8 @@ cudaError_t Enactor::EnactPass(Detail &detail)
 	typedef typename Policy::Downsweep 						Downsweep;
 
 	// Data types
-	typedef typename Policy::KeyType 						KeyType;
-	typedef typename Policy::ValueType 						ValueType;
+	typedef typename Policy::KeyType 						KeyType;	// Converted key type
 	typedef typename Policy::SizeT 							SizeT;
-	typedef typename Detail::KeyTraits::ConvertedKeyType 	ConvertedKeyType;
 
 	cudaError_t retval = cudaSuccess;
 	do {
@@ -535,29 +542,29 @@ cudaError_t Enactor::EnactPass(Detail &detail)
 		UpsweepKernel<<<grid_size[0], Upsweep::THREADS, dynamic_smem[0]>>>(
 			d_selectors,
 			(SizeT*) spine(),
-			(ConvertedKeyType *) detail.problem_storage.d_keys[detail.problem_storage.selector],
-			(ConvertedKeyType *) detail.problem_storage.d_keys[detail.problem_storage.selector ^ 1],
+			(KeyType *) detail.problem_storage.d_keys[detail.problem_storage.selector],
+			(KeyType *) detail.problem_storage.d_keys[detail.problem_storage.selector ^ 1],
 			detail.work);
 
-		if (DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor UpsweepKernel failed ", __FILE__, __LINE__))) break;
+		if (ENACTOR_DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor UpsweepKernel failed ", __FILE__, __LINE__, ENACTOR_DEBUG))) break;
 
 		// Spine scan
 		SpineKernel<<<grid_size[1], Spine::THREADS, dynamic_smem[1]>>>(
 			(SizeT*) spine(), (SizeT*) spine(), detail.spine_elements);
 
-		if (DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor SpineKernel failed ", __FILE__, __LINE__))) break;
+		if (ENACTOR_DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor SpineKernel failed ", __FILE__, __LINE__, ENACTOR_DEBUG))) break;
 
 		// Downsweep scan from spine
 		DownsweepKernel<<<grid_size[2], Downsweep::THREADS, dynamic_smem[2]>>>(
 			d_selectors,
 			(SizeT *) spine(),
-			(ConvertedKeyType *) detail.problem_storage.d_keys[detail.problem_storage.selector],
-			(ConvertedKeyType *) detail.problem_storage.d_keys[detail.problem_storage.selector ^ 1],
+			(KeyType *) detail.problem_storage.d_keys[detail.problem_storage.selector],
+			(KeyType *) detail.problem_storage.d_keys[detail.problem_storage.selector ^ 1],
 			detail.problem_storage.d_values[detail.problem_storage.selector],
 			detail.problem_storage.d_values[detail.problem_storage.selector ^ 1],
 			detail.work);
 
-		if (DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor DownsweepKernel failed ", __FILE__, __LINE__))) break;
+		if (ENACTOR_DEBUG && (retval = util::B40CPerror(cudaThreadSynchronize(), "Enactor DownsweepKernel failed ", __FILE__, __LINE__, ENACTOR_DEBUG))) break;
 
 	} while (0);
 
@@ -580,26 +587,26 @@ cudaError_t Enactor::PreSort(Detail &detail)
 		// Setup d_selectors if necessary
 		if (d_selectors == NULL) {
 			if (retval = util::B40CPerror(cudaMalloc((void**) &d_selectors, 2 * sizeof(int)),
-				"LsbSortEnactor cudaMalloc d_selectors failed", __FILE__, __LINE__)) break;
+				"LsbSortEnactor cudaMalloc d_selectors failed", __FILE__, __LINE__, ENACTOR_DEBUG)) break;
 		}
 
 		// Setup pong-storage if necessary
 		if (detail.problem_storage.d_keys[0] == NULL) {
 			if (retval = util::B40CPerror(cudaMalloc((void**) &detail.problem_storage.d_keys[0], detail.num_elements * sizeof(KeyType)),
-				"LsbSortEnactor cudaMalloc detail.problem_storage.d_keys[0] failed", __FILE__, __LINE__)) break;
+				"LsbSortEnactor cudaMalloc detail.problem_storage.d_keys[0] failed", __FILE__, __LINE__, ENACTOR_DEBUG)) break;
 		}
 		if (detail.problem_storage.d_keys[1] == NULL) {
 			if (retval = util::B40CPerror(cudaMalloc((void**) &detail.problem_storage.d_keys[1], detail.num_elements * sizeof(KeyType)),
-				"LsbSortEnactor cudaMalloc detail.problem_storage.d_keys[1] failed", __FILE__, __LINE__)) break;
+				"LsbSortEnactor cudaMalloc detail.problem_storage.d_keys[1] failed", __FILE__, __LINE__, ENACTOR_DEBUG)) break;
 		}
 		if (!util::Equals<ValueType, util::NullType>::VALUE) {
 			if (detail.problem_storage.d_values[0] == NULL) {
 				if (retval = util::B40CPerror(cudaMalloc((void**) &detail.problem_storage.d_values[0], detail.num_elements * sizeof(ValueType)),
-					"LsbSortEnactor cudaMalloc detail.problem_storage.d_values[0] failed", __FILE__, __LINE__)) break;
+					"LsbSortEnactor cudaMalloc detail.problem_storage.d_values[0] failed", __FILE__, __LINE__, ENACTOR_DEBUG)) break;
 			}
 			if (detail.problem_storage.d_values[1] == NULL) {
 				if (retval = util::B40CPerror(cudaMalloc((void**) &detail.problem_storage.d_values[1], detail.num_elements * sizeof(ValueType)),
-					"LsbSortEnactor cudaMalloc detail.problem_storage.d_values[1] failed", __FILE__, __LINE__)) break;
+					"LsbSortEnactor cudaMalloc detail.problem_storage.d_values[1] failed", __FILE__, __LINE__, ENACTOR_DEBUG)) break;
 			}
 		}
 
@@ -633,7 +640,7 @@ cudaError_t Enactor::PostSort(Detail &detail, int num_passes)
 
 			// Copy out the selector from the last pass
 			if (retval = util::B40CPerror(cudaMemcpy(&detail.problem_storage.selector, &d_selectors[num_passes & 0x1], sizeof(int), cudaMemcpyDeviceToHost),
-				"LsbSortEnactor cudaMemcpy d_selector failed", __FILE__, __LINE__)) break;
+				"LsbSortEnactor cudaMemcpy d_selector failed", __FILE__, __LINE__, ENACTOR_DEBUG)) break;
 
 			// Correct new selector if the original indicated that we started off from the alternate
 			detail.problem_storage.selector ^= old_selector;
@@ -664,6 +671,11 @@ cudaError_t Enactor::EnactSort(Detail &detail)
 	const int MIN_OCCUPANCY 			= B40C_MIN((int) Upsweep::MAX_CTA_OCCUPANCY, (int) Downsweep::MAX_CTA_OCCUPANCY);
 	util::SuppressUnusedConstantWarning(MIN_OCCUPANCY);
 
+	// Make sure we have a valid policy
+	if (!Policy::VALID) {
+		return cudaErrorInvalidConfiguration;
+	}
+
 	// Compute sweep grid size
 	int grid_size = (Policy::OVERSUBSCRIBED_GRID_SIZE) ?
 		OversubscribedGridSize<Downsweep::SCHEDULE_GRANULARITY, MIN_OCCUPANCY>(detail.num_elements, detail.max_grid_size) :
@@ -678,7 +690,7 @@ cudaError_t Enactor::EnactSort(Detail &detail)
 	detail.work.template Init<Downsweep::LOG_SCHEDULE_GRANULARITY>(
 		detail.num_elements, grid_size);
 
-	if (DEBUG) {
+	if (ENACTOR_DEBUG) {
 		printf("\n\n");
 		PrintPassInfo<Upsweep, Spine, Downsweep>(detail.work, detail.spine_elements);
 		printf("Sorting: \t[radix_bits: %d, start_bit: %d, num_bits: %d, num_passes: %d]\n",
@@ -718,19 +730,21 @@ cudaError_t Enactor::EnactSort(Detail &detail)
 template <
 	int START_BIT,
 	int NUM_BITS,
-	typename Policy,
-	typename PingPongStorage,
-	typename SizeT>
+	typename Policy>
 cudaError_t Enactor::Sort(
-	PingPongStorage &problem_storage,
-	SizeT num_elements,
+	util::PingPongStorage<
+		typename Policy::OriginalKeyType,
+		typename Policy::ValueType> &problem_storage,
+	typename Policy::SizeT num_elements,
 	int max_grid_size)
 {
-	typedef Detail<START_BIT, NUM_BITS, PingPongStorage, SizeT> Detail;
+	Detail<START_BIT, NUM_BITS, Policy> detail(
+		this,
+		problem_storage,
+		num_elements,
+		max_grid_size);
 
-	Detail detail(this, problem_storage, num_elements, max_grid_size);
-
-	return EnactSort<Policy, Detail>(detail);
+	return detail.template EnactSort<Policy>();
 }
 
 /**
@@ -747,11 +761,15 @@ cudaError_t Enactor::Sort(
 	SizeT num_elements,
 	int max_grid_size)
 {
+	typedef ProblemType<
+		typename PingPongStorage::KeyType,
+		typename PingPongStorage::ValueType,
+		SizeT> ProblemType;
+
 	Detail<
 		START_BIT,
 		NUM_BITS,
-		PingPongStorage,
-		SizeT> detail(this, problem_storage, num_elements, max_grid_size);
+		ProblemType> detail(this, problem_storage, num_elements, max_grid_size);
 
 	return util::ArchDispatch<
 		__B40C_CUDA_ARCH__,

@@ -118,10 +118,10 @@ double TimedScan(
 
 	// Perform a single iteration to allocate any memory if needed, prime code caches, etc.
 	printf("\n");
-	scan_enactor.DEBUG = true;
+	scan_enactor.ENACTOR_DEBUG = true;
 	scan_enactor.template Scan<EXCLUSIVE, ReductionOp::IS_COMMUTATIVE, PROB_SIZE_GENRE>(
 		d_dest, d_src, num_elements, scan_op, identity_op, max_ctas);
-	scan_enactor.DEBUG = false;
+	scan_enactor.ENACTOR_DEBUG = false;
 
 	// Perform the timed number of iterations
 	b40c::GpuTimer timer;

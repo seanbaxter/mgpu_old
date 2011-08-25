@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/b40c/segmented_scan
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-23T02:13:39.057199Z
-575
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -137,10 +137,10 @@ file
 
 
 
-2011-07-17T17:19:46.000000Z
-656366bfb5ac3f962ae2edbdd6dd8693
-2011-06-22T12:33:17.731292Z
-572
+2011-08-25T08:01:50.000000Z
+7e3ce02d716e15a80a8d91a4d3eab56d
+2011-08-24T14:44:20.623781Z
+659
 duane.merrill
 
 
@@ -163,7 +163,7 @@ duane.merrill
 
 
 
-15535
+15581
 
 downsweep
 dir

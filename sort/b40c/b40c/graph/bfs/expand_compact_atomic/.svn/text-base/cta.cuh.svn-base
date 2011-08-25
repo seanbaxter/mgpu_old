@@ -57,6 +57,18 @@ template <typename CollisionMask>
 texture<CollisionMask, cudaTextureType1D, cudaReadModeElementType> BitmaskTex<CollisionMask>::ref;
 
 
+/**
+ * Templated texture reference for row-offsets
+ */
+template <typename SizeT>
+struct RowOffsetTex
+{
+	static texture<SizeT, cudaTextureType1D, cudaReadModeElementType> ref;
+};
+template <typename SizeT>
+texture<SizeT, cudaTextureType1D, cudaReadModeElementType> RowOffsetTex<SizeT>::ref;
+
+
 
 /**
  * Derivation of KernelPolicy that encapsulates tile-processing routines
@@ -113,59 +125,94 @@ struct Cta
 	// Members
 	//---------------------------------------------------------------------
 
-	__device__ __forceinline__ void BitmaskCull(VertexId &vertex)
+	/**
+	 * BitmaskCull
+	 */
+	__device__ __forceinline__ void BitmaskCull(VertexId &neighbor_id)
 	{
-/*		Do not use bitmask culling
+		if (neighbor_id != -1) {
 
-		// Location of mask byte to read
-		SizeT mask_byte_offset = (vertex & KernelPolicy::VERTEX_ID_MASK) >> 3;
+			// Location of mask byte to read
+			SizeT mask_byte_offset = (neighbor_id & KernelPolicy::VERTEX_ID_MASK) >> 3;
 
-		// Bit in mask byte corresponding to current vertex id
-		CollisionMask mask_bit = 1 << (vertex & 7);
+			// Bit in mask byte corresponding to current vertex id
+			CollisionMask mask_bit = 1 << (neighbor_id & 7);
 
-		// Read byte from from collision cache bitmask
-		CollisionMask mask_byte = tex1Dfetch(
-			BitmaskTex<CollisionMask>::ref,
-			mask_byte_offset);
+			// Read byte from from collision cache bitmask tex
+			CollisionMask mask_byte = tex1Dfetch(
+				BitmaskTex<CollisionMask>::ref,
+				mask_byte_offset);
 
-		if (mask_bit & mask_byte) {
+			if (mask_bit & mask_byte) {
 
-			// Seen it
-			vertex = -1;
+				// Seen it
+				neighbor_id = -1;
 
-		} else {
+			} else {
 
-			// Update with best effort
-			mask_byte |= mask_bit;
-			util::io::ModifiedStore<util::io::st::cg>::St(
-				mask_byte,
-				d_collision_cache + mask_byte_offset);
-*/
+				util::io::ModifiedLoad<util::io::ld::cg>::Ld(
+					mask_byte, d_collision_cache + mask_byte_offset);
+
+				if (mask_bit & mask_byte) {
+
+					// Seen it
+					neighbor_id = -1;
+
+				} else {
+
+					// Update with best effort
+					mask_byte |= mask_bit;
+					util::io::ModifiedStore<util::io::st::cg>::St(
+						mask_byte,
+						d_collision_cache + mask_byte_offset);
+				}
+			}
+		}
+	}
+
+
+	/**
+	 * VertexCull
+	 */
+	__device__ __forceinline__ void VertexCull(VertexId &neighbor_id)
+	{
+		if (neighbor_id != -1) {
+
+			VertexId row_id = neighbor_id & KernelPolicy::VERTEX_ID_MASK;
+
 			// Load source path of node
 			VertexId source_path;
 			util::io::ModifiedLoad<util::io::ld::cg>::Ld(
 				source_path,
-				d_source_path + vertex);
+				d_source_path + row_id);
 
 			if (source_path != -1) {
 
 				// Seen it
-				vertex = -1;
+				neighbor_id = -1;
 
 			} else {
 
-				// Update source path with current iteration
-				util::io::ModifiedStore<util::io::st::cg>::St(
-					iteration + 1,
-					d_source_path + vertex);
+				if (KernelPolicy::MARK_PARENTS) {
 
-				// Mooch parent
+					// MOOCH Update source path with parent vertex
+
+				} else {
+
+					// Update source path with current iteration
+					util::io::ModifiedStore<util::io::st::cg>::St(
+						iteration + 1,
+						d_source_path + row_id);
+				}
 			}
-//		}
+		}
 	}
 
 
-	__device__ __forceinline__ void LocalCull(VertexId &vertex)
+	/**
+	 * CtaCull
+	 */
+	__device__ __forceinline__ void CtaCull(VertexId &vertex)
 	{
 		// Hash the node-IDs into smem scratch
 
@@ -174,7 +221,7 @@ struct Cta
 
 		// Hash the node-IDs into smem scratch
 		if (vertex != -1) {
-			smem_storage.vid_hashtable[hash] = vertex;
+			smem_storage.cta_hashtable[hash] = vertex;
 		}
 
 		__syncthreads();
@@ -185,7 +232,7 @@ struct Cta
 		// we are a duplicate... for now.
 
 		if (vertex != -1) {
-			VertexId hashed_node = smem_storage.vid_hashtable[hash];
+			VertexId hashed_node = smem_storage.cta_hashtable[hash];
 			duplicate = (hashed_node == vertex);
 		}
 
@@ -194,7 +241,7 @@ struct Cta
 		// For the possible-duplicates, hash in thread-IDs to select
 		// one of the threads to be the unique one
 		if (duplicate) {
-			smem_storage.vid_hashtable[hash] = threadIdx.x;
+			smem_storage.cta_hashtable[hash] = threadIdx.x;
 		}
 
 		__syncthreads();
@@ -203,8 +250,33 @@ struct Cta
 		if (duplicate) {
 			// If not equal to our tid, we are not an authoritative thread
 			// for this node-ID
-			if (smem_storage.vid_hashtable[hash] != threadIdx.x) {
+			if (smem_storage.cta_hashtable[hash] != threadIdx.x) {
 				vertex = -1;
+			}
+		}
+	}
+
+
+	/**
+	 * WarpCull
+	 */
+	__device__ __forceinline__ void WarpCull(VertexId &vertex)
+	{
+		if (vertex != -1) {
+
+			int warp_id 		= threadIdx.x >> 5;
+			int hash 			= vertex & (SmemStorage::WARP_HASH_ELEMENTS - 1);
+
+			smem_storage.warp_hashtable[warp_id][hash] = vertex;
+			VertexId retrieved = smem_storage.warp_hashtable[warp_id][hash];
+
+			if (retrieved == vertex) {
+
+				smem_storage.warp_hashtable[warp_id][hash] = threadIdx.x;
+				VertexId tid = smem_storage.warp_hashtable[warp_id][hash];
+				if (tid != threadIdx.x) {
+					vertex = -1;
+				}
 			}
 		}
 	}
@@ -282,33 +354,14 @@ struct Cta
 			 */
 			static __device__ __forceinline__ void Inspect(Cta *cta, Tile *tile)
 			{
-				VertexId vertex = tile->vertex_id[LOAD][VEC];
+				if (tile->vertex_id[LOAD][VEC] != -1) {
 
-				if (vertex != -1) {
-
-					// Load neighbor row range from d_row_offsets
-					Vec2SizeT row_range;
-					if (vertex & 1) {
-
-						// Misaligned: load separately
-						util::io::ModifiedLoad<KernelPolicy::ROW_OFFSET_UNALIGNED_READ_MODIFIER>::Ld(
-							row_range.x,
-							cta->d_row_offsets + vertex);
-
-						util::io::ModifiedLoad<KernelPolicy::ROW_OFFSET_UNALIGNED_READ_MODIFIER>::Ld(
-							row_range.y,
-							cta->d_row_offsets + vertex + 1);
-
-					} else {
-						// Aligned: load together
-						util::io::ModifiedLoad<KernelPolicy::ROW_OFFSET_ALIGNED_READ_MODIFIER>::Ld(
-							row_range,
-							reinterpret_cast<Vec2SizeT*>(cta->d_row_offsets + vertex));
-					}
+					// Translate vertex-id into local gpu row-id (currently stride of num_gpu)
+					VertexId row_id = tile->vertex_id[LOAD][VEC] & KernelPolicy::VERTEX_ID_MASK;
 
 					// Node is previously unvisited: compute row offset and length
-					tile->row_offset[LOAD][VEC] = row_range.x;
-					tile->row_length[LOAD][VEC] = row_range.y - row_range.x;
+					tile->row_offset[LOAD][VEC] = tex1Dfetch(RowOffsetTex<SizeT>::ref, row_id);
+					tile->row_length[LOAD][VEC] = tex1Dfetch(RowOffsetTex<SizeT>::ref, row_id + 1) - tile->row_offset[LOAD][VEC];
 				}
 
 				// Next vector element
@@ -374,7 +427,11 @@ struct Cta
 								neighbor_id, cta->d_column_indices + coop_offset + threadIdx.x);
 
 							// Check
-							cta->BitmaskCull(neighbor_id);
+							if (cta->smem_storage.state.work_decomposition.num_elements > KernelPolicy::TILE_ELEMENTS * KernelPolicy::BITMASK_CULL_THRESHOLD * gridDim.x) {
+								cta->BitmaskCull(neighbor_id);
+							}
+							cta->VertexCull(neighbor_id);
+
 							if (neighbor_id != -1) ranks[0][0] = 1;
 						}
 
@@ -621,7 +678,9 @@ struct Cta
 					guarded_elements);
 		}
 
-		LocalCull(tile.vertex_id[0][0]);
+//		CtaCull(tile.vertex_id[0][0]);
+		WarpCull(tile.vertex_id[0][0]);
+
 
 		// Inspect dequeued vertices, obtaining edge-list details
 		tile.Inspect(this);
@@ -676,7 +735,11 @@ struct Cta
 						d_column_indices + smem_storage.offset_scratch[scratch_offset + threadIdx.x]);
 
 					// Check
-					BitmaskCull(neighbor_id);
+					if (smem_storage.state.work_decomposition.num_elements > KernelPolicy::TILE_ELEMENTS * KernelPolicy::BITMASK_CULL_THRESHOLD * gridDim.x) {
+						BitmaskCull(neighbor_id);
+					}
+					VertexCull(neighbor_id);
+
 					if (neighbor_id != -1) ranks[0][0] = 1;
 				}
 

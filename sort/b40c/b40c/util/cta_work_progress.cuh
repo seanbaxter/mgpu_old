@@ -336,6 +336,32 @@ public:
 
 		return retval;
 	}
+
+
+	/**
+	 * Set work queue length
+	 */
+	template <typename IterationT, typename SizeT>
+	cudaError_t SetQueueLength(
+		IterationT iteration,
+		SizeT queue_length)
+	{
+		cudaError_t retval = cudaSuccess;
+
+		do {
+			int queue_length_idx = iteration & 0x3;
+
+			if (retval = util::B40CPerror(cudaMemcpy(
+					((SizeT*) d_counters) + queue_length_idx,
+					&queue_length,
+					1 * sizeof(SizeT),
+					cudaMemcpyHostToDevice),
+				"CtaWorkProgress cudaMemcpy d_counters failed", __FILE__, __LINE__)) break;
+
+		} while (0);
+
+		return retval;
+	}
 };
 
 } // namespace util

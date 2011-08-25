@@ -1,19 +1,19 @@
 K 25
 svn:wc:ra_dav:version-url
 V 53
-/svn/!svn/ver/600/trunk/b40c/graph/bfs/compact_atomic
+/svn/!svn/ver/654/trunk/b40c/graph/bfs/compact_atomic
 END
 cta.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 61
-/svn/!svn/ver/599/trunk/b40c/graph/bfs/compact_atomic/cta.cuh
+/svn/!svn/ver/610/trunk/b40c/graph/bfs/compact_atomic/cta.cuh
 END
 kernel_policy.cuh
 K 25
 svn:wc:ra_dav:version-url
 V 71
-/svn/!svn/ver/594/trunk/b40c/graph/bfs/compact_atomic/kernel_policy.cuh
+/svn/!svn/ver/654/trunk/b40c/graph/bfs/compact_atomic/kernel_policy.cuh
 END
 kernel.cuh
 K 25

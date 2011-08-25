@@ -219,7 +219,7 @@ struct KernelPolicy : _ProblemType
 			// Amount of storage we can use for hashing scratch space under target occupancy
 			MAX_SCRATCH_BYTES_PER_CTA		= (B40C_SMEM_BYTES(CUDA_ARCH) / _MAX_CTA_OCCUPANCY)
 												- sizeof(State)
-												- 72,
+												- 128,
 
 			SCRATCH_ELEMENT_SIZE 			= (ProblemType::MARK_PARENTS) ?
 													sizeof(SizeT) + sizeof(VertexId) :			// Need both gather offset and parent

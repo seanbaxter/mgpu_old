@@ -48,7 +48,7 @@ using namespace b40c;
  * Defines, constants, globals 
  ******************************************************************************/
 
-// #define DEBUG
+// #define ENACTOR_DEBUG
 bool 	g_verbose;
 bool 	g_keys_only;
 int 	g_max_ctas 			= 0;
@@ -117,9 +117,9 @@ void TimedSort(
 		"TimedSort cudaMemcpy device_storage.d_keys[0] failed: ", __FILE__, __LINE__)) exit(1);
 
 	// Perform a single sorting iteration to allocate memory, prime code caches, etc.
-	sorting_enactor.DEBUG = true;
+	sorting_enactor.ENACTOR_DEBUG = true;
 	sorting_enactor.template Sort<GENRE>(device_storage, num_elements, g_max_ctas);
-	sorting_enactor.DEBUG = false;
+	sorting_enactor.ENACTOR_DEBUG = false;
 
 	// Perform the timed number of sorting g_iterations
 	GpuTimer timer;
@@ -196,7 +196,7 @@ void TestSort(SizeT num_elements)
 		if (util::B40CPerror(cudaMalloc((void**) &device_storage.d_keys[0], sizeof(K) * num_elements),
 			"TimedSort cudaMalloc device_storage.d_keys[0] failed: ", __FILE__, __LINE__)) exit(1);
 
-		TimedSort<radix_sort::LARGE_SIZE>(
+		TimedSort<radix_sort::UNKNOWN_SIZE>(
 			device_storage, num_elements, h_keys, g_iterations);
 
 	    // Free allocated memory
@@ -215,7 +215,7 @@ void TestSort(SizeT num_elements)
 		if (util::B40CPerror(cudaMalloc((void**) &device_storage.d_values[0], sizeof(V) * num_elements),
 			"TimedSort cudaMalloc device_storage.d_values[0] failed: ", __FILE__, __LINE__)) exit(1);
 
-		TimedSort<radix_sort::LARGE_SIZE>(device_storage, num_elements, h_keys, g_iterations);
+		TimedSort<radix_sort::UNKNOWN_SIZE>(device_storage, num_elements, h_keys, g_iterations);
 
 	    // Free allocated memory
 	    if (device_storage.d_keys[0]) cudaFree(device_storage.d_keys[0]);

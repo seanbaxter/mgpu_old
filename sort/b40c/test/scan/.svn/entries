@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/test/scan
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-22T12:33:17.731292Z
-572
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 has-props
 
@@ -66,10 +66,10 @@ file
 
 
 
-2011-07-17T17:19:45.000000Z
-88823ab6b60dab39689a48085308809a
-2011-06-22T12:33:17.731292Z
-572
+2011-08-25T08:01:49.000000Z
+d049e9b24de4edc38c97736ed2cbc15e
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 
 
@@ -92,7 +92,7 @@ duane.merrill
 
 
 
-5964
+5972
 
 tune_scan.cu
 file
@@ -100,11 +100,11 @@ file
 
 
 
-2011-07-17T17:19:45.000000Z
-67300cc991c432aa03195b052526c2ca
-2011-06-08T14:55:12.535729Z
-526
-duane.merrill@gmail.com
+2011-08-25T08:01:49.000000Z
+f687e714e33e2a7898759ba72f804132
+2011-08-24T14:46:28.525295Z
+660
+duane.merrill
 
 
 
@@ -126,7 +126,7 @@ duane.merrill@gmail.com
 
 
 
-16942
+16958
 
 test_scan.cu
 file
@@ -168,10 +168,10 @@ file
 
 
 
-2011-07-17T17:19:45.000000Z
-08e1a1d30b2ffa14caee485566afff23
-2011-06-22T12:33:17.731292Z
-572
+2011-08-25T08:01:49.000000Z
+79d3f978077a4a799f47859b5e662b68
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 
 
@@ -194,7 +194,7 @@ duane.merrill
 
 
 
-5196
+5212
 
 Makefile
 file
@@ -236,10 +236,10 @@ file
 
 
 
-2011-07-17T17:19:45.000000Z
-29fd39594015cabf7ee4dbf315975558
-2011-06-22T12:33:17.731292Z
-572
+2011-08-25T08:01:49.000000Z
+af61017bf403d16b242dfe51c5e9ee6e
+2011-08-15T18:03:01.749793Z
+647
 duane.merrill
 
 

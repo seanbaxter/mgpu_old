@@ -36,14 +36,34 @@ namespace util {
 /**
  * Displays error message in accordance with debug mode
  */
-cudaError_t B40CPerror(cudaError_t error, const char *message, const char *filename, int line)
+cudaError_t B40CPerror(
+	cudaError_t error,
+	const char *message,
+	const char *filename,
+	int line,
+	bool print = true)
 {
-	if (error) {
+	if (error && print) {
 		fprintf(stderr, "[%s, %d] %s (CUDA error %d: %s)\n", filename, line, message, error, cudaGetErrorString(error));
 		fflush(stderr);
 	}
 	return error;
 }
+
+/**
+ * Displays error message in accordance with debug mode
+ */
+cudaError_t B40CPerror(
+	cudaError_t error,
+	bool print = true)
+{
+	if (error && print) {
+		fprintf(stderr, "(CUDA error %d: %s)\n", error, cudaGetErrorString(error));
+		fflush(stderr);
+	}
+	return error;
+}
+
 
 
 } // namespace util

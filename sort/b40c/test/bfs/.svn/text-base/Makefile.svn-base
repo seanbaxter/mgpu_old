@@ -160,7 +160,7 @@ bin/test_bfs_$(NVCC_VERSION)_$(ARCH_SUFFIX) : test_bfs.cu $(DEPS)
 
 	
 #-------------------------------------------------------------------------------
-# (make microbench) Microbenchmark test driver
+# (make microbench) Microbenchmark gather & lookup test driver
 #-------------------------------------------------------------------------------
 
 microbench: bin/microbench_bfs_$(NVCC_VERSION)_$(ARCH_SUFFIX)
@@ -168,6 +168,17 @@ microbench: bin/microbench_bfs_$(NVCC_VERSION)_$(ARCH_SUFFIX)
 bin/microbench_bfs_$(NVCC_VERSION)_$(ARCH_SUFFIX) : microbench_bfs.cu $(DEPS)
 	mkdir -p bin
 	$(NVCC) $(DEFINES) $(SM_TARGETS) -o bin/microbench_bfs_$(NVCC_VERSION)_$(ARCH_SUFFIX) microbench_bfs.cu $(NVCCFLAGS) $(ARCH) $(INC) -O3  
+
+
+#-------------------------------------------------------------------------------
+# (make cull) Microbenchmark cull driver
+#-------------------------------------------------------------------------------
+
+cull: bin/microbench_cull_$(NVCC_VERSION)_$(ARCH_SUFFIX)
+
+bin/microbench_cull_$(NVCC_VERSION)_$(ARCH_SUFFIX) : microbench_cull.cu $(DEPS)
+	mkdir -p bin
+	$(NVCC) $(DEFINES) $(SM_TARGETS) -o bin/microbench_cull_$(NVCC_VERSION)_$(ARCH_SUFFIX) microbench_cull.cu $(NVCCFLAGS) $(ARCH) $(INC) -O3  
 
 
 

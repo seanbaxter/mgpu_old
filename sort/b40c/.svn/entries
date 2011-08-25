@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk
 http://back40computing.googlecode.com/svn
 
 
 
-2011-07-12T14:33:11.414552Z
-604
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 has-props
 
@@ -69,10 +69,10 @@ file
 
 
 
-2011-07-17T17:19:48.000000Z
-2a11c6610868dc8fce7b8b3ae1285645
-2011-06-24T19:45:27.087750Z
-578
+2011-08-25T08:01:51.000000Z
+d7e42fa0386509515aefa731c3411d2f
+2011-08-23T13:30:43.177311Z
+655
 duane.merrill
 
 
@@ -140,10 +140,10 @@ file
 
 
 
-2011-07-17T17:19:48.000000Z
-19bf5f8302ad59243ed5e0407c024bd4
-2010-12-15T22:05:09.889534Z
-270
+2011-08-25T08:01:51.000000Z
+bfeeea2055689c1cbd46287efc48b5bf
+2011-08-12T04:06:15.849461Z
+627
 duane.merrill
 
 
@@ -166,5 +166,5 @@ duane.merrill
 
 
 
-526
+246
 

@@ -1,14 +1,14 @@
 10
 
 dir
-604
+660
 http://back40computing.googlecode.com/svn/trunk/test/consecutive_reduction
 http://back40computing.googlecode.com/svn
 
 
 
-2011-06-23T02:13:39.057199Z
-575
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 has-props
 
@@ -66,10 +66,10 @@ file
 
 
 
-2011-07-17T17:19:45.000000Z
-d4ae79f89b53c99fc6a6bc2cdc99b3be
-2011-06-22T08:13:56.721977Z
-568
+2011-08-25T08:01:49.000000Z
+795cc3aa29cb18a680e0797f71ad5b22
+2011-08-24T14:46:28.525295Z
+660
 duane.merrill
 
 
@@ -92,7 +92,7 @@ duane.merrill
 
 
 
-7072
+7088
 
 test_consecutive_reduction.cu
 file

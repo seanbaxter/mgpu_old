@@ -92,6 +92,7 @@ template <
 	ProbSizeGenre PROB_SIZE_GENRE,
 	ArchGenre ARCH_GENRE,
 	TypeSizeGenre TYPE_SIZE_GENRE,
+	TypeSizeGenre OFFSET_SIZE_GENRE,
 	TypeSizeGenre POINTER_SIZE_GENRE>
 struct AutotunedGenre;
 
@@ -117,21 +118,32 @@ struct ArchClassifier
 template <typename ProblemType>
 struct TypeSizeClassifier
 {
-	static const int KEYS_ROUNDED_SIZE		= 1 << util::Log2<sizeof(typename ProblemType::KeyType)>::VALUE;	// Round up to the nearest arch subword
-	static const int VALUES_ROUNDED_SIZE	= 1 << util::Log2<sizeof(typename ProblemType::ValueType)>::VALUE;
-	static const int MAX_ROUNDED_SIZE		= B40C_MAX(KEYS_ROUNDED_SIZE, VALUES_ROUNDED_SIZE);
+	enum {
+		KEYS_ROUNDED_SIZE		= 1 << util::Log2<sizeof(typename ProblemType::KeyType)>::VALUE,	// Round up to the nearest arch subword
+		VALUES_ROUNDED_SIZE		= 1 << util::Log2<sizeof(typename ProblemType::ValueType)>::VALUE,
+		MAX_ROUNDED_SIZE		= B40C_MAX(KEYS_ROUNDED_SIZE, VALUES_ROUNDED_SIZE),
+	};
 
 	static const TypeSizeGenre GENRE 		= (MAX_ROUNDED_SIZE < 8) ? MEDIUM_TYPE : LARGE_TYPE;
 };
 
 
 /**
- * Classifies the pointer type into a type-size genre
+ * Classifies the offset type into a type-size genre
  */
 template <typename ProblemType>
-struct PointerSizeClassifier
+struct OffsetSizeClassifier
 {
 	static const TypeSizeGenre GENRE 		= (sizeof(typename ProblemType::SizeT) < 8) ? MEDIUM_TYPE : LARGE_TYPE;
+};
+
+
+/**
+ * Classifies the pointer type into a type-size genre
+ */
+struct PointerSizeClassifier
+{
+	static const TypeSizeGenre GENRE 		= (sizeof(size_t) < 8) ? MEDIUM_TYPE : LARGE_TYPE;
 };
 
 
@@ -149,7 +161,8 @@ struct AutotunedClassifier :
 		PROB_SIZE_GENRE,
 		ArchClassifier<CUDA_ARCH>::GENRE,
 		TypeSizeClassifier<ProblemType>::GENRE,
-		PointerSizeClassifier<ProblemType>::GENRE>
+		OffsetSizeClassifier<ProblemType>::GENRE,
+		PointerSizeClassifier::GENRE>
 {};
 
 
@@ -166,8 +179,9 @@ template <
 	typename ProblemType,
 	int CUDA_ARCH,
 	TypeSizeGenre TYPE_SIZE_GENRE,
+	TypeSizeGenre OFFSET_SIZE_GENRE,
 	TypeSizeGenre POINTER_SIZE_GENRE>
-struct AutotunedGenre<ProblemType, CUDA_ARCH, LARGE_SIZE, SM20, TYPE_SIZE_GENRE, POINTER_SIZE_GENRE>
+struct AutotunedGenre<ProblemType, CUDA_ARCH, LARGE_SIZE, SM20, TYPE_SIZE_GENRE, OFFSET_SIZE_GENRE, POINTER_SIZE_GENRE>
 	: Policy<
 		// Problem Type
 		ProblemType,
@@ -197,12 +211,12 @@ struct AutotunedGenre<ProblemType, CUDA_ARCH, LARGE_SIZE, SM20, TYPE_SIZE_GENRE,
 		5,						// SPINE_LOG_RAKING_THREADS
 
 		// Downsweep Kernel
-		true,					// DOWNSWEEP_TWO_PHASE_SCATTER
+		partition::downsweep::SCATTER_TWO_PHASE,			// DOWNSWEEP_SCATTER_POLICY
 		8,						// DOWNSWEEP_CTA_OCCUPANCY
 		6,						// DOWNSWEEP_LOG_THREADS
 		2,						// DOWNSWEEP_LOG_LOAD_VEC_SIZE
 		1,						// DOWNSWEEP_LOG_LOADS_PER_CYCLE
-		((TYPE_SIZE_GENRE < LARGE_TYPE) && (POINTER_SIZE_GENRE < LARGE_TYPE)) ?		// DOWNSWEEP_LOG_CYCLES_PER_TILE
+		(((ProblemType::KEYS_ONLY) || (POINTER_SIZE_GENRE < LARGE_TYPE)) && (OFFSET_SIZE_GENRE < LARGE_TYPE)) ?
 			1 :
 			0,
 		6>						// DOWNSWEEP_LOG_RAKING_THREADS
@@ -216,8 +230,9 @@ template <
 	typename ProblemType,
 	int CUDA_ARCH,
 	TypeSizeGenre TYPE_SIZE_GENRE,
+	TypeSizeGenre OFFSET_SIZE_GENRE,
 	TypeSizeGenre POINTER_SIZE_GENRE>
-struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM20, TYPE_SIZE_GENRE, POINTER_SIZE_GENRE>
+struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM20, TYPE_SIZE_GENRE, OFFSET_SIZE_GENRE, POINTER_SIZE_GENRE>
 	: Policy<
 		// Problem Type
 		ProblemType,
@@ -247,7 +262,7 @@ struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM20, TYPE_SIZE_GENRE,
 		5,						// SPINE_LOG_RAKING_THREADS
 
 		// Downsweep Kernel
-		true,					// DOWNSWEEP_TWO_PHASE_SCATTER
+		partition::downsweep::SCATTER_TWO_PHASE,			// DOWNSWEEP_SCATTER_POLICY
 		7,						// DOWNSWEEP_CTA_OCCUPANCY
 		7,						// DOWNSWEEP_LOG_THREADS
 		1,						// DOWNSWEEP_LOG_LOAD_VEC_SIZE
@@ -268,8 +283,9 @@ template <
 	typename ProblemType,
 	int CUDA_ARCH,
 	TypeSizeGenre TYPE_SIZE_GENRE,
+	TypeSizeGenre OFFSET_SIZE_GENRE,
 	TypeSizeGenre POINTER_SIZE_GENRE>
-struct AutotunedGenre<ProblemType, CUDA_ARCH, LARGE_SIZE, SM13, TYPE_SIZE_GENRE, POINTER_SIZE_GENRE>
+struct AutotunedGenre<ProblemType, CUDA_ARCH, LARGE_SIZE, SM13, TYPE_SIZE_GENRE, OFFSET_SIZE_GENRE, POINTER_SIZE_GENRE>
 	: Policy<
 		// Problem Type
 		ProblemType,
@@ -303,7 +319,7 @@ struct AutotunedGenre<ProblemType, CUDA_ARCH, LARGE_SIZE, SM13, TYPE_SIZE_GENRE,
 		5,						// SPINE_LOG_RAKING_THREADS
 
 		// Downsweep Kernel
-		true,					// DOWNSWEEP_TWO_PHASE_SCATTER
+		partition::downsweep::SCATTER_TWO_PHASE,			// DOWNSWEEP_SCATTER_POLICY
 		5,						// DOWNSWEEP_CTA_OCCUPANCY
 		(TYPE_SIZE_GENRE < LARGE_TYPE) ?	// DOWNSWEEP_LOG_THREADS
 			6 :
@@ -328,8 +344,9 @@ template <
 	typename ProblemType,
 	int CUDA_ARCH,
 	TypeSizeGenre TYPE_SIZE_GENRE,
+	TypeSizeGenre OFFSET_SIZE_GENRE,
 	TypeSizeGenre POINTER_SIZE_GENRE>
-struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM13, TYPE_SIZE_GENRE, POINTER_SIZE_GENRE>
+struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM13, TYPE_SIZE_GENRE, OFFSET_SIZE_GENRE, POINTER_SIZE_GENRE>
 	: Policy<
 		// Problem Type
 		ProblemType,
@@ -359,7 +376,7 @@ struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM13, TYPE_SIZE_GENRE,
 		5,						// SPINE_LOG_RAKING_THREADS
 
 		// Downsweep Kernel
-		true,					// DOWNSWEEP_TWO_PHASE_SCATTER
+		partition::downsweep::SCATTER_TWO_PHASE,			// DOWNSWEEP_SCATTER_POLICY
 		5,						// DOWNSWEEP_CTA_OCCUPANCY
 		6,						// DOWNSWEEP_LOG_THREADS
 		2,						// DOWNSWEEP_LOG_LOAD_VEC_SIZE
@@ -384,8 +401,9 @@ template <
 	typename ProblemType,
 	int CUDA_ARCH,
 	TypeSizeGenre TYPE_SIZE_GENRE,
+	TypeSizeGenre OFFSET_SIZE_GENRE,
 	TypeSizeGenre POINTER_SIZE_GENRE>
-struct AutotunedGenre<ProblemType, CUDA_ARCH, LARGE_SIZE, SM10, TYPE_SIZE_GENRE, POINTER_SIZE_GENRE>
+struct AutotunedGenre<ProblemType, CUDA_ARCH, LARGE_SIZE, SM10, TYPE_SIZE_GENRE, OFFSET_SIZE_GENRE, POINTER_SIZE_GENRE>
 	: Policy<
 		// Problem Type
 		ProblemType,
@@ -415,14 +433,12 @@ struct AutotunedGenre<ProblemType, CUDA_ARCH, LARGE_SIZE, SM10, TYPE_SIZE_GENRE,
 		5,						// SPINE_LOG_RAKING_THREADS
 
 		// Downsweep Kernel
-		true,					// DOWNSWEEP_TWO_PHASE_SCATTER
+		partition::downsweep::SCATTER_WARP_TWO_PHASE,			// DOWNSWEEP_SCATTER_POLICY
 		2,						// DOWNSWEEP_CTA_OCCUPANCY
 		7,						// DOWNSWEEP_LOG_THREADS
 		1,						// DOWNSWEEP_LOG_LOAD_VEC_SIZE
 		1,						// DOWNSWEEP_LOG_LOADS_PER_CYCLE
-		(TYPE_SIZE_GENRE < LARGE_TYPE) ?
-			1 :
-			1,
+		0,						// DOWNSWEEP_LOG_CYCLES_PER_TILE
 		7>						// DOWNSWEEP_LOG_RAKING_THREADS
 {
 	static const ProbSizeGenre PROB_SIZE_GENRE = LARGE_SIZE;
@@ -434,8 +450,9 @@ template <
 	typename ProblemType,
 	int CUDA_ARCH,
 	TypeSizeGenre TYPE_SIZE_GENRE,
+	TypeSizeGenre OFFSET_SIZE_GENRE,
 	TypeSizeGenre POINTER_SIZE_GENRE>
-struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM10, TYPE_SIZE_GENRE, POINTER_SIZE_GENRE>
+struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM10, TYPE_SIZE_GENRE, OFFSET_SIZE_GENRE, POINTER_SIZE_GENRE>
 	: Policy<
 		// Problem Type
 		ProblemType,
@@ -446,7 +463,7 @@ struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM10, TYPE_SIZE_GENRE,
 		9,						// LOG_SCHEDULE_GRANULARITY
 		util::io::ld::NONE,		// CACHE_MODIFIER
 		util::io::st::NONE,		// CACHE_MODIFIER
-		true,					// EARLY_EXIT
+		false,					// EARLY_EXIT
 		false,					// UNIFORM_SMEM_ALLOCATION
 		true, 					// UNIFORM_GRID_SIZE
 		true,					// OVERSUBSCRIBED_GRID_SIZE
@@ -465,14 +482,12 @@ struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM10, TYPE_SIZE_GENRE,
 		5,						// SPINE_LOG_RAKING_THREADS
 
 		// Downsweep Kernel
-		true,					// DOWNSWEEP_TWO_PHASE_SCATTER
+		partition::downsweep::SCATTER_WARP_TWO_PHASE,			// DOWNSWEEP_SCATTER_POLICY
 		2,						// DOWNSWEEP_CTA_OCCUPANCY
 		7,						// DOWNSWEEP_LOG_THREADS
 		1,						// DOWNSWEEP_LOG_LOAD_VEC_SIZE
 		1,						// DOWNSWEEP_LOG_LOADS_PER_CYCLE
-		(TYPE_SIZE_GENRE < LARGE_TYPE) ?	// DOWNSWEEP_LOG_CYCLES_PER_TILE
-			1 :
-			1,
+		0,						// DOWNSWEEP_LOG_CYCLES_PER_TILE
 		7>						// DOWNSWEEP_LOG_RAKING_THREADS
 {
 	static const ProbSizeGenre PROB_SIZE_GENRE = SMALL_SIZE;
@@ -496,7 +511,7 @@ struct AutotunedGenre<ProblemType, CUDA_ARCH, SMALL_SIZE, SM10, TYPE_SIZE_GENRE,
 template <typename ProblemType, int PROB_SIZE_GENRE, typename PassPolicy>
 __launch_bounds__ (
 	(AutotunedClassifier<ProblemType, __B40C_CUDA_ARCH__, (ProbSizeGenre) PROB_SIZE_GENRE>::Upsweep::THREADS),
-	(AutotunedClassifier<ProblemType, __B40C_CUDA_ARCH__, (ProbSizeGenre) PROB_SIZE_GENRE>::Upsweep::MAX_CTA_OCCUPANCY))
+	(AutotunedClassifier<ProblemType, __B40C_CUDA_ARCH__, (ProbSizeGenre) PROB_SIZE_GENRE>::Upsweep::CTA_OCCUPANCY))
 __global__ void TunedUpsweepKernel(
 	int 													*d_selectors,
 	typename ProblemType::SizeT 							*d_spine,
@@ -558,7 +573,7 @@ __global__ void TunedSpineKernel(
 template <typename ProblemType, int PROB_SIZE_GENRE, typename PassPolicy>
 __launch_bounds__ (
 	(AutotunedClassifier<ProblemType, __B40C_CUDA_ARCH__, (ProbSizeGenre) PROB_SIZE_GENRE>::Downsweep::THREADS),
-	(AutotunedClassifier<ProblemType, __B40C_CUDA_ARCH__, (ProbSizeGenre) PROB_SIZE_GENRE>::Downsweep::MAX_CTA_OCCUPANCY))
+	(AutotunedClassifier<ProblemType, __B40C_CUDA_ARCH__, (ProbSizeGenre) PROB_SIZE_GENRE>::Downsweep::CTA_OCCUPANCY))
 __global__ void TunedDownsweepKernel(
 	int 													*d_selectors,
 	typename ProblemType::SizeT 							*d_spine,

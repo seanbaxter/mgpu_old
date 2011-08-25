@@ -81,6 +81,17 @@ struct Tile :
 	//---------------------------------------------------------------------
 
 	/**
+	 * Returns how many elements are valid in the tile
+	 *
+	 * To be overloaded.
+	 */
+	template <typename Cta>
+	__device__ __forceinline__ SizeT ValidElements(Cta *cta, const SizeT &guarded_elements)
+	{
+		return cta->smem_storage.bin_warpscan[1][KernelPolicy::BINS - 1];
+	}
+
+	/**
 	 * Returns the bin into which the specified key is to be placed.
 	 */
 	template <typename Cta>
@@ -143,22 +154,9 @@ struct Tile :
 	template <typename Cta>
 	__device__ __forceinline__ void ScatterKeys(
 		Cta *cta,
-		const SizeT &guarded_elements)
+		const SizeT &valid_elements)
 	{
-		if (KernelPolicy::TWO_PHASE_SCATTER) {
-
-			SizeT num_compacted = cta->smem_storage.bin_warpscan[1][KernelPolicy::BINS - 1];
-
-			util::io::ScatterTile<
-				KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
-				0,
-				KernelPolicy::THREADS,
-				KernelPolicy::WRITE_MODIFIER>::Scatter(
-					cta->d_out_keys,
-					(KeyType (*)[1])  this->keys,
-					(SizeT (*)[1])  this->scatter_offsets,
-					num_compacted);
-		} else {
+		if (KernelPolicy::SCATTER_STRATEGY == partition::downsweep::SCATTER_DIRECT) {
 
 			util::io::ScatterTile<
 				KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
@@ -169,6 +167,17 @@ struct Tile :
 					(KeyType (*)[1]) this->keys,
 					(ValidFlag (*)[1]) this->flags,
 					(SizeT (*)[1]) this->scatter_offsets);
+		} else {
+
+			util::io::ScatterTile<
+				KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
+				0,
+				KernelPolicy::THREADS,
+				KernelPolicy::WRITE_MODIFIER>::Scatter(
+					cta->d_out_keys,
+					(KeyType (*)[1])  this->keys,
+					(SizeT (*)[1])  this->scatter_offsets,
+					valid_elements);
 		}
 	}
 
@@ -180,22 +189,9 @@ struct Tile :
 	template <typename Cta>
 	__device__ __forceinline__ void ScatterValues(
 		Cta *cta,
-		const SizeT &guarded_elements)
+		const SizeT &valid_elements)
 	{
-		if (KernelPolicy::TWO_PHASE_SCATTER) {
-
-			SizeT num_compacted = cta->smem_storage.bin_warpscan[1][KernelPolicy::BINS - 1];
-
-			util::io::ScatterTile<
-				KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
-				0,
-				KernelPolicy::THREADS,
-				KernelPolicy::WRITE_MODIFIER>::Scatter(
-					cta->d_out_values,
-					(ValueType (*)[1]) this->values,
-					(SizeT (*)[1]) this->scatter_offsets,
-					num_compacted);
-		} else {
+		if (KernelPolicy::SCATTER_STRATEGY == partition::downsweep::SCATTER_DIRECT) {
 
 			util::io::ScatterTile<
 				KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
@@ -206,6 +202,17 @@ struct Tile :
 					(ValueType (*)[1]) this->values,
 					(ValidFlag (*)[1]) this->flags,
 					(SizeT (*)[1]) this->scatter_offsets);
+		} else {
+
+			util::io::ScatterTile<
+				KernelPolicy::LOG_TILE_ELEMENTS_PER_THREAD,
+				0,
+				KernelPolicy::THREADS,
+				KernelPolicy::WRITE_MODIFIER>::Scatter(
+					cta->d_out_values,
+					(ValueType (*)[1]) this->values,
+					(SizeT (*)[1]) this->scatter_offsets,
+					valid_elements);
 		}
 	}
 };

@@ -1,13 +1,13 @@
 K 25
 svn:wc:ra_dav:version-url
 V 33
-/svn/!svn/ver/549/trunk/test/copy
+/svn/!svn/ver/660/trunk/test/copy
 END
 test_copy.h
 K 25
 svn:wc:ra_dav:version-url
 V 45
-/svn/!svn/ver/549/trunk/test/copy/test_copy.h
+/svn/!svn/ver/660/trunk/test/copy/test_copy.h
 END
 test_copy.cu
 K 25
@@ -31,7 +31,7 @@ tune_copy.cu
 K 25
 svn:wc:ra_dav:version-url
 V 46
-/svn/!svn/ver/526/trunk/test/copy/tune_copy.cu
+/svn/!svn/ver/660/trunk/test/copy/tune_copy.cu
 END
 Makefile
 K 25
