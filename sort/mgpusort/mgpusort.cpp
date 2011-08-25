@@ -552,9 +552,8 @@ IntPair GetSortCode(int bit, int endBit, sortData_t data) {
 	return IntPair(endKeyFlags, valueCode);
 }
 
-sortStatus_t sortArrayFromList(sortEngine_t engine, sortData_t data, 
-	int numSortThreads, int valuesPerThread, bool useTransList, 
-	const char* table) {
+sortStatus_t sortArrayFromList(sortEngine_t engine, sortData_t data,
+	SortTable table) {
 
 	int bit = data->firstBit;
 
@@ -567,14 +566,14 @@ sortStatus_t sortArrayFromList(sortEngine_t engine, sortData_t data,
 
 	// Loop through each element of the pass table.
 	for(int i(0); i < 6; ++i)
-		for(int j(0); j < table[i]; ++j) {
+		for(int j(0); j < table.pass[i]; ++j) {
 			int endBit = bit + i + 1;
 
 			IntPair sortCode = GetSortCode(bit, endBit, data);
 			int earlyExit;
-			status = sortPass(engine, data, numSortThreads, valuesPerThread,
-				useTransList, bit, endBit, sortCode.first, sortCode.second,
-				&earlyExit, data->parity);
+			status = sortPass(engine, data, table.numSortThreads, 
+				table.valuesPerThread, table.useTransList, bit, endBit, 
+				sortCode.first, sortCode.second, &earlyExit, data->parity);
 			if(SORT_STATUS_SUCCESS != status) break;
 			
 			bit = endBit;
@@ -603,21 +602,9 @@ sortStatus_t SORTAPI sortArray(sortEngine_t engine, sortData_t data) {
 	if(!numBits) return SORT_STATUS_SUCCESS;
 	if(numBits > 32) return SORT_STATUS_INVALID_VALUE;
 
-	const char* table;
-	int numThreads;
-	if(0 == data->valueCount) {
-		// Key-only, 128 threads.
-		table = sort_128_8_key_simple_table[numBits - 1];
-		numThreads = 128;
-	} else if(1 == abs(data->valueCount)) {
-		// Single value, 256 threads.
-		table = sort_256_8_single_simple_table[numBits - 1];
-		numThreads = 256;
-	} else if(2 == data->valueCount) {
-		// TODO: generate remaining tables.
-	} 
+	SortTable table = GetOptimizedSortTable(data);
 
-	return sortArrayFromList(engine, data, numThreads, 8, false, table);
+	return sortArrayFromList(engine, data, table);
 }
 
 sortStatus_t SORTAPI sortArrayEx(sortEngine_t engine, sortData_t data, 
@@ -637,17 +624,19 @@ sortStatus_t SORTAPI sortArrayEx(sortEngine_t engine, sortData_t data,
 	int split = numPasses * bitPass - numBits;
 
 	// Generate a pass list.
-	char list[6] = { 0 };
+	SortTable table = { 0 };
 	int bit = data->firstBit;
 
 	for(int pass(0); pass < numPasses; ++pass) {
 		numBits = bitPass - (pass < split);
-		++list[numBits - 1];
+		++table.pass[numBits - 1];
 		bit += numBits;
 	}
+	table.numSortThreads = numSortThreads;
+	table.valuesPerThread = valuesPerThread;
+	table.useTransList = useTransList;
 
-	return sortArrayFromList(engine, data, numSortThreads, valuesPerThread, 
-		useTransList, list); 
+	return sortArrayFromList(engine, data, table); 
 }
 
 		

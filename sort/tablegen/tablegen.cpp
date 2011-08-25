@@ -48,7 +48,7 @@ void PrintPassCounts(const double passThroughputs[6], const char* tableName) {
 	printf("// %s table generated from bit pass throughputs:\n", tableName);
 	for(int i(0); i < 6; ++i)
 		printf("// %d bit = %8.3f M\n", i + 1, passThroughputs[i]);
-	printf("\nPassTable %s = {\n", tableName);
+	printf("\nPassTable %s[32] = {\n", tableName);
 	for(int targetBits(1); targetBits <= 32; ++targetBits) { 
 		int counts[6];
 		int optCounts[6];

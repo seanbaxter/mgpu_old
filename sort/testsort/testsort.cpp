@@ -1,6 +1,53 @@
 #include "benchmark.h"
 #include <random>
 
+
+// Need to sort fewer elements as the number of values increases, to fit
+// everything in video memory.
+#ifdef _DEBUG
+
+const int ElementCounts[7] = {
+	1234567,
+//	1<< 19,
+	1<< 19,
+	1<< 19,
+	1<< 19,
+	1<< 19,
+	1<< 19,
+	1<< 19
+};
+const int NumIterations = 1;
+const int NumTests = 1;
+
+#else
+/*
+const int ElementCounts[7] = {
+	35000000,
+	27000000,
+	16000000,
+	12000000,
+	10000000,
+	80000000,
+	70000000
+};
+const int NumIterations = 15;
+const int NumTests = 5;
+*/
+
+const int ElementCounts[7] = {
+	500000,
+	500000,
+	500000,
+	500000,
+	500000,
+	500000,
+	500000
+};
+const int NumIterations = 300;
+const int NumTests = 5;
+
+#endif
+
 std::tr1::mt19937 mt19937;
 
 bool TestSorted(CuDeviceMem** a, CuDeviceMem** b, int numElements,
@@ -47,51 +94,9 @@ Throughput CalcThroughput(int numBits, int numElements, int valueCount,
 	return throughput;
 }
 
-// Need to sort fewer elements as the number of values increases, to fit
-// everything in video memory.
-#ifdef _DEBUG
 
-const int ElementCounts[7] = {
-	1234567,
-//	1<< 19,
-	1<< 19,
-	1<< 19,
-	1<< 19,
-	1<< 19,
-	1<< 19,
-	1<< 19
-};
-const int NumIterations = 1;
-const int NumTests = 1;
-
-#else
-/*
-const int ElementCounts[7] = {
-	40000000,
-	27000000,
-	16000000,
-	12000000,
-	10000000,
-	80000000,
-	70000000
-};
-const int NumIterations = 15;
-const int NumTests = 5;
-*/
-
-const int ElementCounts[7] = {
-	500000,
-	500000,
-	500000,
-	500000,
-	500000,
-	500000,
-	500000
-};
-const int NumIterations = 100;
-const int NumTests = 5;
-
-#endif
+////////////////////////////////////////////////////////////////////////////////
+// CUDA thrust benchmark
 
 Throughput Thrust(CuContext* context) {
 	int count = ElementCounts[0];
@@ -116,6 +121,10 @@ Throughput Thrust(CuContext* context) {
 	}
 	return thrustThroughput;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Terms for setting up a benchmark run for either MGPU or B40C
 
 struct BenchmarkTerms {
 	CuContext* context;
@@ -253,23 +262,11 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c) {
 	return true;
 }
 
-int main(int argc, char** argv) {
 
-	cuInit(0);
-	
-	DevicePtr device;
-	CreateCuDevice(0, &device);
+////////////////////////////////////////////////////////////////////////////////
+// ComparisonBenchmark runs the same benchmark on both MGPU and B40C
 
-	ContextPtr context;
-	CreateCuContext(device, 0, &context);
-
-	sortEngine_t engine;
-	sortStatus_t status = sortCreateEngine("..\\cubin\\", &engine);
-	if(SORT_STATUS_SUCCESS != status) {
-		printf("Error creating MGPU sort engine: %s\n",
-			sortStatusString(status));
-		return 0;
-	}
+void ComparisonBenchmark(CuContext* context, sortEngine_t engine) {
 
 	// Benchmark thrust::sort
 	Throughput thrustThroughput = Thrust(context);
@@ -304,6 +301,7 @@ int main(int argc, char** argv) {
 			terms.valueCount = valueCount;
 			terms.numIterations = NumIterations;
 			terms.numTests = NumTests;
+
 			Benchmark(terms, mgpu, b40c);			
 
 			printf("MGPU:(%8.2lf, %7.2lf) M/s",
@@ -320,6 +318,107 @@ int main(int argc, char** argv) {
 		}
 		printf("\n");
 	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// BenchmarkBitPass benchmarks the individual bit pass speeds. The results are
+// returned in a simple format that can be parsed by tablegen to create optimal
+// multi-pass algorithms for sorting keys of any size.
+
+bool BenchmarkBitPass(CuContext* context, sortEngine_t engine, 
+	const int* testSizes, int numIterations, int numTests,
+	const char* tableSuffix) {
+
+	for(int valueCount(-1); valueCount <= 6; ++valueCount) {
+		for(int numThreads(128); numThreads <= 256; numThreads *= 2) {
+			
+			// Formulate a table name like sort_128_8_key_simple_table
+			printf("sort_%d_8_", numThreads, 8);
+			switch(valueCount) {
+				case -1: printf("index_"); break;
+				case 0: printf("key_"); break;
+				case 1: printf("single_"); break;
+				default: printf("multi_%d_", valueCount); break;
+			}
+			// Only benchmark simple storage for now
+			printf("simple_");
+
+			printf("%s\n", tableSuffix);
+
+			for(int bitPass(1); bitPass <= 6; ++bitPass) {
+				BenchmarkTerms terms;
+				terms.context = context;
+				terms.engine = engine;
+				terms.count = testSizes[abs(valueCount)];
+				terms.numBits = (32 % bitPass) ? (32 - (32 % bitPass)) : 32;
+				terms.bitPass = bitPass;
+				terms.numThreads = numThreads;
+				terms.valueCount = valueCount;
+				terms.numIterations = numIterations;
+				terms.numTests = numTests;
+
+				Throughput mgpu = { 0 }, b40c = { 0 };
+				bool success = Benchmark(terms, mgpu, b40c);
+				if(!success) return false;
+
+				printf("%7.3lf\n", mgpu.normElementsPerSec / 1.0e6);
+			}
+		}
+	}
+	return true;
+}
+
+void BenchmarkBitPassLarge(CuContext* context, sortEngine_t engine) {
+	const int LargePass[7] = {
+		35000000,
+		27000000,
+		16000000,
+		12000000,
+		10000000,
+		8000000,
+		7000000
+	};
+	BenchmarkBitPass(context, engine, LargePass, 8, 4, "large");
+}
+
+void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
+	const int SmallPass[7] = {
+		500000,
+		500000,
+		500000,
+		500000,
+		500000,
+		500000,
+		500000
+	};
+	BenchmarkBitPass(context, engine, SmallPass, 100, 5, "small");
+}
+
+
+
+
+int main(int argc, char** argv) {
+
+	cuInit(0);
+	
+	DevicePtr device;
+	CreateCuDevice(0, &device);
+
+	ContextPtr context;
+	CreateCuContext(device, 0, &context);
+
+	sortEngine_t engine;
+	sortStatus_t status = sortCreateEngine("..\\cubin\\", &engine);
+	if(SORT_STATUS_SUCCESS != status) {
+		printf("Error creating MGPU sort engine: %s\n",
+			sortStatusString(status));
+		return 0;
+	}
+//	BenchmarkBitPassSmall(context, engine);
+//	BenchmarkBitPassLarge(context, engine);
+
+	ComparisonBenchmark(context, engine);
 
 	sortReleaseEngine(engine);
 }

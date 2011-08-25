@@ -1,19 +1,63 @@
 
 
+#include "../../inc/mgpusort.hpp"
+#include "../../util/cucpp.h"
+#include <vector>
+
+struct Throughput {
+	double elementsPerSec;
+	double bytesPerSec;
+	double normElementsPerSec;
+	double normBytesPerSec;
+
+	void Max(const Throughput& rhs) {
+		elementsPerSec = std::max(elementsPerSec, rhs.elementsPerSec);
+		bytesPerSec = std::max(bytesPerSec, rhs.bytesPerSec);
+		normElementsPerSec = std::max(normElementsPerSec, 
+			rhs.normElementsPerSec);
+		normBytesPerSec = std::max(normBytesPerSec, rhs.normBytesPerSec);
+	}
+};
+
+
+Throughput CalcThroughput(int numBits, int numElements, int valueCount, 
+	int iterations, double elapsed) {
+
+	Throughput throughput;
+	throughput.elementsPerSec = numElements * iterations / elapsed;
+	throughput.bytesPerSec = sizeof(uint) * (1 + abs(valueCount)) * 
+		throughput.elementsPerSec;
+	throughput.normElementsPerSec = 
+		(numBits / 32.0) * throughput.elementsPerSec;
+	throughput.normBytesPerSec = (numBits / 32.0) * throughput.bytesPerSec;
+
+	return throughput;
+}
+
+
+
 // BenchmarkBitPass benchmarks the individual bit pass speeds. The results are
 // returned in a simple format that can be parsed by tablegen to create optimal
 // multi-pass algorithms for sorting keys of any size.
 bool BenchmarkBitPass(CuContext* context, sortEngine_t engine, 
+	const int* testSizes, int numIterations, int numTests,
 	const char* tableSuffix) {
 
-	printf("Normalized throughputs for all MGPU simple output kernels.\n");
 	for(int valueCount(0); valueCount <= 1; ++valueCount) {
-		printf("Num values = %d\n", valueCount);
 		for(int numThreads(128); numThreads <= 256; numThreads *= 2) {
-			printf("Num threads = %d\n", numThreads);
+			
+			// Formulate a table name like sort_128_8_key_simple_table
+			printf("sort_%d_8_", numThreads, 8);
+			switch(valueCount) {
+				case -1: printf("index_"); break;
+				case 0: printf("key_"); break;
+				case 1: printf("single_"); break;
+				default: printf("multi_%d_", valueCount); break;
+			}
+			// Only benchmark simple storage for now
+			printf("simple_");
 
-			printf("sort_%d_%d_%s_%s_%s", numThreads, 8, 
-
+			printf("%s\n", tableSuffix);
 
 			for(int bitPass(1); bitPass <= 6; ++bitPass) {
 				BenchmarkTerms terms;
@@ -31,9 +75,7 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 				bool success = Benchmark(terms, mgpu, b40c);
 				if(!success) return false;
 
-				printf("Bits = %d\t\t%8.3lf M/s\t%6.3lf GB/s\n", bitPass, 
-					mgpu.normElementsPerSec / 1.0e6,
-					mgpu.normBytesPerSec / (1<< 30));
+				printf("%7.3lf\n", mgpu.normElementsPerSec / 1.0e6);
 			}
 		}
 		printf("\n");
@@ -41,3 +83,16 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 	return true;
 }
 
+int main(int argc, char** argv) {
+
+	cuInit(0);
+
+	DevicePtr device;
+	CUresult result = CreateCuDevice(0, &device);
+
+	ContextPtr context;
+
+
+
+
+}

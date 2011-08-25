@@ -75,16 +75,14 @@ struct sortEngine_d : public CuBase {
 
 typedef intrusive_ptr2<sortEngine_d> EnginePtr;
 
+struct SortTable { 
+	char pass[6]; 
+	int numSortThreads;
+	int valuesPerThread;
+	bool useTransList;
+};
 
-typedef const char PassTable[32][6];
+typedef const char PassTable[6];
 
-extern PassTable sort_128_8_key_simple_table;
-extern PassTable sort_256_8_key_simple_table;
-extern PassTable sort_128_8_key_list_table;
-extern PassTable sort_256_8_key_list_table;
-
-extern PassTable sort_128_8_single_simple_table;
-extern PassTable sort_256_8_single_simple_table;
-extern PassTable sort_128_8_single_list_table;
-extern PassTable sort_256_8_single_list_table;
+SortTable GetOptimizedSortTable(sortData_t data);
 

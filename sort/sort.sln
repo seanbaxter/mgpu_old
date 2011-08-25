@@ -40,8 +40,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tablegen", "tablegen\tableg
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simpletest", "simpletest\simpletest.vcproj", "{27750B1E-5143-493C-92A1-753096992FF8}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "passtest", "passtest\passtest.vcproj", "{B3ED29D6-B517-4240-AF81-71F8041E58E5}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -60,6 +58,7 @@ Global
 		{98C06C17-3CB2-495D-A6C6-85783B8D20B5}.Release|Win32.ActiveCfg = Release|Win32
 		{98C06C17-3CB2-495D-A6C6-85783B8D20B5}.Release|Win32.Build.0 = Release|Win32
 		{69A0D03C-DF15-4793-91D3-74FF091DB92F}.Debug|Win32.ActiveCfg = Debug|Win32
+		{69A0D03C-DF15-4793-91D3-74FF091DB92F}.Debug|Win32.Build.0 = Debug|Win32
 		{69A0D03C-DF15-4793-91D3-74FF091DB92F}.Release|Win32.ActiveCfg = Release|Win32
 		{69A0D03C-DF15-4793-91D3-74FF091DB92F}.Release|Win32.Build.0 = Release|Win32
 		{EEE3B735-2CFB-4CB9-BD74-BA8543FD34E3}.Debug|Win32.ActiveCfg = Debug|Win32
@@ -74,10 +73,6 @@ Global
 		{27750B1E-5143-493C-92A1-753096992FF8}.Debug|Win32.Build.0 = Debug|Win32
 		{27750B1E-5143-493C-92A1-753096992FF8}.Release|Win32.ActiveCfg = Release|Win32
 		{27750B1E-5143-493C-92A1-753096992FF8}.Release|Win32.Build.0 = Release|Win32
-		{B3ED29D6-B517-4240-AF81-71F8041E58E5}.Debug|Win32.ActiveCfg = Debug|Win32
-		{B3ED29D6-B517-4240-AF81-71F8041E58E5}.Debug|Win32.Build.0 = Debug|Win32
-		{B3ED29D6-B517-4240-AF81-71F8041E58E5}.Release|Win32.ActiveCfg = Release|Win32
-		{B3ED29D6-B517-4240-AF81-71F8041E58E5}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
