@@ -1,5 +1,5 @@
-#include "../../inc/mgpuscan.h"
-#include "../../util/cucpp.h"
+#include "../../../inc/mgpuscan.h"
+#include "../../../util/cucpp.h"
 #include <sstream>
 
 struct scanEngine_d {

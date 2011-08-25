@@ -1,7 +1,7 @@
 #include <vector>
 #include <random>
-#include "../../inc/mgpuscan.h"
-#include "../../util/cucpp.h"
+#include "../../../inc/mgpuscan.h"
+#include "../../../util/cucpp.h"
 
 std::tr1::mt19937 mt19937;
 
@@ -15,8 +15,8 @@ int main(int argc, char** argv) {
 	result = CreateCuContext(device, 0, &context);
 
 	scanEngine_t engine;
-	scanStatus_t status = scanCreateEngine("../mgpuscan/globalscan.cubin", 
-		&engine);
+	scanStatus_t status = scanCreateEngine(
+		"../../src/mgpuscan/globalscan.cubin", &engine);
 
 	int count = 1<< 19;
 	std::vector<int> vals(count);

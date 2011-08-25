@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="occupancy"
-	ProjectGUID="{2B540600-3FC7-4FEF-A795-E1674DAC6114}"
-	RootNamespace="occupancy"
+	Name="scantest"
+	ProjectGUID="{F2F8E08E-F642-41CC-9334-97A1AD14C03C}"
+	RootNamespace="scantest"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -60,6 +60,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="cuda.lib $(OUTDIR)\mgpuscan.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -132,6 +133,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="cuda.lib $(OUTDIR)\mgpuscan.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -171,7 +173,11 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath=".\occupancy.cpp"
+				RelativePath="..\..\..\util\cucpp.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\scantest\scantest.cpp"
 				>
 			</File>
 		</Filter>
@@ -180,6 +186,14 @@
 			Filter="h;hpp;hxx;hm;inl;inc;xsd"
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
+			<File
+				RelativePath="..\..\..\util\cucpp.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\..\util\util.h"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Resource Files"
