@@ -1,0 +1,17 @@
+LIBRARY	"ssparse"
+EXPORTS
+	sparseCreate
+	sparseInc
+	sparseDestroy
+	sparseQuerySupport
+	sparseMatCreate
+	sparseMatCreateInterleave
+	sparseMatCreateStream
+	sparseMatCreateGPU
+	sparseMatDestroy
+	sparseMatEngine
+	sparseMatVecSMul
+	sparseMatVecDMul
+	sparseMatVecCMul
+	sparseMatVecZMul
+	
