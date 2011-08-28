@@ -16,7 +16,7 @@ typedef std::complex<double> cdouble;
 // Copy these directly into CUdeviceptrs.
 template<typename T>
 struct EncodedMatrixData {
-	int height, width, warpSize, valuesPerThread, nz, nz2, numGroups, 
+	int height, width, valuesPerThread, nz, nz2, numGroups, 
 		outputSize, packedSizeShift;
 	std::vector<T> sparseValues;
 	std::vector<uint> colIndices, rowIndices, outputIndices;
@@ -38,18 +38,18 @@ struct COOElement {
 struct sparseMatrix;
 struct sparseEngine_d : public CuBase {
 	
-	// Finalize joins together partial dot products. There are four functions,
-	// one for each precision type.
-	struct Finalize {
-		ModulePtr module;
-		FunctionPtr func[2][4];
-	}; 
 	struct Kernel {
 		ModulePtr module;
 
 		// Multiple function defined over 5 valuesPerThread sizes 
 		// (4, 8, 12, 16, 20).
 		FunctionPtr func[5];
+
+		// Single finalize function that supports both standard and BLAS-style
+		// reduction.
+		FunctionPtr finalize, finalizeNoShift;
+
+		// Texture reference for x-vector.
 		CUtexref xVec_texture;
 	};
 	struct Build {
@@ -81,9 +81,6 @@ struct sparseEngine_d : public CuBase {
 
 	ContextPtr context;
 	int numSMs;
-
-	// All finalize kernels are defined in the same module.
-	std::auto_ptr<Finalize> finalize;
 	
 	// Multiply kernel defined over 6 precisions.
 	std::auto_ptr<Kernel> multiply[6];
@@ -124,17 +121,17 @@ sparseStatus_t CreateSparseMatrix(sparseEngine_t engine, const EncodedMatrixData
 // Unify all four encoding precisions (real4, real8, complex4, complex8) behind these
 // templates
 template<typename T>
-void EncodeMatrixDeinterleaved(int height, int width, int warpSize, int valuesPerThread,
+void EncodeMatrixDeinterleaved(int height, int width, int valuesPerThread,
 	sparseInput_t input, int nz, const T* sparse, const int* col, const int* row,
 	std::auto_ptr<EncodedMatrixData<T> >* ppMatrix);
 
 template<typename T>
-void EncodeMatrixInterleaved(int height, int width, int warpSize, int valuesPerThread, 
+void EncodeMatrixInterleaved(int height, int width, int valuesPerThread, 
 	sparseInput_t input, int nz, const void* sparse, const int* row,
 	std::auto_ptr<EncodedMatrixData<T> >* ppMatrix);
 
 template<typename T>
-void EncodeMatrixStream(int height, int width, int warpSize, int valuesPerThread,
+void EncodeMatrixStream(int height, int width, int valuesPerThread,
 	int sizeHint, int(SPARSEAPI*fp)(int, T*, int*, int*, void*), void* cookie,
 	std::auto_ptr<EncodedMatrixData<T> >* ppMatrix);
 

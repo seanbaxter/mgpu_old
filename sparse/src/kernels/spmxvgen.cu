@@ -5,13 +5,14 @@
 #define LOG_WARP_SIZE 5
 #define NUM_THREADS 128
 #define NUM_WARPS (NUM_THREADS / WARP_SIZE)
-#define BLOCKS_PER_SM 6
+
 
 typedef unsigned int uint;
 
 #ifdef USE_COMPLEX
 	// Complex
 	#ifdef USE_FLOAT
+		#define BLOCKS_PER_SM 7
 		typedef float2 MemType;
 		typedef float2 ComputeType;
 		typedef float2 TexType;
@@ -22,6 +23,7 @@ typedef unsigned int uint;
 		DEVICE ComputeType FromTexture(TexType t) { return t; }
 
 	#elif defined(USE_FLOAT_DOUBLE)
+		#define BLOCKS_PER_SM 6
 		typedef float2 MemType;
 		typedef double2 ComputeType;
 		typedef uint4 TexType;
@@ -37,6 +39,7 @@ typedef unsigned int uint;
 		}
 
 	#elif defined(USE_DOUBLE)
+		#define BLOCKS_PER_SM 4
 		typedef double2 MemType;
 		typedef double2 ComputeType;
 		typedef uint4 TexType;
@@ -62,26 +65,30 @@ typedef unsigned int uint;
 	}
 	DEVICE void SetShared(int i, ComputeType c) {
 		sharedArray[i] = c.x;
-		sharedArray[2 * WARP_SIZE + i];
+		sharedArray[2 * WARP_SIZE + i] = c.y;
 	}
-	DEVICE ComputeType Mad(ComputeType a, ComputeType b, ComputeType c) {
-		return MAKE_PAIR(a.x * b.x - a.y * b.y + c.x,
-			a.x * b.y + a.y * b.x + c.y);
+	DEVICE ComputeType Add(ComputeType a, ComputeType b) {
+		return MAKE_PAIR(a.x + b.x, a.y + b.y);
+	}
+	DEVICE ComputeType Mul(ComputeType a, ComputeType b) {
+		return MAKE_PAIR(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
 	}
 
 	#define Zero MAKE_PAIR(0, 0)
 #else
 	// Real
 	#ifdef USE_FLOAT
+		#define BLOCKS_PER_SM 8
 		typedef float MemType;
 		typedef float ComputeType;
 		typedef float TexType;
 		typedef float SharedType;
 		
 		DEVICE ComputeType ConvertUp(MemType m) { return m; }
-		DEVICE ComputeTYpe FromTexture(TexType t) { return t; }
+		DEVICE ComputeType FromTexture(TexType t) { return t; }
 
 	#elif defined(USE_FLOAT_DOUBLE)
+		#define BLOCKS_PER_SM 7
 		typedef float MemType;
 		typedef double ComputeType;
 		typedef uint2 TexType;
@@ -93,6 +100,7 @@ typedef unsigned int uint;
 		}
 
 	#elif defined(USE_DOUBLE)
+		#define BLOCKS_PER_SM 6
 		typedef double MemType;
 		typedef double ComputeType;
 		typedef uint2 TexType;
@@ -112,10 +120,12 @@ typedef unsigned int uint;
 
 	DEVICE ComputeType GetShared(int i) { return sharedArray[i]; }
 	DEVICE void SetShared(int i, ComputeType x) { sharedArray[i] = x; }
-	DEVICE ComputeType Mad(ComputeType a, ComputeType b, ComputeTYpe c) {
-		return a * b + c;	
+	DEVICE ComputeType Add(ComputeType a, ComputeType b) {
+		return a + b;
 	}
-
+	DEVICE ComputeType Mul(ComputeType a, ComputeType b) {
+		return a * b; 
+	}
 	#define Zero 0
 #endif
 
@@ -153,7 +163,7 @@ static const uint SerializeFlag = 1<< 25;
 #define SPMXV_NAME SpMxV_4
 #define VALUES_PER_THREAD 4
 #include "spmxv.cu"
-/*
+
 #define SPMXV_NAME SpMxV_8
 #define VALUES_PER_THREAD 8
 #include "spmxv.cu"
@@ -169,7 +179,5 @@ static const uint SerializeFlag = 1<< 25;
 #define SPMXV_NAME SpMxV_20
 #define VALUES_PER_THREAD 20
 #include "spmxv.cu"
-*/
 
-
-
+#include "finalize.cu"

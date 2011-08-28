@@ -462,6 +462,9 @@ public:
 	bool PushV(float2 f2) { return PushV(&f2, 8, 8); }
 	bool PushV(float3 f3) { return PushV(&f3, 12, 4); }
 	bool PushV(float4 f4) { return PushV(&f4, 16, 16); }
+
+	bool PushV(double d) { return PushV(&d, 8, 8); }
+	bool PushV(double2 d2) { return PushV(&d2, 16, 16); }	
 	
 	bool PushV(CuDeviceMem* mem);
 

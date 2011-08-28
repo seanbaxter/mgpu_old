@@ -500,10 +500,6 @@ CUresult CreateCuFunction(const char* name, CuModule* module, int3 blockShape,
 	CUresult result = cuModuleGetFunction(&func, module->Handle(), name);
 	if(CUDA_SUCCESS != result) return result;
 
-	result = cuFuncSetBlockShape(func, blockShape.x, blockShape.y,
-		blockShape.z);
-	if(CUDA_SUCCESS != result) return result;
-
 	FunctionPtr f(new CuFunction);
 
 	CuFuncAttr& attr = f->_attributes;

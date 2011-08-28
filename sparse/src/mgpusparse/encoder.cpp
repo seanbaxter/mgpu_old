@@ -24,7 +24,7 @@ struct EncoderBuilder {
 		const int* rowIndices, int nz, T* sparseValuesOut, uint* colIndicesOut);
 
 	int precedingRow;
-	int warpSize, valuesPerThread, groupSize;
+	int valuesPerThread, groupSize;
 	int nzCount;
 
 	// WarpColIndices, sharedMemSlots, scanDeltas, and outputSlots are
@@ -48,25 +48,24 @@ struct EncoderBuilder {
 	// written by ConsumeAndWrite
 	std::vector<int> rowIndices2, colIndices2;
 
-	void Init(int warpSize_, int valuesPerThread_) {
+	void Init(int valuesPerThread_) {
 		precedingRow = 0;
-		warpSize = warpSize_;
 		valuesPerThread = valuesPerThread_;
-		groupSize = warpSize * valuesPerThread;
+		groupSize = WarpSize * valuesPerThread;
 		nzCount = 0;
 		warpColIndices.resize(groupSize);
-		includedRowIndices.resize(warpSize);
-		sharedMemSlots.resize(2 * warpSize);
-		scanDeltas.resize(2 * warpSize);
-		outputSlots.resize(warpSize);
+		includedRowIndices.resize(WarpSize);
+		sharedMemSlots.resize(2 * WarpSize);
+		scanDeltas.resize(2 * WarpSize);
+		outputSlots.resize(WarpSize);
 		rowIndices2.resize(groupSize);
 		colIndices2.resize(groupSize);
 
 		transposeIndices.resize(groupSize);
-		for(int warp(0), i(0); warp < warpSize; ++warp)
+		for(int warp(0), i(0); warp < WarpSize; ++warp)
 			for(int val(0); val < valuesPerThread; ++val, ++i)
 				// scatter from i to the transposed index
-				transposeIndices[i] = (i % valuesPerThread) * warpSize +
+				transposeIndices[i] = (i % valuesPerThread) * WarpSize +
 					(i / valuesPerThread);
 	}
 };
@@ -76,7 +75,7 @@ int EncoderBuilder::ProcessWarp() {
 	// Loop through each value in row-major order and build the colIndex flags.
 	int curSharedMemSlot = 0;
 	int lastFlagCount = 0;
-	for(int tid(0), i(0); tid < warpSize; ++tid) {
+	for(int tid(0), i(0); tid < WarpSize; ++tid) {
 		int curThreadRow = -1;
 		int lastFlagCount = 0;
 		int threadSharedMemSlot = curSharedMemSlot;
@@ -117,7 +116,7 @@ int EncoderBuilder::ProcessWarp() {
 	int precedingSlotRow = -1;
 	int precedingSlotStart = -1;
 	int numOutputSlots = 0;
-	for(int tid(0); tid < 2 * warpSize; ++tid) {
+	for(int tid(0); tid < 2 * WarpSize; ++tid) {
 		uint delta = 0;
 		if(tid < curSharedMemSlot) {
 			int sharedSlotRow = rowIndices2[sharedMemSlots[tid]];
@@ -139,9 +138,9 @@ int EncoderBuilder::ProcessWarp() {
 	// set deltaX to the second row
 	// set deltaY to the third row
 	// set outputSlots to the fourth row
-	for(int tid(0), i(0); tid < warpSize; ++tid, i += valuesPerThread) {
+	for(int tid(0), i(0); tid < WarpSize; ++tid, i += valuesPerThread) {
 		warpColIndices[i + 1] |= scanDeltas[tid]<< 26;
-		warpColIndices[i + 2] |= scanDeltas[warpSize + tid]<< 25;
+		warpColIndices[i + 2] |= scanDeltas[WarpSize + tid]<< 25;
 		if(tid < numOutputSlots) {
 			warpColIndices[i + 1] |= SerializeRow;
 			warpColIndices[i + 3] |= outputSlots[tid]<< 25;
@@ -163,7 +162,7 @@ StreamResult EncoderBuilder::ConsumeAndWrite(const T* sparseValues,
 	// lets us encode matrices with many consecutive zeros with negligible
 	// waste.
 	int firstGroupRow = rowIndices[0];
-	int lastGroupRow = firstGroupRow + warpSize - 1;
+	int lastGroupRow = firstGroupRow + WarpSize - 1;
 
 	StreamResult result;
 	result.consumed = 0;
@@ -211,21 +210,11 @@ StreamResult EncoderBuilder::ConsumeAndWrite(const T* sparseValues,
 template<typename T>
 struct EncoderFeeder {
 
-	void Init(int height_, int width_, int warpSize_, int valuesPerThread_, int sizeHint,
-		bool allocSparse, bool allowRow, bool allocCol);
+	void Init(int height_, int width_, int valuesPerThread_, int sizeHint);
 
-	int Process(const T* sparse, const int* row, const int* col, int nz);
-
-	typedef size_t(SPARSEAPI*FP)(size_t, T*, int*, int*, void*);
-	void FeedStream(FP fp, void* cookie, std::auto_ptr<EncodedMatrixData<T> >* ppMatrix);
+	int Process(const T* sparse, const int* col, const int* row, int nz);
 
 	void Finalize(std::auto_ptr<EncodedMatrixData<T> >* ppMatrixData);
-
-	void Advance(int count) {
-		memmove(&sparseFrame[0], &sparseFrame[0] + builder.groupSize - count, sizeof(T) * count);
-		memmove(&rowFrame[0], &rowFrame[0] + builder.groupSize - count, sizeof(int) * count);
-		memmove(&colFrame[0], &colFrame[0] + builder.groupSize - count, sizeof(int) * count);
-	}
 
 	EncoderBuilder builder;
 	int height;
@@ -237,17 +226,13 @@ struct EncoderFeeder {
 	std::vector<uint> colIndicesOut;
 	std::vector<uint> rowIndicesOut;
 	std::vector<uint> outputCountsOut;
-
-	std::vector<T> sparseFrame;
-	std::vector<int> rowFrame;
-	std::vector<int> colFrame;
 };
 
 template<typename T>
-void EncoderFeeder<T>::Init(int height_, int width_, int warpSize_, int valuesPerThread_,
-	int sizeHint, bool allocSparse, bool allocRow, bool allocCol) {
+void EncoderFeeder<T>::Init(int height_, int width_, int valuesPerThread_,
+	int sizeHint) {
 
-	builder.Init(warpSize_, valuesPerThread_);
+	builder.Init(valuesPerThread_);
 	height = height_;
 	width = width_;
 	maxFragments = 0;
@@ -256,18 +241,11 @@ void EncoderFeeder<T>::Init(int height_, int width_, int warpSize_, int valuesPe
 	sparseValuesOut.reserve((int)(1.01 * sizeHint));
 	colIndicesOut.reserve((int)(1.01 * sizeHint));
 	outputCountsOut.resize(height + 1);
-
-	if(allocSparse) sparseFrame.resize(builder.groupSize);
-	if(allocRow) rowFrame.resize(builder.groupSize);
-	if(allocCol) colFrame.resize(builder.groupSize);
 }
 
 template<typename T>
-int EncoderFeeder<T>::Process(const T *sparse, const int *col, const int *row, int nz) {
-
-	if(!sparse) sparse = &sparseFrame[0];
-	if(!col) col = &colFrame[0];
-	if(!row) row = &rowFrame[0];
+int EncoderFeeder<T>::Process(const T *sparse, const int *col, const int *row, 
+	int nz) {
 
 	size_t current = sparseValuesOut.size();
 	sparseValuesOut.resize(current + builder.groupSize);
@@ -295,7 +273,6 @@ void EncoderFeeder<T>::Finalize(std::auto_ptr<EncodedMatrixData<T> >* ppMatrix) 
 	std::auto_ptr<EncodedMatrixData<T> > matrix(new EncodedMatrixData<T>);
 	matrix->height = height;
 	matrix->width = width;
-	matrix->warpSize = builder.warpSize;
 	matrix->valuesPerThread = builder.valuesPerThread;
 	matrix->nz = builder.nzCount;
 	matrix->nz2 = (int)sparseValuesOut.size();
@@ -344,94 +321,112 @@ void EncoderFeeder<T>::Finalize(std::auto_ptr<EncodedMatrixData<T> >* ppMatrix) 
 // EncodeMatrixDeinterleaved
 
 template<typename T>
-void EncodeMatrixDeinterleaved(int height, int width, int warpSize,
+void EncodeMatrixDeinterleaved(int height, int width,
 	int valuesPerThread, sparseInput_t input, int nz, const T* sparse, 
 	const int* col, const int* row, 
 	std::auto_ptr<EncodedMatrixData<T> >* ppMatrix) {
 
 	EncoderFeeder<T> feeder;
+	std::vector<int> rowIndices;
 	
 	if(SPARSE_INPUT_CSR == input) {
-		feeder.Init(height, width, warpSize, valuesPerThread, nz, false, true, false);
-		int curRow = 0;
-		while(nz) {
-			// advance index until the current row is found
-			int count = std::min(nz, warpSize);
-			for(int i(0); i < count; ) {
-				if(i + feeder.builder.nzCount >= row[curRow]) ++curRow;
-				else feeder.rowFrame[i++] = curRow;
-			}
-			int consumed = feeder.Process(sparse, 0, col, nz);
-			sparse += consumed;
-			col += consumed;
-			nz -= consumed;
+		rowIndices.resize(nz);
+
+		// Expand the row indices into a full array.
+		for(int r(0); r < height; ++r) {
+			int begin = row[r];
+			int end = row[r + 1];
+			std::fill(&rowIndices[0] + begin, &rowIndices[0] + end, r);
 		}
-	} else if(SPARSE_INPUT_COO == input) {
-		feeder.Init(height, width, warpSize, valuesPerThread, nz, false, false, false);
-		while(nz) {
-			int consumed = feeder.Process(sparse, col, row, nz);
-			sparse += consumed;
-			col += consumed;
-			row += consumed;
-			nz -= consumed;
-		}
+		row = &rowIndices[0];
+	} 
+	feeder.Init(height, width, valuesPerThread, nz);
+	while(nz) {
+		int consumed = feeder.Process(sparse, col, row, nz);
+		sparse += consumed;
+		col += consumed;
+		row += consumed;
+		nz -= consumed;
 	}
 
 	feeder.Finalize(ppMatrix);
 }
 
-template void EncodeMatrixDeinterleaved(int height, int width, int warpSize,
+template void EncodeMatrixDeinterleaved(int height, int width,
 	int valuesPerThread, sparseInput_t input, int nz, const float* sparse,
-	const int* col, const int* row, std::auto_ptr<EncodedMatrixData<float> >* ppMatrix);
-template void EncodeMatrixDeinterleaved(int height, int width, int warpSize,
+	const int* col, const int* row, 
+	std::auto_ptr<EncodedMatrixData<float> >* ppMatrix);
+template void EncodeMatrixDeinterleaved(int height, int width,
 	int valuesPerThread, sparseInput_t input, int nz, const double* sparse,
-	const int* col, const int* row, std::auto_ptr<EncodedMatrixData<double> >* ppMatrix);
-template void EncodeMatrixDeinterleaved(int height, int width, int warpSize,
+	const int* col, const int* row, 
+	std::auto_ptr<EncodedMatrixData<double> >* ppMatrix);
+template void EncodeMatrixDeinterleaved(int height, int width,
 	int valuesPerThread, sparseInput_t input, int nz, const cfloat* sparse,
-	const int* col, const int* row, std::auto_ptr<EncodedMatrixData<cfloat> >* ppMatrix);
-template void EncodeMatrixDeinterleaved(int height, int width, int warpSize,
+	const int* col, const int* row, 
+	std::auto_ptr<EncodedMatrixData<cfloat> >* ppMatrix);
+template void EncodeMatrixDeinterleaved(int height, int width,
 	int valuesPerThread, sparseInput_t input, int nz, const cdouble* sparse,
-	const int* col, const int* row, std::auto_ptr<EncodedMatrixData<cdouble> >* ppMatrix);
+	const int* col, const int* row, 
+	std::auto_ptr<EncodedMatrixData<cdouble> >* ppMatrix);
 
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 // EncodeMatrixInterleaved
 
 template<typename T>
-void EncodeMatrixInterleaved(int height, int width, int warpSize,
-	int valuesPerThread, sparseInput_t input, int nz, const void* sparse,
-	const int* row, std::auto_ptr<EncodedMatrixData<T> >* ppMatrix) {
+void EncodeMatrixInterleaved(int height, int width, int valuesPerThread, 
+	sparseInput_t input, int nz, const void* sparse, const int* row, 
+	std::auto_ptr<EncodedMatrixData<T> >* ppMatrix) {
 
 	EncoderFeeder<T> feeder;
-	feeder.Init(height, width, warpSize, valuesPerThread, nz, true, true, true);
+	feeder.Init(height, width, valuesPerThread, nz);
+	int groupSize = feeder.builder.groupSize;
 
 	if(SPARSE_INPUT_CSR == input) {
 		const CSRElement<T>* csr = static_cast<const CSRElement<T>*>(sparse);
-		int curRow = 0;
+		std::vector<int> rowIndices(nz);
+
+		// Expand the row indices into a full array.
+		for(int r(0); r < height; ++r) {
+			int begin = row[r];
+			int end = row[r + 1];
+			std::fill(&rowIndices[0] + begin, &rowIndices[0] + end, r);
+		}
+		row = &rowIndices[0];
+
+		std::vector<T> sparseValues(groupSize);
+		std::vector<int> colIndices(groupSize);
+	
 		while(nz) {
-			// advance index until the current row is found
-			int count = std::min(nz, warpSize);
-			for(int i(0); i < count; ) {
-				if(i + feeder.builder.nzCount >= row[curRow]) ++curRow;
-				else {
-					feeder.sparseFrame[i] = csr[i].value;
-					feeder.rowFrame[i] = curRow;
-					feeder.colFrame[i] = csr[i].col;
-					++i;
-				}			
+			int count = std::min(nz, groupSize);
+			
+			for(int i(0); i < count; ++i) {
+				sparseValues[i] = csr[i].value;
+				colIndices[i] = csr[i].col;
 			}
-			int consumed = feeder.Process(0, 0, 0, nz);
+			int consumed = feeder.Process(&sparseValues[0], &colIndices[0], row,
+				nz);
 			csr += consumed;
+			row += consumed;
+			nz -= consumed;
 		}
 	} else if(SPARSE_INPUT_COO == input) {
 		const COOElement<T>* coo = static_cast<const COOElement<T>*>(sparse);
+		std::vector<T> sparseValues(groupSize);
+		std::vector<int> colIndices(groupSize);
+		std::vector<int> rowIndices(groupSize);
+
+
 		while(nz) {
-			for(int i(0); i < std::min(feeder.builder.groupSize, nz); ++i) {
-				feeder.sparseFrame[i] = coo[i].value;
-				feeder.rowFrame[i] = coo[i].row;
-				feeder.colFrame[i] = coo[i].col;
+			int count = std::min(nz, groupSize);
+			
+			for(int i(0); i < count; ++i) {
+				sparseValues[i] = coo[i].value;
+				colIndices[i] = coo[i].col;
+				rowIndices[i] = coo[i].row;
 			}
-			int consumed = feeder.Process(0, 0, 0, nz);
+			int consumed = feeder.Process(&sparseValues[0], &colIndices[0],
+				&rowIndices[0], nz);
 			coo += consumed;
 			nz -= consumed;
 		}
@@ -439,57 +434,16 @@ void EncodeMatrixInterleaved(int height, int width, int warpSize,
 	feeder.Finalize(ppMatrix);
 }
 
-template void EncodeMatrixInterleaved(int height, int width, int warpSize,
+template void EncodeMatrixInterleaved(int height, int width,
 	int valuesPerThread, sparseInput_t input, int nz, const void* data,
 	const int* row, std::auto_ptr<EncodedMatrixData<float> >* ppMatrix);
-template void EncodeMatrixInterleaved(int height, int width, int warpSize,
+template void EncodeMatrixInterleaved(int height, int width,
 	int valuesPerThread, sparseInput_t input, int nz, const void* data,
 	const int* row, std::auto_ptr<EncodedMatrixData<double> >* ppMatrix);
-template void EncodeMatrixInterleaved(int height, int width, int warpSize,
+template void EncodeMatrixInterleaved(int height, int width,
 	int valuesPerThread, sparseInput_t input, int nz, const void* data,
 	const int* row, std::auto_ptr<EncodedMatrixData<cfloat> >* ppMatrix);
-template void EncodeMatrixInterleaved(int height, int width, int warpSize,
+template void EncodeMatrixInterleaved(int height, int width,
 	int valuesPerThread, sparseInput_t input, int nz, const void* data,
 	const int* row, std::auto_ptr<EncodedMatrixData<cdouble> >* ppMatrix);
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// EncodeMatrixStream
-
-template<typename T>
-void EncodeMatrixStream(int height, int width, int warpSize, int valuesPerThread,
-	int sizeHint, int(SPARSEAPI*fp)(int, T*, int*, int*, void*), void* cookie,
-	std::auto_ptr<EncodedMatrixData<T> >* ppMatrix) {
-
-	EncoderFeeder<T> feeder;
-	feeder.Init(height, width, warpSize, valuesPerThread, sizeHint, true, true, true);
-	int leftover = 0;
-	int readSize = 0;
-	do {
-		int groupSize = feeder.builder.groupSize;
-		if(leftover) feeder.Advance(leftover);
-
-		readSize = feeder.builder.groupSize - leftover;
-		int nz = fp((size_t)readSize, &feeder.sparseFrame[0] + leftover,
-			&feeder.rowFrame[0] + leftover, &feeder.colFrame[0] + leftover, cookie);
-		readSize += nz;
-		int consumed = feeder.Process(0, 0, 0, readSize);
-	} while(readSize == feeder.builder.groupSize);
-
-	feeder.Finalize(ppMatrix);
-}
-
-
-template void EncodeMatrixStream(int height, int width, int warpSize, 
-	int valuesPerThread, int sizeHint, sparseStreamReal4_fp fp, void* cookie,
-	std::auto_ptr<EncodedMatrixData<float> >* ppMatrix);
-template void EncodeMatrixStream(int height, int width, int warpSize, 
-	int valuesPerThread, int sizeHint, sparseStreamReal8_fp fp, void* cookie,
-	std::auto_ptr<EncodedMatrixData<double> >* ppMatrix);
-template void EncodeMatrixStream(int height, int width, int warpSize,
-	int valuesPerThread, int sizeHint, sparseStreamComplex4_fp fp, void* cookie,
-	std::auto_ptr<EncodedMatrixData<cfloat> >* ppMatrix);
-template void EncodeMatrixStream(int height, int width, int warpSize,
-	int valuesPerThread, int sizeHint, sparseStreamComplex8_fp fp, void* cookie,
-	std::auto_ptr<EncodedMatrixData<cdouble> >* ppMatrix);
 

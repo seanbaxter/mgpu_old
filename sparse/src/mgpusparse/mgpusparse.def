@@ -1,12 +1,11 @@
-LIBRARY	"ssparse"
+LIBRARY	"mgpusparse"
 EXPORTS
 	sparseCreate
 	sparseInc
-	sparseDestroy
+	sparseRelease
 	sparseQuerySupport
 	sparseMatCreate
 	sparseMatCreateInterleave
-	sparseMatCreateStream
 	sparseMatCreateGPU
 	sparseMatDestroy
 	sparseMatEngine

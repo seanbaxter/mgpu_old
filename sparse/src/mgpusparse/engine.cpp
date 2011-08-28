@@ -30,6 +30,7 @@ const PrecTerm PrecTerms[6] = {
 	{ 16, CU_AD_FORMAT_UNSIGNED_INT32, 4, 16, CU_AD_FORMAT_UNSIGNED_INT32, 4 }
 };
 
+/*
 // TODO: compute block shape for sm_13
 // This is sm_20
 int ComputeOptimalBlockShape(int r) {
@@ -57,6 +58,7 @@ int ComputeOptimalBlockShape(int r) {
 
 	return optimumBlockSize;
 }
+*/
 
 sparseStatus_t CreateSparseEngine(const char* kernelPath, EnginePtr* ppEngine) {
 
@@ -80,28 +82,6 @@ sparseStatus_t sparseEngine_d::LoadKernel(sparsePrec_t prec,
 
 	// First attempt to load the finalize module if it is not yet loaded.
 	CUresult result = CUDA_SUCCESS;
-	if(!finalize.get()) {
-		std::auto_ptr<Finalize> f(new Finalize);
-
-		std::string filename = kernelPath + "finalize.cubin";
-		result = context->LoadModuleFilename(filename, &f->module);
-		if(CUDA_SUCCESS != result) return SPARSE_STATUS_KERNEL_NOT_FOUND;
-		
-		// load the finalize functions from the module
-		const char* FinalizeSuffix[4] = {
-			"float", "double", "cfloat", "cdouble"
-		};
-		for(int i(0); i < 2; ++i)
-			for(int j(0); j < 4; ++j) {
-				std::ostringstream oss;
-				oss<< "Finalize_"<< FinalizeSuffix[j];
-				if(i) oss<< "_special";
-				result = f->module->GetFunction(oss.str(), make_int3(128, 1, 1),
-					&f->func[j][i]);
-				if(CUDA_SUCCESS != result) return SPARSE_STATUS_KERNEL_ERROR;
-			}
-		finalize = f;
-	}
 
 
 	// Check if the requested kernel is available, and if not, load it.
@@ -114,6 +94,7 @@ sparseStatus_t sparseEngine_d::LoadKernel(sparsePrec_t prec,
 		result = context->LoadModuleFilename(filename, &k->module);
 		if(CUDA_SUCCESS != result) return SPARSE_STATUS_KERNEL_NOT_FOUND;
 
+		// Load the five SpMxV kernels for different valuesPerThread counts.
 		for(int i(0); i < 5; ++i) {
 			std::ostringstream oss;
 			oss<< "SpMxV_"<< (4 * i + 4);
@@ -121,6 +102,15 @@ sparseStatus_t sparseEngine_d::LoadKernel(sparsePrec_t prec,
 				make_int3(NumThreads, 1,1), &k->func[i]);
 			if(CUDA_SUCCESS != result) return SPARSE_STATUS_KERNEL_ERROR;
 		}
+
+		// Load the finalize function.
+		result = k->module->GetFunction("Finalize", make_int3(128, 1, 1), 
+			&k->finalize);
+			if(CUDA_SUCCESS != result) return SPARSE_STATUS_KERNEL_ERROR;
+
+		result = k->module->GetFunction("FinalizeNoShift", make_int3(128, 1, 1), 
+			&k->finalizeNoShift);
+			if(CUDA_SUCCESS != result) return SPARSE_STATUS_KERNEL_ERROR;
 
 		// Cache the texture reference
 		CUmodule module = k->module->Handle();
@@ -234,14 +224,14 @@ sparseStatus_t sparseEngine_d::LoadBuild(sparsePrec_t prec, int valuesPerThread,
 }
 
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 // sparseEngine_d::Multiply
 
 template<typename T>
-sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat_, T alpha, T beta,
+sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, T alpha, T beta,
 	CUdeviceptr xVec, CUdeviceptr yVec) {
 
-	sparseMatrix* m = static_cast<sparseMatrix*>(mat_);
+	sparseMatrix* m = static_cast<sparseMatrix*>(mat);
 	CuContext* c = m->engine->context.get();
 
 	Kernel* k;
@@ -253,8 +243,7 @@ sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat_, T alpha, T beta,
 	callStack.Push(m->rowIndices, m->colIndices, m->sparseValues, m->numGroups,
 		m->tempOutput);
 
-
-	// get the size of the xVec elements
+	// Get the size of the xVec elements
 	PrecTerm precTerms = PrecTerms[m->prec];	
 	size_t offset;
 	CUresult result = cuTexRefSetAddress(&offset, k->xVec_texture, xVec, 
@@ -268,55 +257,32 @@ sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat_, T alpha, T beta,
 	if(CUDA_SUCCESS != result) return SPARSE_STATUS_LAUNCH_ERROR;
 
 
-
-	/*
-
 	// Finalize the vector
+	int numFinalizeBlocks = DivUp(m->numGroups, 4);	// Finalize is 128 threads.
 	callStack.Reset();
-	callStack.Push(mat->tempOutput->hmem, mat->outputIndices->hmem, mat->height, yVec);
-	CUfunction finalizeFunc;
-	if(T(1) == alpha && T(0) == beta) {
-		if(mat->packedSizeShift) {
-			// SpMxVFinalize1
-			callStack.Push(mat->packedSizeShift);
-			finalizeFunc = finalize[mat->prec]->func[0];
-		} else
-			// SpMxVFinalize2
-			finalizeFunc = finalize[mat->prec]->func[1];		
-	} else {
-		if(mat->packedSizeShift) {
-			// SpMxVFinalize3
-			callStack.Push(mat->packedSizeShift, alpha, beta);
-			finalizeFunc = finalize[mat->prec]->func[2];
-		} else {
-			// SpMxVFinalize4
-			callStack.Push(alpha, beta);
-			finalizeFunc = finalize[mat->prec]->func[3];
-		}
-	}
-
-	result = callStack.SetToFunction(finalizeFunc);
+	callStack.Push(m->tempOutput, m->outputIndices, m->height, yVec, alpha,
+		beta);
+	if(m->packedSizeShift) {
+		callStack.Push(m->packedSizeShift);
+		result = k->finalize->Launch(numFinalizeBlocks, 1, callStack);
+	} else
+		result = k->finalizeNoShift->Launch(numFinalizeBlocks, 1, callStack);
 	if(CUDA_SUCCESS != result) return SPARSE_STATUS_KERNEL_ERROR;
 
-	numBlocks = (mat->height + 511) / 512;
-	result = stream ? cuLaunchGridAsync(finalizeFunc, 16, (numBlocks + 15) / 16, stream) :
-		cuLaunchGrid(finalizeFunc, 16, (numBlocks + 15) / 16);
-	if(CUDA_SUCCESS != result) return SPARSE_STATUS_LAUNCH_ERROR;
-*/
 	return SPARSE_STATUS_SUCCESS;
 }
 
-template sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, float alpha, float beta,
-	CUdeviceptr xVec, CUdeviceptr yVec);
-template sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, double alpha, double beta,
-	CUdeviceptr xVec, CUdeviceptr yVec);
-template sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, cfloat alpha, cfloat beta,
-	CUdeviceptr xVec, CUdeviceptr yVec);
-template sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, cdouble alpha, cdouble beta,
-	CUdeviceptr xVec, CUdeviceptr yVec);
+template sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, float alpha,
+	float beta, CUdeviceptr xVec, CUdeviceptr yVec);
+template sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, double alpha,
+	double beta, CUdeviceptr xVec, CUdeviceptr yVec);
+template sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, float2 alpha,
+	float2 beta, CUdeviceptr xVec, CUdeviceptr yVec);
+template sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, double2 alpha,
+	double2 beta, CUdeviceptr xVec, CUdeviceptr yVec);
 
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 // sparseEngine_d::Encode
 
 sparseStatus_t sparseEngine_d::Encode(int height, int width, sparsePrec_t prec,
@@ -539,7 +505,7 @@ sparseStatus_t CreateSparseMatrix(sparseEngine_t engine,
 	if(CUDA_SUCCESS != result) return SPARSE_STATUS_DEVICE_ALLOC_FAILED;
 
 	result = engine->context->ByteAlloc(
-		data.outputSize * PrecTerms[prec].tempSize, 0, &m->tempOutput);
+		data.outputSize * PrecTerms[prec].tempSize, &m->tempOutput);
 	if(CUDA_SUCCESS != result) return SPARSE_STATUS_DEVICE_ALLOC_FAILED;
 
 	m->storage = m->sparseValues->Size() + m->colIndices->Size() +
