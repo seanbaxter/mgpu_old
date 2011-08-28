@@ -6,8 +6,7 @@ Finalize(const ComputeType* tempOutput_global,
 	ComputeType alpha, ComputeType beta, uint packedSizeShift) {
 	
 	// We have no reduction requirements so don't bother with warp calculations.
-	uint gid = blockIdx.x + gridDim.x * blockIdx.y;
-	uint row = blockDim.x * gid + threadIdx.x;
+	uint row = 128 * blockIdx.x + threadIdx.x;
 	
 	if(row >= numRows) return;
 		
@@ -37,8 +36,7 @@ FinalizeNoShift(const ComputeType* tempOutput_global,
 	ComputeType alpha, ComputeType beta) {
 	
 	// We have no reduction requirements so don't bother with warp calculations.
-	uint gid = blockIdx.x + gridDim.x * blockIdx.y;
-	uint row = blockDim.x * gid + threadIdx.x;
+	uint row = 128 * blockIdx.x + threadIdx.x;
 	
 	if(row >= numRows) return;
 		

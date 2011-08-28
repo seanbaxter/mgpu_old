@@ -7,17 +7,17 @@
 
 const char* Matrices[][2] = {
 	{ "scircuit.mtx", "Circuit" },
-	{ "pdb1HYS.mtx", "Protein" },
-	{ "cant.mtx", "FEM/Cantilever" },
-	{ "consph.mtx", "FEM/Spheres" },
-	{ "pwtk.mtx", "Wind Tunnel" },
-	{ "rma10.mtx", "FEM/Harbor" },
-	{ "qcd5_4.mtx", "QCD" },
-	{ "shipsec1.mtx", "FEM/Ship" },
 	{ "mac_econ_fwd500.mtx", "Economics" },
 	{ "mc2depi.mtx", "Epidemiology" },
 	{ "cop20k_A.mtx", "FEM/Accelerator" },
-	{ "webbase-1M.mtx", "Webbase" }
+	{ "cant.mtx", "FEM/Cantilever" },
+	{ "rma10.mtx", "FEM/Harbor" },
+	{ "shipsec1.mtx", "FEM/Ship" },
+	{ "consph.mtx", "FEM/Spheres" },
+	{ "pdb1HYS.mtx", "Protein" },
+	{ "qcd5_4.mtx", "QCD" },
+	{ "webbase-1M.mtx", "Webbase" },
+	{ "pwtk.mtx", "Wind Tunnel" }
 };
 
 
@@ -259,6 +259,7 @@ bool RunBenchmark(CuContext* context, sparseEngine_t mgpu,
 			context->MemAlloc<double>(m->height, &yVecDevice);
 		}
 
+
 		std::vector<std::vector<Benchmark> > mgpuBenchmarks(numValueSets);
 		for(int j(0); j < numValueSets; ++j) mgpuBenchmarks[j].resize(numRuns);
 		std::vector<Benchmark> cusparseBenchmarks(numRuns);
@@ -269,6 +270,8 @@ bool RunBenchmark(CuContext* context, sparseEngine_t mgpu,
 
 		////////////////////////////////////////////////////////////////////////
 		// Benchmark MGPU Sparse
+
+		results[i].matrixName = Matrices[i][1];
 
 		for(int val(0); val < numValueSets; ++val) {
 			double inflation;
@@ -289,7 +292,7 @@ bool RunBenchmark(CuContext* context, sparseEngine_t mgpu,
 			printf("MGPU value size: %d:\n", valsPerThread);
 
 			for(int run(0); run < numRuns; ++run) {
-				printf("\t%7.3lf GB/s", mgpuBenchmarks[val][run].bandwidth);
+				printf("\t%7.3lf GB/s\n", mgpuBenchmarks[val][run].bandwidth);
 				results[i].mgpu[val].Max(mgpuBenchmarks[val][run]);
 			}
 
@@ -347,9 +350,13 @@ int main(int argc, char** argv) {
 
 	std::vector<Result> results;
 
-	RunBenchmark(context, mgpu, cusparse, "../../matrices/", 3, 100, 5, 
-		SPARSE_PREC_REAL8, true, results);
+	RunBenchmark(context, mgpu, cusparse, "../../matrices/", 3, 500, 5, 
+		SPARSE_PREC_REAL4, true, results);
 
+	for(size_t i(0); i < results.size(); ++i) {
+		printf("%30s     %7.3lf GB/s     %7.3lf GB/s\n", results[i].matrixName,
+			results[i].mgpuPreferred.bandwidth, results[i].cusparse.bandwidth);
+	}
 	
 	cusparseDestroy(cusparse);
 

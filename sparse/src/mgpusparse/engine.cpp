@@ -256,7 +256,6 @@ sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, T alpha, T beta,
 		callStack);
 	if(CUDA_SUCCESS != result) return SPARSE_STATUS_LAUNCH_ERROR;
 
-
 	// Finalize the vector
 	int numFinalizeBlocks = DivUp(m->numGroups, 4);	// Finalize is 128 threads.
 	callStack.Reset();

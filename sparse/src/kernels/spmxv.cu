@@ -12,7 +12,8 @@ void SPMXV_NAME(const uint* rowIndices_global, const uint* colIndices_global,
 	uint lane = (WARP_SIZE - 1) & tid;
 	uint warp = tid / WARP_SIZE;
 	uint block = blockIdx.x;
-	uint gid = NUM_WARPS * block + warp;
+	uint gid0 = NUM_WARPS * block;		// gid is the group ID. same as global
+	uint gid = gid0 + warp;				// warp ID.
 
 	// Shared memory index. Each threads needs two slots (64 per warp). For 
 	// complex precision types, four slots are needed.
@@ -26,7 +27,7 @@ void SPMXV_NAME(const uint* rowIndices_global, const uint* colIndices_global,
 
 	// Load the row indices for each warp.
 	if(tid < NUM_WARPS)
-		sharedArray[tid] = rowIndices_global[min(numGroups - 1, gid + tid)];
+		sharedArray[tid] = rowIndices_global[min(numGroups - 1, gid0 + tid)];
 	__syncthreads();
 	
 	uint rowIndex = sharedArray[warp];
@@ -76,14 +77,15 @@ void SPMXV_NAME(const uint* rowIndices_global, const uint* colIndices_global,
 		ComputeType vectorValue = FromTexture(
 			tex1Dfetch(xVec_texture, 0x003fffff & colIndex));
 		
-		uint startFlag = FirstThreadRow & colIndex;
+		products[i] = Mul(matrixValue, vectorValue);
+		
+		if(i) {
+			uint startFlag = FirstThreadRow & colIndex;
+			if(!startFlag) products[i] = Add(products[i], products[i - 1]);
+		}
+
 		uint endFlag = LastThreadRow & colIndex;
 
-		ComputeType prev = startFlag ? products[i - 1] : Zero;
-
-		// if(startFlag) prev = products[i - 1];
-		products[i] = Add(Mul(matrixValue, vectorValue), prev);
-		
 		SetShared(scanOffset, products[i]);
 		scanOffset += 0 != endFlag;
 	}
@@ -106,18 +108,16 @@ void SPMXV_NAME(const uint* rowIndices_global, const uint* colIndices_global,
 		// Avoid putting multiple statements in a branch, because nvcc will
 		// generate a BRA.U instruction rather than simple predication.
 		if(predX) valueX = Add(valueX, GetShared(sharedX - offset));
-		SetShared(sharedX, valueX);
-		
 		if(predY) valueY = Add(valueY, GetShared(sharedY - offset));
+
+		SetShared(sharedX, valueX);
 		SetShared(sharedY, valueY);
 	}
 	
 	// For offset = WARP_SIZE, only handle the right half.
 	bool predY = WARP_SIZE <= deltaPairY;
-	if(predY) {
-		valueY = Add(valueY, GetShared(sharedY - WARP_SIZE));
-		SetShared(sharedY, valueY);
-	}
+	if(predY) valueY = Add(valueY, GetShared(sharedY - WARP_SIZE));	
+	SetShared(sharedY, valueY);
 
 	// Write the final row sums to tempOutput_gloabl	
 	if(SerializeFlag & colIndices[1])

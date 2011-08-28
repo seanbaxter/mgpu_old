@@ -1,0 +1,6 @@
+For the MGPU sparse matrix test, download NVIDIA's sample matrices from
+http://www.nvidia.com/object/nvidia_research_pub_001.html
+
+Unpack them unto /matrices and run sparsetest. These matrices are in Matrix
+Market format. See http://math.nist.gov/MatrixMarket
+
