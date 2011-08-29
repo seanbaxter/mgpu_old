@@ -197,6 +197,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\..\inc\mgpuscan.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\..\util\util.h"
 				>
 			</File>

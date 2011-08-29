@@ -10,6 +10,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "scantest", "scantest\scante
 		{1AFB4139-8054-4203-ADB0-22252A202461} = {1AFB4139-8054-4203-ADB0-22252A202461}
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kernels", "kernels", "{339864CC-8239-453E-85EB-BCC55A5316A4}"
+	ProjectSection(SolutionItems) = preProject
+		..\src\mgpuscan\globalscan.cu = ..\src\mgpuscan\globalscan.cu
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32

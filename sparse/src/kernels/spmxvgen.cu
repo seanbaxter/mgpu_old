@@ -1,4 +1,4 @@
-#define DEVICE extern "C" __device__ __forceinline
+#define DEVICE extern "C" __device__ __forceinline__
 
 // #define VALUES_PER_THREAD
 #define WARP_SIZE 32

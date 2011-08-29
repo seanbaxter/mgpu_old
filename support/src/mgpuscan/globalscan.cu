@@ -1,13 +1,14 @@
 #include <device_functions.h>
 #include <vector_functions.h>
 
+#define DEVICE extern "C" __forceinline__ __device__
 typedef unsigned int uint;
 
 #define ROUND_UP(x, y) (~(y - 1) & (x + y - 1))
 
 #define WARP_SIZE 32
 #define NUM_THREADS 256
-#define BLOCKS_PER_SM (1024 / NUM_THREADS)
+#define BLOCKS_PER_SM 4
 #define NUM_WARPS (NUM_THREADS / WARP_SIZE)
 
 #define LOG_WARP_SIZE 5
@@ -22,14 +23,12 @@ typedef unsigned int uint;
 
 __shared__ volatile uint values_shared[SHARED_SIZE];
 
-
-
 ////////////////////////////////////////////////////////////////////////////////
 // Multiscan utility function. Used in the first and third passes of the
 // global scan function. Returns the inclusive scan of the arguments in .x and
 // the sum of all arguments in .y.
 
-extern "C" __forceinline __device__ uint2 Multiscan(uint tid, uint x) {
+DEVICE uint2 Multiscan(uint tid, uint x) {
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
 
@@ -125,7 +124,7 @@ extern "C" __global__ void GlobalScanPass2(uint* blockTotals_global,
 	uint numBlocks) {
 
 	uint tid = threadIdx.x;
-	uint x = 0;
+	uint x = 0; 
 	if(tid < numBlocks) x = blockTotals_global[tid];
 
 	// Subtract the value from the inclusive scan for the exclusive scan.

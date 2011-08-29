@@ -26,10 +26,11 @@
 #include <vector_functions.h>
 #include <sm_11_atomic_functions.h>		// atomicAdd()
 
-#define DEVICE extern "C" __device__ __forceinline
-#define DEVICE2 __device__ __forceinline
+#define DEVICE extern "C" __device__ __forceinline__
+#define DEVICE2 __device__ __forceinline__
 
 typedef unsigned int uint;
+typedef unsigned short uint16;
 
 
 // retrieve numBits bits from x starting at bit

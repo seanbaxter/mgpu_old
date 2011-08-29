@@ -12,9 +12,6 @@
 #define NUM_TRANSACTION_LISTS WARP_SIZE
 #define LOG_NUM_TRANSACTION_LISTS LOG_WARP_SIZE
 
-typedef unsigned int uint;
-typedef unsigned short uint16;
-
 // Histogram 1
 __shared__ volatile uint hist_shared1[2 * NUM_THREADS];
 
@@ -38,8 +35,6 @@ __shared__ volatile uint hist3_shared3[10 * NUM_THREADS];
 #define gatherScan_shared3 (listScan_shared3 + NUM_THREADS)
 #define transOffset_shared3 (gatherScan_shared3 + NUM_THREADS)
 #define bucketCodes_shared3 (transOffset_shared3 + NUM_THREADS)
-
-#define DEVICE extern "C" __device__ __forceinline
 
 // Return the number of transactions required to scatter keyCount words starting
 // at offset scatter.
