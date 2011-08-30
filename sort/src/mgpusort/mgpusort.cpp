@@ -428,7 +428,7 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 	*earlyExitCode = 0;
 	if(data->earlyExit) {
 		uint4 detect;
-		result = engine->sortDetectCounters->ToHost(&detect, 16);
+		result = engine->sortDetectCounters->ToHost(&detect, 1);
 		if(CUDA_SUCCESS != result) return SORT_STATUS_DEVICE_ERROR;
 
 		uint radixSort = detect.x;
@@ -533,7 +533,7 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 // favor a particular kind of pass (sortArrayEx).
 
 // Returns endKeyFlags in .first and valueCode in .second.
-IntPair GetSortCode(int bit, int endBit, sortData_t data) {
+IntPair GetSortCode(int bit, int endBit, sortData_t data, bool firstPass) {
 
 	int endKeyFlags = 0;
 	if(bit == data->firstBit) {
@@ -545,7 +545,7 @@ IntPair GetSortCode(int bit, int endBit, sortData_t data) {
 	switch(data->valueCount) {
 		case 0: valueCode = 0; break;
 		case 1: valueCode = 2; break;
-		case -1: valueCode = (bit == data->firstBit) ? 1 : 2; break;
+		case -1: valueCode = firstPass ? 1 : 2; break;
 		default: valueCode = 3; break;
 	}
 	
@@ -565,11 +565,12 @@ sortStatus_t sortArrayFromList(sortEngine_t engine, sortData_t data,
 	sortStatus_t status;
 
 	// Loop through each element of the pass table.
+	bool firstPass = true;
 	for(int i(0); i < 6; ++i)
 		for(int j(0); j < table.pass[i]; ++j) {
 			int endBit = bit + i + 1;
 
-			IntPair sortCode = GetSortCode(bit, endBit, data);
+			IntPair sortCode = GetSortCode(bit, endBit, data, firstPass);
 			int earlyExit;
 			status = sortPass(engine, data, table.numSortThreads, 
 				table.valuesPerThread, table.useTransList, bit, endBit, 
@@ -577,7 +578,9 @@ sortStatus_t sortArrayFromList(sortEngine_t engine, sortData_t data,
 			if(SORT_STATUS_SUCCESS != status) break;
 			
 			bit = endBit;
-			if(2 == earlyExit) { i = 6; break; }
+			if(3 == earlyExit) { i = 6; break; }
+			if(2 == earlyExit) continue;
+			firstPass = false;
 		}
 
 	// Restore the trailing keys.
@@ -721,6 +724,7 @@ sortStatus_t SORTAPI sortFreeData(sortData_d* data) {
 		cuFreeZero(data->values5[i]);
 		cuFreeZero(data->values6[i]);
 	}
+	memset(data, 0, sizeof(sortData_d)); 
 	return SORT_STATUS_SUCCESS;
 }
 

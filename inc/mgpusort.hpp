@@ -25,12 +25,17 @@ struct MgpuSortData : sortData_d {
 		memset(this, 0, sizeof(MgpuSortData)); 
 	}
 	~MgpuSortData() { 
+		Reset();
+	}
+
+	void Reset() {
 		for(int i(0); i < 2; ++i) {
 			if(_attachedKeys[i]) keys[i ^ parity] = 0;
 			for(int j(0); j < 6; ++j)
 				if(_attachedVals[j][i]) values[j][i ^ parity] = 0;
 		}
-		sortFreeData(this); 
+		sortFreeData(this);
+		memset(this, 0, sizeof(MgpuSortData)); 
 	}
 
 	sortStatus_t Alloc(sortEngine_t engine, int maxElements_, int valueCount_) {

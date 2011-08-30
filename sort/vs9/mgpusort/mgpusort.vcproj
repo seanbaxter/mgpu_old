@@ -201,6 +201,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\..\inc\mgpusort.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\src\mgpusort\sortdll.h"
 				>
 			</File>

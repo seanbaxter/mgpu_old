@@ -42,7 +42,7 @@ const char* SORTAPI sortStatusString(sortStatus_t status);
 // Create the sort engine on the CUDA device API context
 
 struct sortEngine_d;
-typedef sortEngine_d* sortEngine_t;
+typedef struct sortEngine_d* sortEngine_t;
 
 // Create the engine and attach to the current context.
 sortStatus_t SORTAPI sortCreateEngine(const char* kernelPath,
@@ -188,5 +188,4 @@ sortStatus_t SORTAPI sortDevice(sortEngine_t engine, CUdeviceptr keys,
 #ifdef __cplusplus
 } // extern "C"
 #endif
-
 

@@ -20,7 +20,7 @@
 // re-order for this:
 // 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7  0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
 
-// A final parallel scan pass gets the final counter values, as there is no more
+// A last parallel scan pass gets the final counter values, as there is no more
 // sequential scan opportunity to exploit.
 
 // The warp is cut into halves - threads in the first half add the top rows of 
@@ -62,8 +62,9 @@ DEVICE2 void GatherSums(uint lane, int mode, volatile uint* data) {
 	volatile uint* sourceA = odd ? source2 : source1;
 	volatile uint* sourceB = odd ? source1 : source2;
 
-	// Adjust for row. This construction should let the compiler calculate sourceA 
-	// and sourceB just once, then add odd * colHeight for each GatherSums call.
+	// Adjust for row. This construction should let the compiler calculate
+	// sourceA and sourceB just once, then add odd * colHeight for each 
+	// GatherSums call.
 	uint sourceOffset = odd * (WARP_SIZE * halfHeight);
 	sourceA += sourceOffset;
 	sourceB += sourceOffset;
@@ -109,27 +110,44 @@ DEVICE2 void GatherSums(uint lane, int mode, volatile uint* data) {
 DEVICE void IncBucketCounter(uint bucket, volatile uint* counters, 
 	uint& counter0, uint& counter1, uint numBits) {
 
-	if(numBits <= 2) {
-		counter0 = shl_add(1, ((1 == numBits) ? 16 : 8) * bucket, counter0);
+	if(1 == numBits)
+		// For 1-bit keys, use 16-bit counters in a single register.
+		// counter0 += 1<< (16 * bucket);
+		counter0 = shl_add(1, 16 * bucket, counter0);
+	else if(2 == numBits)
+		// For 2-bit keys, use 8-bit counters in a single register.
+		counter0 = shl_add(1, 8 * bucket, counter0);
+	else if(3 == numBits) {
+		// For 3-bit keys, use 8-bit counters in two registers.
+		
+		// Insert the least-significant 2 bits of bucket into bits 4:3 of shift.
+		// That is, shift = 0, 8, 16, or 24 when bits 1:0 of bucket are 0, 1, 2,
+		// or 3. bfi is available on Fermi for performing a mask and shift in
+		// one instruction.
+		uint shift = bfi(0, bucket, 3, 2);
 
-	} else if(3 == numBits) {
-		// note: this 3-bit update takes more instructions than the ones
-		// using shared memory. Consider using shared memory for it also.
-		//	uint bit = 1<< (8 * (7 & bucket));
-		uint bit = 1<< bfi(0, bucket, 3, 2);
-		if(0 == (4 & bucket)) counter0 += bit;
-		else counter1 += bit;
+		// Increment counter0 or counter1 by 1<< shift depending on bit 2 of
+		// bucket.
+		if(4 & bucket) shl_add(1, shift, counter1);
+		else shl_add(1, shift, counter0);
 
 	} else {
-		// Read the previous counter.
-		uint pointerOffset = (~3 & bucket)<< 5;
-		uint counter = LoadShifted(counters, pointerOffset);
+		// For 4-, 5-, and 6-bit keys, use 8-bit counters in indexable shared
+		// memory. This requires a read-modify-write to update the previous
+		// count.
 
-		// Set the counter for this bit.
+		// We can find the array index by dividing bucket by 4 (the number of
+		// counters packed into each uint) and multiplying by 32 (the stride
+		// between consecutive counters for the thread).
+		// uint index = 32 * (bucket / 4);
+		// It's likely more efficient to use a mask rather than a shift (the
+		// NVIDIA docs claim shift is 2-cycles, but it is likely just one for
+		// constant shift, so use a mask to be safe).
+
+		uint index = (32 / 4) * (~3 & bucket);
+		uint counter = counters[index];
 		counter = shl_add(1, bfi(0, bucket, 3, 2), counter);
-
-		// Store the updated counter.
-		StoreShifted(counters, pointerOffset, counter);
+		counters[index] = counter;
 	}
 }
 

@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="simpletest"
-	ProjectGUID="{39162EF7-A50F-4016-8541-FB66397D659A}"
-	RootNamespace="simpletest"
+	Name="simpletest2"
+	ProjectGUID="{CF155772-8D82-41B4-9CD0-2B1386B8BD0E}"
+	RootNamespace="simpletest2"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -60,7 +60,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="cuda.lib $(OUTDIR)\mgpusort.lib"
+				AdditionalDependencies="$(OUTDIR)\mgpusort.lib cuda.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -133,7 +133,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="cuda.lib $(OUTDIR)\mgpusort.lib"
+				AdditionalDependencies="$(OUTDIR)\mgpusort.lib cuda.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -177,7 +177,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\simpletest\simpletest.cpp"
+				RelativePath="..\..\src\simpletest2\simpletest2.cpp"
 				>
 			</File>
 		</Filter>
@@ -192,6 +192,10 @@
 			</File>
 			<File
 				RelativePath="..\..\..\inc\mgpusort.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\..\inc\mgpusort.hpp"
 				>
 			</File>
 			<File
