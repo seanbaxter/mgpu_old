@@ -12,8 +12,8 @@
 typedef unsigned char byte;
 typedef unsigned int uint;
 typedef unsigned long ulong;
-typedef __int64 int64;
-typedef unsigned __int64 uint64;
+typedef long long int64;
+typedef unsigned long long uint64;
 
 #ifdef _MSC_VER
 
