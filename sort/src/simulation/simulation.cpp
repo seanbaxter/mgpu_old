@@ -1,8 +1,13 @@
 
 #include <cstdio>
-#include <random>
 #include <algorithm>
 #include <vector>
+
+#ifdef _MSC_VER
+#include <random>
+#else
+#include <tr1/random>
+#endif
 
 const int NumBuckets = 16;
 const int NumValues = 32 * 16;

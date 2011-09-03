@@ -114,6 +114,9 @@
 			/>
 			<Tool
 				Name="Cudart Build Rule"
+				Include="../../src/b40c"
+				Arch1="20"
+				Arch2="0"
 				Runtime="2"
 			/>
 			<Tool

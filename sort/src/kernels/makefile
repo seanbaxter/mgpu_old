@@ -69,7 +69,7 @@ hist : histgen.cu histogram.cu common.cu params.cu \
 sort : common.cu params.cu sort.cu sortcommon.cu sortgen.cu \
 	sortgeneric.cu sortscan1.cu sortscan2.cu sortscan3.cu sortstore.cu
 	
-	
+	 
 # Build count cubins
 $(CUBIN)/count.cubin : count
 	nvcc $(NVCCFLAGS) -o $@ countgen.cu

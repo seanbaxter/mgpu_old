@@ -1,7 +1,12 @@
 #include <vector>
-#include <random>
 #include "../../../inc/mgpuscan.h"
 #include "../../../util/cucpp.h"
+
+#ifdef _MSC_VER
+#include <random>
+#else
+#include <tr1/random>
+#endif
 
 std::tr1::mt19937 mt19937;
 

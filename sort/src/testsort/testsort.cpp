@@ -1,5 +1,10 @@
 #include "benchmark.h"
+
+#ifdef _MSC_VER
 #include <random>
+#else
+#include <tr1/random>
+#endif
 
 
 // Need to sort fewer elements as the number of values increases, to fit

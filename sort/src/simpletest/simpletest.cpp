@@ -2,9 +2,14 @@
 // (mgpusort.lib is the import library on Windows).
 #include <cstdio>
 #include <vector>
-#include <random>
 #include "../../../util/cucpp.h"			// MGPU utility classes
 #include "../../../inc/mgpusort.hpp"		// MGPU Sort with C++ wrappers
+
+#ifdef _MSC_VER
+#include <random>
+#else
+#include <tr1/random>
+#endif
 
 // Mersenne twister RNG
 std::tr1::mt19937 mt19937;

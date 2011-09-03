@@ -2,6 +2,8 @@
 
 #include <cassert>
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
 
 // May include interlocked.hpp to support multi-threaded access to the CuBase 
 // reference counter.
@@ -13,7 +15,7 @@ typedef unsigned long ulong;
 typedef __int64 int64;
 typedef unsigned __int64 uint64;
 
-#ifdef WIN32
+#ifdef _MSC_VER
 
 #include <intrin.h>
 

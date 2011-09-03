@@ -8,7 +8,12 @@
 #include <utility>
 #include <algorithm>
 #include <vector>
+
+#ifdef _MSC_VER
 #include <random>
+#else
+#include <tr1/random>
+#endif
 
 typedef unsigned int uint;
 typedef std::pair<int, int> IntPair;
@@ -44,7 +49,7 @@ Pair CountTransactions(const int* keys, const int* gather, const int* scatter,
 	for(int warp(0); warp < numValues / (int)WARP_SIZE; ++warp) {
 		const int* k = keys + warp * WARP_SIZE;
 		
-		for(int i(0); i < WARP_SIZE; ++i) {
+		for(int i(0); i < (int)WARP_SIZE; ++i) {
 			int index = warp * WARP_SIZE + i;
 			int key = k[i];
 			if(!i || intervals.back().first != key)

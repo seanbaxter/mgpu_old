@@ -656,7 +656,7 @@ public:
 		bool success = !_running;
 		if(success) {
 			if(reset) _elapsed = 0;
-			CUresult result = cuEventRecord(_startEvent, 0);
+			cuEventRecord(_startEvent, 0);
 			_running = true;
 		}
 		return success;

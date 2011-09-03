@@ -127,7 +127,8 @@ CUresult CreateCuContext(CuDevice* device, uint flags, ContextPtr* ppContext) {
 CUresult AttachCuContext(ContextPtr* ppContext) {
 	ContextPtr context(new CuContext(false));
 	CUresult result = cuCtxGetCurrent(&context->_h);
-	if(!context->_h) return CUDA_ERROR_INVALID_CONTEXT;
+	if(CUDA_SUCCESS != result || !context->_h)
+		return CUDA_ERROR_INVALID_CONTEXT;
 
 	int ordinal;
 	cuCtxGetDevice(&ordinal);
@@ -260,7 +261,7 @@ void CuDeviceMem::Clean() {
 }
 
 CUresult CuDeviceMem::FromHostByte(const void* host, size_t size) {
-	if(-1 == size) size = _size;
+	if((size_t)-1 == size) size = _size;
 	if(size > _size) return CUDA_ERROR_INVALID_VALUE;
 	return cuMemcpyHtoD(_deviceptr, host, size);
 }
