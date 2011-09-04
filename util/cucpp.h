@@ -2,6 +2,7 @@
 
 #include "util.h"
 #include <cuda.h>
+#include <memory>
 #include <string>
 #include <vector>
 #include <vector_functions.h>

@@ -12,7 +12,9 @@
 struct MgpuException : std::exception {
 	MgpuException(sortStatus_t status) : _status(status) { }
 	
-	virtual const char* what() const { return sortStatusString(_status); }
+	virtual const char* what() const throw() { 
+		return sortStatusString(_status); 
+	}
 	
 	sortStatus_t _status;
 };
