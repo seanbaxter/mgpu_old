@@ -67,6 +67,9 @@ sparseStatus_t CreateSparseEngine(const char* kernelPath, EnginePtr* ppEngine) {
 
 	AttachCuContext(&engine->context);
 	engine->numSMs = engine->context->Device()->NumSMs();
+
+	if(2 != engine->context->Device()->ComputeCapability().first)
+		return SPARSE_STATUS_CONFIG_NOT_SUPPORTED;
 	
 	ppEngine->swap(engine);
 	return SPARSE_STATUS_SUCCESS;

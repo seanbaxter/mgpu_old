@@ -18,7 +18,7 @@ scanStatus_t scanCreateEngine(const char* cubin, scanEngine_t* engine) {
 	CUresult result = AttachCuContext(&e->context);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_INVALID_CONTEXT;
 
-	if(e->context->Device()->ComputeCapability().first < 2)
+	if(2 != e->context->Device()->ComputeCapability().first)
 		return SCAN_STATUS_UNSUPPORTED_DEVICE;
 
 	result = e->context->LoadModuleFilename(cubin, &e->module);

@@ -203,7 +203,7 @@ sortStatus_t SORTAPI sortCreateEngine(const char* kernelPath,
 	EnginePtr e(new sortEngine_d);
 	CUresult result = AttachCuContext(&e->context);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_INVALID_CONTEXT;
-	if(e->context->Device()->ComputeCapability().first < 2)
+	if(2 != e->context->Device()->ComputeCapability().first)
 		return SORT_STATUS_UNSUPPORTED_DEVICE;;
 
 	e->kernelPath = kernelPath;
