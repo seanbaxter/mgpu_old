@@ -1,8 +1,5 @@
 #define _USE_MATH_DEFINES
 
-#define NOMINMAX
-#include <windows.h>  
-  
 #include <iostream>
 #include <cstdio>
 #include <utility>
