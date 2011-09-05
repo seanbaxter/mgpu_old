@@ -113,10 +113,10 @@ int main(int argc, char** argv) {
 		return 0;
 	}
 
-	// Search through 20 million elements.
-	const int NumElements = 2000000;
+	// Search through 5 million elements.
+	const int NumElements = 5000000;
 	std::vector<float> data(NumElements);
-	std::tr1::uniform_real<float> r(-1e10, 1e10);
+	std::tr1::uniform_real<float> r(-1e9, 1e9);
 	for(int i(0); i < NumElements; ++i)
 		data[i] = r(mt19937);
 	
