@@ -1,4 +1,3 @@
-
 // Load 8 fused keys and produce a bucket total and a key offset within
 // the thread-bucket. If 4 buckets are being counted, predInc is packed
 // with bytes. If 8 buckets are being counted, predInc is packed with
@@ -11,11 +10,6 @@
 DEVICE uint LoadFusedKeys8(uint tid, uint bit, uint numBits,
 	Values fusedKeys, uint2& bucketsPacked, uint2& offsetsPacked) { 
 
-	// NOTE: this is a stupid construction.
-	// tid * VALUES_PER_THREAD is a left shift
-	// + index / WARP_SIZE is a right shift
-	// the conversion from uint to byte for shared mem LDS is a left shift.
-	// At least one of these should be eliminated.
 	volatile uint* threadData = scattergather_shared + 
 		StridedThreadOrder(tid * VALUES_PER_THREAD);
 
@@ -63,20 +57,6 @@ DEVICE uint LoadFusedKeys8(uint tid, uint bit, uint numBits,
 	}
 	return predInc;
 }
-
-// Same as SortScatter2, but works on indices that are packed into WORDs. This
-// function uses only a single shift to adjust index for bank-conflict
-// resolution even when processing two indices. Bitshifts are half-speed
-// operations on Fermi, so eliminating one per pair of indices saves 16 cycles
-// when sorting 8 values with two passes.
-
-// CONSIDER: pre-multiplying all counters by 4 (shl 2) to avoid having to shift
-// by 2 to get dynamic indexing into shared mem for scatter. This is only
-// feasible when the stream length is small so as not to overflow the
-// byte-packing.
-
-// indexPacked holds the key0 index in the low ushort and the key1 index in the 
-// high ushort.
 
 
 #include "sortscan1.cu"

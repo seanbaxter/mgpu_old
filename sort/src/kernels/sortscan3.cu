@@ -57,13 +57,13 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 
 	// The first half-warp sums counts 0-3, the second half-warp sums counts
 	// 4-7.
-	volatile uint* scan = predInc3_shared + (tid + tid / WARP_SIZE);
+	uint warp = tid / WARP_SIZE;
+	uint lane = (WARP_SIZE - 1) & tid;
+
+	volatile uint* scan = predInc3_shared + (tid + warp);
 	scan[0] = predInc.x;
 	scan[SCAN_SIZE_3] = predInc.y;
 	__syncthreads();
-
-	uint warp = tid / WARP_SIZE;
-	uint lane = (WARP_SIZE - 1) & tid;
 
 	// Perform sequential scan over the byte-packed counts.
 	// The sequential operation exhibits very little ILP (only the addition and
@@ -75,7 +75,7 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 	// effectively will run twice as fast as the sequential part.
 	if(tid < WARP_SIZE) {
 		// Counts 0-3 are in the first half of scan.
-		// Counts 4-7 are in the second half or scan.
+		// Counts 4-7 are in the second half of scan.
 		// Each stream begins on a different bank using this indexing.
 		volatile uint* scan2 = predInc3_shared + 
 			(STREAM_LENGTH_3 * tid + tid / STREAMS_PER_WARP_3);
@@ -87,7 +87,6 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 			scan2[i] = x;
 			x += y;
 		}
-			
 
 		// If tid < WARP_SIZE / 2, process counts 0-3.
 		// If tid >= WARP_SIZE / 2, process counts 4-7.
@@ -106,7 +105,7 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 		// Perform parallel scan over two warps of data.
 		// This thread processes columns
 		// tid (0+2 or 1+3) and 
-		// tid + WARP_SIZE (4+6,5+7).
+		// tid + WARP_SIZE (4+6 or 5+7).
 		// 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 | 4 4 4 4 4 4 4 4 5 5 5 5 5 5 5 5
 		// 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 | 6 6 6 6 6 6 6 6 7 7 7 7 7 7 7 7
 		volatile uint* scan4 = scan3 + WARP_SIZE + 16;

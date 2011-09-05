@@ -102,6 +102,7 @@ DEVICE uint2 MultiScan2(uint tid, uint predInc, uint numTransBuckets,
 	return sortOffsets;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////
 
 

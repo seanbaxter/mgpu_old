@@ -10,6 +10,9 @@ DEVICE void SortScatter1(uint tid, Values fusedKeys, uint bit, uint scatter[4],
 	uint numTransBuckets, volatile uint* compressed, 
 	volatile uint* uncompressed, uint* debug_global) {
 
+	uint warp = tid / WARP_SIZE;
+	uint lane = (WARP_SIZE - 1) & tid;
+
 	// Compute the number of set bits.
 	uint predInc = 0;
 	Values bits;
@@ -22,13 +25,10 @@ DEVICE void SortScatter1(uint tid, Values fusedKeys, uint bit, uint scatter[4],
 
 	// Reserve space for the scan, with each warp distanced out 33 elements to 
 	// avoid bank conflicts.
-	volatile uint* scan = predInc1_shared + tid + tid / WARP_SIZE;
+	volatile uint* scan = predInc1_shared + tid + warp;
 
 	scan[0] = predInc;
 	__syncthreads();
-
-	uint warp = tid / WARP_SIZE;
-	uint lane = (WARP_SIZE - 1) & tid;
 
 	// Perform sequential scan over the bit counts.
 	// The sequential operation exhibits very little ILP (only the addition and
