@@ -21,11 +21,11 @@ extern "C" __global__ void HISTOGRAM_FUNC2(uint numBlocks,
 			blockScan_shared2[i] = x;
 			x += y;
 		}
+		bucketTotals_shared2[tid] = x;
 
 		// Write the total number of values in each bucket. The host code can 
 		// cuMemcpy this array and figure out if the array is already fully or 
 		// partially sorted.
-		bucketTotals_shared2[tid] = x;
 		// bucketTotals_global[tid] = x;
 	}
 	__syncthreads();

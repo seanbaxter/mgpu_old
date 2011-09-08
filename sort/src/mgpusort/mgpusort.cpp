@@ -22,7 +22,7 @@ const char* SortStatusStrings[] = {
 
 const char* SORTAPI sortStatusString(sortStatus_t status) {
 	int code = (int)status;
-	if(code >= sizeof(SortStatusStrings) / sizeof(char*)) return 0;
+	if(code >= (int)sizeof(SortStatusStrings) / sizeof(char*)) return 0;
 	return SortStatusStrings[code];
 }
 
@@ -435,8 +435,8 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 		uint fullCount = detect.y;
 		uint radixCount = detect.z;
 
-		if(terms.numCountBlocks == fullCount) *earlyExitCode = 3;
-		else if(terms.numCountBlocks == radixCount) *earlyExitCode = 2;
+		if(terms.numCountBlocks == (int)fullCount) *earlyExitCode = 3;
+		else if(terms.numCountBlocks == (int)radixCount) *earlyExitCode = 2;
 
 		// If 5% of the sort blocks are sorted, use the slightly slower early 
 		// exit sort kernel.
@@ -627,7 +627,7 @@ sortStatus_t SORTAPI sortArrayEx(sortEngine_t engine, sortData_t data,
 	int split = numPasses * bitPass - numBits;
 
 	// Generate a pass list.
-	SortTable table = { 0 };
+	SortTable table = { { 0 } };
 	int bit = data->firstBit;
 
 	for(int pass(0); pass < numPasses; ++pass) {
