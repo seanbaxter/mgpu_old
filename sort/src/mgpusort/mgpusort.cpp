@@ -22,7 +22,7 @@ const char* SortStatusStrings[] = {
 
 const char* SORTAPI sortStatusString(sortStatus_t status) {
 	int code = (int)status;
-	if(code >= (int)sizeof(SortStatusStrings) / sizeof(char*)) return 0;
+	if(code >= (int)(sizeof(SortStatusStrings) / sizeof(char*))) return 0;
 	return SortStatusStrings[code];
 }
 
