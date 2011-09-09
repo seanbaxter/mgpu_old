@@ -13,8 +13,8 @@ release: CPPFLAGS1 = -Wall -I /usr/local/cuda/include -c -O3
 release: CUFLAGS = -I /usr/local/cuda/include -c -O3 -arch=compute_20 -code=sm_20
 release: CPPFLAGS2 = -Wall -L /usr/local/cuda/lib -lcuda -lcudart
 debug: CPPFLAGS1 = -Wall -I /usr/local/cuda/include -c -g -O0
-debug: CUFLAGS = -I /usr/local/cuda/include -c -O3 -arch=compute_20 -code=sm_20
-debug: CPPFLAGS2 = -Wall -lcuda -lcudart
+debug: CUFLAGS = -I /usr/local/cuda/include -c -O0 -g -arch=compute_20 -code=sm_20
+debug: CPPFLAGS2 = -Wall -L /usr/local/cuda/lib -lcuda -lcudart
 
 release: ../release/testsort
 debug: ../debug/testsort
