@@ -15,11 +15,29 @@
 
 #define NUM_VALUES (VALUES_PER_THREAD * NUM_THREADS)
 
+#ifdef BUILD_64
+
+// 64bit kernels require more registers and so run less efficiently.
+// To eliminate skills, give them so more regs. Note that this needs to be
+// better optimized.
+
+#ifdef VALUE_TYPE_NONE
+#define REGS_PER_THREAD 36
+#else
+#define REGS_PER_THREAD 40
+#endif
+
+
+#else
+
 #ifdef VALUE_TYPE_NONE
 #define REGS_PER_THREAD 32
 #else
 #define REGS_PER_THREAD 36
 #endif
+
+#endif // BUILD_64
+
 
 #define NUM_BLOCKS (32768 / ((~1 & (1 + REGS_PER_THREAD)) * NUM_THREADS))
 
