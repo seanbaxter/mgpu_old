@@ -8,9 +8,9 @@ SRC = simpletest.cpp cucpp.cpp
 .PHONY: debug
 
 release: CPPFLAGS1 = -Wall -I /usr/local/cuda/include -c -O3
-release: CPPFLAGS2 = -Wall -lcuda
+release: CPPFLAGS2 = -Wall -lcuda -lcudart
 debug: CPPFLAGS1 = -Wall -I /usr/local/cuda/include -c -g -O0
-debug: CPPFLAGS2 = -Wall -l cuda
+debug: CPPFLAGS2 = -Wall -lcuda -lcudart
 
 release: ../release/simpletest
 debug: ../debug/simpletest
