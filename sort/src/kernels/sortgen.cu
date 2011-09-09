@@ -22,7 +22,7 @@
 // better optimized.
 
 #ifdef VALUE_TYPE_NONE
-#define REGS_PER_THREAD 36
+#define REGS_PER_THREAD 32
 #else
 #define REGS_PER_THREAD 40
 #endif
