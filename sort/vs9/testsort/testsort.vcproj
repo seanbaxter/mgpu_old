@@ -115,8 +115,10 @@
 			<Tool
 				Name="Cudart Build Rule"
 				Include="../../src/b40c"
-				Arch1="20"
+				NvccCompilation="0"
+				Arch1="0"
 				Arch2="0"
+				Arch3="20"
 				Runtime="2"
 			/>
 			<Tool

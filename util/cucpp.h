@@ -468,6 +468,13 @@ public:
 	bool PushV(double2 d2) { return PushV(&d2, 16, 16); }	
 	
 	bool PushV(CuDeviceMem* mem);
+	
+	// On 64bit builds, CUdeviceptr is defined as long long unsigned int.
+#if defined(__x86_64) || defined(AMD64) || defined(_M_AMD64)
+	bool PushV(CUdeviceptr p) {
+		return PushV(&p, 8, 8);
+	}
+#endif
 
 	bool PushV(const void* data, size_t size, size_t align);
 
