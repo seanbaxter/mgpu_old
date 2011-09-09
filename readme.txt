@@ -29,7 +29,11 @@ Modern GPU library code for CUDA
 (C) 2011 Sean Baxter (email sean at moderngpu)
 http://www.moderngpu.com/
 
-Code and website currently under construction. Check back for a large online
-book for GPGPU programming.
-
 Code licensed under BSD.
+
+64bit CUDA builds are considered experimental and not yet tested. To avoid 
+spills, the register counts were increased, which lowers SM occupancy. It is
+likely that the 64bit builds can be optimized to run at the same occupancy as
+32bit builds, but this has not been done yet.
+
+Additionally, GNU makefile support is spotty at this point.
