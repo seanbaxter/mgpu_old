@@ -1,18 +1,36 @@
-CPPFLAGS = -Wall -I /usr/local/cuda/include -l cuda
+vpath %.h ../../src/mgpusort/ ../../../inc/ ../../../util
+vpath %.cpp ../../src/mgpusort/ ../../../util
 
-SRC = \
-	../../src/mgpusort/mgpusort.cpp \
-	../../src/mgpusort/sorttables.cpp \
-	../../../util/cucpp.cpp
-INC = \
-	../../../inc/mgpusort.h \
-	../../src/mgpusort/sortdll.h \
-	../../../util/cucpp.h \
-	../../../util/util.h
+INC = mgpusort.h sortdll.h cucpp.h util.h
+SRC = mgpusort.cpp sorttables.cpp cucpp.cpp
 
-debug : ../debug/libmgpuscan.o
+.PHONY: release
+.PHONY: debug
 
-../debug/libmgpuscan.o : $(SRC)
-	-mkdir ../debug
-	g++ $(CPPFLAGS) -c -o $@ $^
+release: CPPFLAGS = -Wall -I /usr/local/cuda/include -c -O3
+debug: CPPFLAGS = -Wall -I /usr/local/cuda/include -c -g -O0
+release : ../release/libmgpusort.a $(INC) $(SRC)
+debug : ../debug/libmgpusort.a $(INC) $(SRC)
 
+../release/libmgpusort.a : release/mgpusort.o release/sorttables.o release/cucpp.o
+	@mkdir -p ../release
+	ar rv $@ $^
+
+release/%.o : %.cpp $(INC)
+	@mkdir -p release
+	g++ $(CPPFLAGS) -o $@ $<
+
+../debug/libmgpusort.a : debug/mgpusort.o debug/sorttables.o debug/cucpp.o
+	@mkdir -p ../debug
+	ar crv $@ $^
+
+debug/%.o : %.cpp $(INC)
+	@mkdir -p debug
+	g++ $(CPPFLAGS) -o $@ $<
+
+.PHONY: clean
+clean:
+	@-rm debug/*.o
+	@-rm ../debug/libmgpusort.a
+	@-rm release/*.o
+	@-rm ../release/libmgpusort.a
