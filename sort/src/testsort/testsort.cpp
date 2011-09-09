@@ -339,7 +339,7 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 		for(int numThreads(128); numThreads <= 256; numThreads *= 2) {
 			
 			// Formulate a table name like sort_128_8_key_simple_table
-			printf("sort_%d_8_", numThreads, 8);
+			printf("sort_%d_8_", numThreads);
 			switch(valueCount) {
 				case -1: printf("index_"); break;
 				case 0: printf("key_"); break;
