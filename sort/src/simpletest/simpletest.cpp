@@ -44,7 +44,8 @@ int main(int argc, char** argv) {
 	sortEngine_t engine;
 	sortStatus_t status = sortCreateEngine("../../src/cubin/", &engine);
 	if(SORT_STATUS_SUCCESS != status) {
-		printf("Could not initialize MGPU Sort.\n");
+		printf("Could not initialize MGPU Sort:\n\t%s",
+			sortStatusString(status));
 		return 0;
 	}
 
