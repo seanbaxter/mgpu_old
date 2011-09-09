@@ -106,18 +106,6 @@ DEVICE uint imad(uint a, uint b, uint c) {
 #endif
 }
 
-// Use the PTX instruction red for load, inc, store in a single instruction.
-// *a += b
-// This code is currently not working - I don't think nvcc appropriately
-// supports memory instructions like red.
-DEVICE void red(volatile uint* a, uint b) {
-#ifdef USE_VIDEO_INSTRUCTIONS
-	asm volatile("red.shared.add.u32 [%0], %1;" :: "r"(a), "r"(b));
-#else
-	*a += b;
-#endif
-}
-
 
 DEVICE uint GetByte(uint a, uint i) {
 	return prmt(a, 0, 0x4440 + i);

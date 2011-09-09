@@ -3,6 +3,9 @@
 .PHONY: counts
 .PHONY: hists
 .PHONY: sorts
+.PHONY: counts64
+.PHONY: hists64
+.PHONY: sorts64
 
 # Rules for detecting changes in .cu files effecting these kernels.
 .PHONY: count
@@ -11,15 +14,18 @@
 
 
 # Relative paths
-#vpath %.isa ../isa
-#vpath %.cubin ../cubin
-
-ISA := ../isa
-CUBIN = ../cubin
+# Note that the caller must define BITS
+ifeq ($(BITS), 32)
+	CUBIN = ../isa
+	ISA = ../isa
+elif
+	($(BITS), 64)
+	CUBIN ../cubin64
+	ISA = ../isa64
+#endif
 
 # Compiler options
-NVCCFLAGS = --cubin -Xptxas=-v -arch=compute_20 -code=sm_20
-
+NVCCFLAGS = --cubin -Xptxas=-v -arch=compute_20 -code=sm_20 -m=$(BITS)
 
 T128 = -D NUM_THREADS=128
 T256 = -D NUM_THREADS=256
