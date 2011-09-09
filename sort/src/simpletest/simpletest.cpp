@@ -43,6 +43,10 @@ int main(int argc, char** argv) {
 	// build_all.bat in /kernels.
 	sortEngine_t engine;
 	sortStatus_t status = sortCreateEngine("../../src/cubin/", &engine);
+	if(SORT_STATUS_SUCCESS != status) {
+		printf("Could not initialize MGPU Sort.\n");
+		return 0;
+	}
 
 	// Create some test data in an std::vector. Generate uints with 32 random
 	// bits.
