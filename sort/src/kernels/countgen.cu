@@ -125,11 +125,14 @@ DEVICE void IncBucketCounter(uint bucket, volatile uint* counters,
 		// or 3. bfi is available on Fermi for performing a mask and shift in
 		// one instruction.
 		uint shift = bfi(0, bucket, 3, 2);
+		uint bit = 1<< shift;
 
 		// Increment counter0 or counter1 by 1<< shift depending on bit 2 of
 		// bucket.
-		if(4 & bucket) shl_add(1, shift, counter1);
-		else shl_add(1, shift, counter0);
+		if(0 == (4 & bucket)) counter0 += bit;
+		else counter1 += bit;
+	//	if(4 & bucket) counter1 = shl_add(1, shift, counter1);
+	//	else counter0 = shl_add(1, shift, counter0);
 
 	} else {
 		// For 4-, 5-, and 6-bit keys, use 8-bit counters in indexable shared

@@ -2,6 +2,7 @@
 
 #include "../../../util/cucpp.h"
 #include "../../../inc/mgpusort.hpp"
+#include "../cudpp2/cudpp.h"
 
 // Benchmark parameters for MGPU sort. We expose many options to test all aspects
 // of the library.
@@ -48,7 +49,15 @@ struct B40cTerms {
 
 cudaError_t B40cBenchmark(B40cTerms& terms, double* elapsed);
 
+
+// Use our specially hacked CUDPP and benchmark with B40C's terms.
+CUresult CUDPPBenchmark(CUDPPHandle handle, B40cTerms& terms,
+	double* elapsed);
+
+
 // Only support 32-bit keys on key-only sorts.
 void ThrustBenchmark(bool reset, int iterations, int count, CuContext* context,
 	CuDeviceMem* randomKeys, CuDeviceMem* sortedKeys, double* elapsed);
+
+
 

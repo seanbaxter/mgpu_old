@@ -12,7 +12,8 @@
 #ifdef _DEBUG
 
 const int ElementCounts[7] = {
-	1234567,
+//	1234567,
+	1<< 19,
 //	1<< 19,
 	1<< 19,
 	1<< 19,
@@ -134,6 +135,7 @@ Throughput Thrust(CuContext* context) {
 struct BenchmarkTerms {
 	CuContext* context;
 	sortEngine_t engine;
+	CUDPPHandle cudppHandle;
 	int count;
 	int numBits;
 	int bitPass;
@@ -143,7 +145,8 @@ struct BenchmarkTerms {
 	int numTests;
 };
 
-bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c) {
+bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
+	Throughput& cudpp) {
 
 	// Run both MGPU and B40C sorts, and compare against each other.
 	int capacity = RoundUp(terms.count, 2048);
@@ -206,6 +209,8 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c) {
 	double elapsed;
 	Throughput throughput;
 	for(int test(0); test < NumTests; ++test) {
+
+		// B40C benchmark
 		if(0 == terms.valueCount || 1 == terms.valueCount) {
 			cudaError_t error = B40cBenchmark(b40cTerms, &elapsed);
 			if(cudaSuccess != error) {
@@ -216,14 +221,28 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c) {
 				terms.valueCount, terms.numIterations, elapsed);
 			b40c.Max(throughput);
 		}
+
 		
+		// CUDPP benchmark
+		if(0 == terms.valueCount || 1 == terms.valueCount) {
+			CUresult result = CUDPPBenchmark(terms.cudppHandle, b40cTerms,
+				&elapsed);
+			if(CUDA_SUCCESS != result) {
+				printf("Error in CUDPP sort on numBits = %d.\n", terms.numBits);
+				return false;
+			}
+			throughput = CalcThroughput(terms.numBits, terms.count,
+				terms.valueCount, terms.numIterations, elapsed);
+			cudpp.Max(throughput);
+		}
+		
+		// MGPU benchmark
 		sortStatus_t status = MgpuBenchmark(mgpuTerms, terms.engine, &elapsed);
 		if(SORT_STATUS_SUCCESS != status) {
 			printf("Error in MGPU sort on numBits = %d: %s\n", terms.numBits,
 				sortStatusString(status));
-			return false;	
+			return false;
 		}
-
 		throughput = CalcThroughput(terms.numBits, terms.count, 
 			terms.valueCount, terms.numIterations, elapsed);
 		mgpu.Max(throughput);
@@ -251,7 +270,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c) {
 		printf("Error in sort keys on numBits = %d\n", terms.numBits);
 		return false;
 	}
-	
+
 	if(terms.valueCount) {
 		std::vector<uint> valuesHost2(terms.count);
 		b40cTerms.sortedVals->ToHost(&valuesHost2[0], terms.count);
@@ -271,7 +290,8 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c) {
 ////////////////////////////////////////////////////////////////////////////////
 // ComparisonBenchmark runs the same benchmark on both MGPU and B40C
 
-void ComparisonBenchmark(CuContext* context, sortEngine_t engine) {
+void ComparisonBenchmark(CuContext* context, sortEngine_t engine,
+	CUDPPHandle cudppHandle) {
 
 	// Benchmark thrust::sort
 	Throughput thrustThroughput = Thrust(context);
@@ -297,17 +317,18 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine) {
 
 			printf("%2d bits  ", numBits);
 
-			Throughput mgpu = { 0 }, b40c = { 0 };
+			Throughput mgpu = { 0 }, b40c = { 0 }, cudpp = { 0 };
 			BenchmarkTerms terms = { 0 };
 			terms.context = context;
 			terms.engine = engine;
+			terms.cudppHandle = cudppHandle;
 			terms.numBits = numBits;
 			terms.count = numElements;
 			terms.valueCount = valueCount;
 			terms.numIterations = NumIterations;
 			terms.numTests = NumTests;
 
-			Benchmark(terms, mgpu, b40c);			
+			Benchmark(terms, mgpu, b40c, cudpp);
 
 			printf("MGPU:(%8.2lf, %7.2lf) M/s",
 				mgpu.elementsPerSec / 1.0e6,
@@ -318,6 +339,13 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine) {
 					b40c.normElementsPerSec / 1.0e6);
 				printf("  (%1.3lfx)", mgpu.elementsPerSec / 
 					b40c.elementsPerSec);
+			}
+			if(cudpp.elementsPerSec) {
+				printf("  CUDPP:(%8.2lf, %7.2lf) M/s", 
+					cudpp.elementsPerSec / 1.0e6, 
+					cudpp.normElementsPerSec / 1.0e6);
+				printf("  (%1.3lfx)", mgpu.elementsPerSec / 
+					cudpp.elementsPerSec);
 			}
 			printf("\n");
 		}
@@ -363,8 +391,8 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 				terms.numIterations = numIterations;
 				terms.numTests = numTests;
 
-				Throughput mgpu = { 0 }, b40c = { 0 };
-				bool success = Benchmark(terms, mgpu, b40c);
+				Throughput mgpu = { 0 }, b40c = { 0 }, cudpp = { 0 };
+				bool success = Benchmark(terms, mgpu, b40c, cudpp);
 				if(!success) return false;
 
 				printf("%7.3lf\n", mgpu.normElementsPerSec / 1.0e6);
@@ -423,7 +451,12 @@ int main(int argc, char** argv) {
 //	BenchmarkBitPassSmall(context, engine);
 //	BenchmarkBitPassLarge(context, engine);
 
-	ComparisonBenchmark(context, engine);
+	CUDPPHandle cudppHandle;
+	cudppCreate(&cudppHandle);
+	
+	ComparisonBenchmark(context, engine, cudppHandle);
+
+	cudppDestroy(cudppHandle);
 
 	sortReleaseEngine(engine);
 }

@@ -196,6 +196,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\src\testsort\cudppsort.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\..\src\testsort\mgputest.cpp"
 				>
 			</File>
@@ -228,8 +232,36 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 		</Filter>
+		<Filter
+			Name="cudpp"
+			>
+			<File
+				RelativePath="..\..\src\cudpp2\cudpp.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\cudpp2\cudpp_manager.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\cudpp2\cudpp_maximal_launch.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\cudpp2\cudpp_plan.cpp"
+				>
+			</File>
+		</Filter>
 		<File
 			RelativePath="..\..\src\testsort\b40ctest.cu"
+			>
+		</File>
+		<File
+			RelativePath="..\..\src\cudpp2\radixsort_app.cu"
+			>
+		</File>
+		<File
+			RelativePath="..\..\src\cudpp2\scan_app.cu"
 			>
 		</File>
 		<File
