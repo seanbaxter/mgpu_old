@@ -6,15 +6,15 @@
 #include <tr1/random>
 #endif
 
+const int MaxCUDPPElements = 65535 * 512;
+
 
 // Need to sort fewer elements as the number of values increases, to fit
 // everything in video memory.
 #ifdef _DEBUG
 
 const int ElementCounts[7] = {
-//	1234567,
-	1<< 19,
-//	1<< 19,
+	35000000,
 	1<< 19,
 	1<< 19,
 	1<< 19,
@@ -26,9 +26,10 @@ const int NumIterations = 1;
 const int NumTests = 1;
 
 #else
+
 /*
 const int ElementCounts[7] = {
-	35000000,
+	40000000,
 	27000000,
 	16000000,
 	12000000,
@@ -37,9 +38,8 @@ const int ElementCounts[7] = {
 	70000000
 };
 const int NumIterations = 15;
-const int NumTests = 5;*/
-
-
+const int NumTests = 5;
+*/
 const int ElementCounts[7] = {
 	500000,
 	500000,
@@ -187,6 +187,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 	b40cTerms.randomKeys = keysDevice.get();
 	b40cTerms.sortedKeys = sortedKeysDevice.get();
 
+
 	if(terms.valueCount) {
 		valuesHost[0].resize(terms.count);
 		for(int i(0); i < terms.count; ++i)
@@ -206,6 +207,15 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 		b40cTerms.sortedVals = sortedValuesDevice[0].get();
 	}
 
+	// Make the CUDPPElements a clone of the b40c elements
+	B40cTerms cudppTerms = b40cTerms;
+
+	// CUDPP has a bug preventing it from sorting more than 65535 512-element
+	// blocks. If our sort array is larger than this, resize the sort array.
+	if(terms.count > MaxCUDPPElements)
+		cudppTerms.count = MaxCUDPPElements;
+
+
 	double elapsed;
 	Throughput throughput;
 	for(int test(0); test < NumTests; ++test) {
@@ -224,14 +234,15 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 
 		
 		// CUDPP benchmark
-		if(0 == terms.valueCount || 1 == terms.valueCount) {
-			CUresult result = CUDPPBenchmark(terms.cudppHandle, b40cTerms,
+		if(terms.cudppHandle && (0 == terms.valueCount || 
+			1 == terms.valueCount)) {
+			CUresult result = CUDPPBenchmark(terms.cudppHandle, cudppTerms,
 				&elapsed);
 			if(CUDA_SUCCESS != result) {
 				printf("Error in CUDPP sort on numBits = %d.\n", terms.numBits);
 				return false;
 			}
-			throughput = CalcThroughput(terms.numBits, terms.count,
+			throughput = CalcThroughput(terms.numBits, cudppTerms.count,
 				terms.valueCount, terms.numIterations, elapsed);
 			cudpp.Max(throughput);
 		}
@@ -281,10 +292,11 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 					terms.numBits);
 				return false;
 			}
-	}	
+	}
 
 	return true;
 }
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -330,21 +342,21 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine,
 
 			Benchmark(terms, mgpu, b40c, cudpp);
 
-			printf("MGPU:(%8.2lf, %7.2lf) M/s",
+			printf("MGPU:%8.2lf, %7.2lf M/s",
 				mgpu.elementsPerSec / 1.0e6,
 				mgpu.normElementsPerSec / 1.0e6);
 			if(b40c.elementsPerSec) {
-				printf("  B40C:(%8.2lf, %7.2lf) M/s", 
+				printf("  B40C:%8.2lf, %7.2lf M/s", 
 					b40c.elementsPerSec / 1.0e6, 
 					b40c.normElementsPerSec / 1.0e6);
-				printf("  (%1.3lfx)", mgpu.elementsPerSec / 
+				printf(" %1.3lfx", mgpu.elementsPerSec / 
 					b40c.elementsPerSec);
 			}
 			if(cudpp.elementsPerSec) {
-				printf("  CUDPP:(%8.2lf, %7.2lf) M/s", 
+				printf("  CUDPP:%8.2lf, %7.2lf M/s", 
 					cudpp.elementsPerSec / 1.0e6, 
 					cudpp.normElementsPerSec / 1.0e6);
-				printf("  (%1.3lfx)", mgpu.elementsPerSec / 
+				printf(" %1.3lfx", mgpu.elementsPerSec / 
 					cudpp.elementsPerSec);
 			}
 			printf("\n");
