@@ -302,7 +302,7 @@ CUDPPScanPlan::~CUDPPScanPlan()
 * @param[in]  numElements The maximum number of elements to be compacted
 * @param[in]  numRows The number of rows (for 2D operations) to be compacted
 * @param[in]  rowPitch The pitch of the rows of input data, in elements
-
+*/
 
 /** @brief Reduce Plan constructor
 * 
