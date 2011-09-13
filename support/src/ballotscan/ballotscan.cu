@@ -24,6 +24,9 @@ DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// Use parallel scan for stream compaction. All values that are not -1.0f are
+// moved to the front of the stream and stored to dataOut_global. The total
+// number of defined values is stored in countOut_global.
 
 extern "C" __global__ void ParallelScanWarp(const float* dataIn_global, 
 	float* dataOut_global, uint* countOut_global) {
@@ -69,6 +72,8 @@ extern "C" __global__ void ParallelScanWarp(const float* dataIn_global,
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// Use ballot scan (ballot-mask-popc) for a fast parallel scan on one-bit
+// sequences.
 
 extern "C" __global__ void BallotScanWarp(const float* dataIn_global, 
 	float* dataOut_global, uint* countOut_global) {
