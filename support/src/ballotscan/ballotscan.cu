@@ -164,6 +164,7 @@ DEVICE uint2 Multiscan(uint tid, uint x) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// Scan across an entire block using Multiscan method.
 
 extern "C" __global__ void ParallelScanBlock(const float* dataIn_global, 
 	float* dataOut_global, uint* countOut_global) {
@@ -190,6 +191,12 @@ extern "C" __global__ void ParallelScanBlock(const float* dataIn_global,
 		*countOut_global = scan.y;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////
+// Run a ballot scan on each warp. Run a parallel scan on the total for each
+// warp, then add the exclusive scan of the totals back into the exclusive
+// ballot scans.
+
 extern "C" __global__ void BallotScanBlock(const float* dataIn_global, 
 	float* dataOut_global, uint* countOut_global) {
 
@@ -200,9 +207,9 @@ extern "C" __global__ void BallotScanBlock(const float* dataIn_global,
 	float val = dataIn_global[tid];
 
 	uint flag = -1.0f != val;
-
+	
+	// Ballot scan the flags as in the warp scan version.
 	uint bits = __ballot(flag);
-
 	uint mask = bfi(0, 0xffffffff, 0, lane);
 	uint exc = __popc(mask & bits);
 	uint warpTotal = __popc(bits);
@@ -230,8 +237,6 @@ extern "C" __global__ void BallotScanBlock(const float* dataIn_global,
 	if(flag) shared2[exc] = val;
 	
 	__syncthreads();
-
-	dataOut_global[tid] = exc;
 
 	if(tid < blockTotal) {
 		val = shared2[tid];
