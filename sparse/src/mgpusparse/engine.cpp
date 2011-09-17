@@ -116,7 +116,6 @@ sparseStatus_t sparseEngine_d::LoadKernel(sparsePrec_t prec,
 			if(CUDA_SUCCESS != result) return SPARSE_STATUS_KERNEL_ERROR;
 
 		// Cache the texture reference
-		CUmodule module = k->module->Handle();
 		result = cuModuleGetTexRef(&k->xVec_texture, k->module->Handle(),
 			"xVec_texture");
 		if(CUDA_SUCCESS != result) return SPARSE_STATUS_KERNEL_ERROR;
@@ -235,7 +234,6 @@ sparseStatus_t sparseEngine_d::Multiply(sparseMat_t mat, T alpha, T beta,
 	CUdeviceptr xVec, CUdeviceptr yVec) {
 
 	sparseMatrix* m = static_cast<sparseMatrix*>(mat);
-	CuContext* c = m->engine->context.get();
 
 	Kernel* k;
 	sparseStatus_t status = LoadKernel(m->prec, &k);
@@ -291,6 +289,7 @@ sparseStatus_t sparseEngine_d::Encode(int height, int width, sparsePrec_t prec,
 	int valuesPerThread, int nz, CUdeviceptr row, CUdeviceptr col, CUdeviceptr val, 
 	std::auto_ptr<sparseMatrix>* ppMatrix) {
 
+/*
 	Build* b;
 	sparseStatus_t status = LoadBuild(prec, valuesPerThread, &b);
 	if(SPARSE_STATUS_SUCCESS != status) return status;
@@ -299,7 +298,6 @@ sparseStatus_t sparseEngine_d::Encode(int height, int width, sparsePrec_t prec,
 	int spacing = 2 * total;
 	int numBlocks = std::min((nz + spacing - 1) / spacing, b->blocks);	
 
-/*
 	///////////////////////////////////////////////////////////////////////////////////////////////
 	// run the count algorithm
 
@@ -469,7 +467,7 @@ sparseStatus_t sparseEngine_d::Encode(int height, int width, sparsePrec_t prec,
 
 	*ppMatrix = matrix;
 */
-	return SPARSE_STATUS_SUCCESS;
+	return SPARSE_STATUS_INTERNAL_ERROR;
 }
 
 

@@ -77,7 +77,7 @@ int EncoderBuilder::ProcessWarp() {
 	int lastFlagCount = 0;
 	for(int tid(0), i(0); tid < WarpSize; ++tid) {
 		int curThreadRow = -1;
-		int lastFlagCount = 0;
+	//	int lastFlagCount = 0;
 		int threadSharedMemSlot = curSharedMemSlot;
 		for(int val(0); val < valuesPerThread; ++val, ++i) {
 			int row = rowIndices2[i];
@@ -112,7 +112,7 @@ int EncoderBuilder::ProcessWarp() {
 	// Each thread updates slots tid and tid + warpSize.
 	// Find the first shared mem slot that has the same row index as the 
 	// current slot in the scan and store the difference as deltaX and deltaY.
-	int curScanRow = -1;
+//	int curScanRow = -1;
 	int precedingSlotRow = -1;
 	int precedingSlotStart = -1;
 	int numOutputSlots = 0;
@@ -304,7 +304,7 @@ void EncoderFeeder<T>::Finalize(std::auto_ptr<EncodedMatrixData<T> >* ppMatrix) 
 		matrix->packedSizeShift = groupSizeBits;
 
 		// run an exclusive scan with packing bits
-		int mask = (1<< groupSizeBits) - 1;
+	//	int mask = (1<< groupSizeBits) - 1;
 		int offset = matrix->outputIndices[0];
 		matrix->outputIndices[0] <<= groupSizeBits;
 		for(int i(1); i < height; ++i) {
