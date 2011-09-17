@@ -25,7 +25,7 @@ const char* Matrices[][2] = {
 // Sparse matrix benchmarking utilities
 
 const int BytesPerElement[6] = {
-	12,		// index (4), float (4), float (4)
+	12,		// index (4), float (4), float (g4)
 	16,		// index (4), float (4), double (8)
 	20,		// index (4), double (8), double (8)
 	20,		// index (4), cfloat (8), cfloat (8)
@@ -235,7 +235,7 @@ bool RunBenchmark(CuContext* context, sparseEngine_t mgpu,
 			&m, err);
 
 		if(!success) {
-			printf("Error loading file %\n", Matrices[i][0]);
+			printf("Error loading file %s\n", Matrices[i][0]);
 			return false;
 		}
 
