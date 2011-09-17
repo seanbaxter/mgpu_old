@@ -265,7 +265,6 @@ bool RunBenchmark(CuContext* context, sparseEngine_t mgpu,
 		std::vector<Benchmark> cusparseBenchmarks(numRuns);
 
 		std::vector<int> mgpuFastest(numValueSets);
-		int mgpuFastestRun = 0;
 
 
 		////////////////////////////////////////////////////////////////////////
@@ -345,8 +344,18 @@ int main(int argc, char** argv) {
 	sparseEngine_t mgpu;
 	sparseStatus_t status = sparseCreate("../../src/cubin/", &mgpu);
 
+	if(SPARSE_STATUS_SUCCESS != status) {
+		printf("Could not create MGPU Sparse object: %s.\n",
+			sparseStatusString(status));
+		return 0;
+	}
+
 	cusparseHandle_t cusparse;
 	cusparseStatus_t cuStatus = cusparseCreate(&cusparse);
+	if(CUSPARSE_STATUS_SUCCESS != cuStatus) {
+		printf("Could not create CUSPARSE object.\n");
+		return 0;
+	}
 
 	std::vector<Result> results;
 

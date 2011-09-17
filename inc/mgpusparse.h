@@ -40,6 +40,8 @@ typedef enum {
 	SPARSE_STATUS_INTERNAL_ERROR
 } sparseStatus_t;
 
+const char* SPARSEAPI sparseStatusString(sparseStatus_t status);
+
 
 typedef enum {
 	SPARSE_PREC_REAL4 = 0,
@@ -63,8 +65,6 @@ typedef enum {
 
 typedef std::complex<float> sparseComplex4_t;
 typedef std::complex<double> sparseComplex8_t;
-
-
 
 template<typename T>
 struct sparseMatElementCOO_t {

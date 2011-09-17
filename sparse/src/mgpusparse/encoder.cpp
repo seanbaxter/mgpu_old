@@ -74,7 +74,7 @@ int EncoderBuilder::ProcessWarp() {
 
 	// Loop through each value in row-major order and build the colIndex flags.
 	int curSharedMemSlot = 0;
-	int lastFlagCount = 0;
+//	int lastFlagCount = 0;
 	for(int tid(0), i(0); tid < WarpSize; ++tid) {
 		int curThreadRow = -1;
 	//	int lastFlagCount = 0;

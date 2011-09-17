@@ -222,7 +222,7 @@ sparseStatus_t sparseEngine_d::LoadBuild(sparsePrec_t prec, int valuesPerThread,
 	}
 	*ppBuild = build[sizeSlot][valSlot].get();
 */
-	return SPARSE_STATUS_SUCCESS;
+	return SPARSE_STATUS_INTERNAL_ERROR;
 }
 
 

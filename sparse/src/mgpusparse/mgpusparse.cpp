@@ -3,6 +3,32 @@
 #include <vector>
 
 
+
+const char* SparseStatusStrings[] = {
+	"SPARSE_STATUS_SUCCESS",
+	"SPARSE_STATUS_NOT_INITIALIZED",
+	"SPARSE_STATUS_DEVICE_ALLOC_FAILED",
+	"SPARSE_STATUS_HOST_ALLOC_FAILED",
+	"SPARSE_STATUS_PREC_MISMATCH",
+	"SPARSE_STATUS_CONFIG_NOT_SUPPORTED",
+	"SPARSE_STATUS_CONTEXT_MISMATCH",
+	"SPARSE_STATUS_INVALID_CONTEXT",
+	"SPARSE_STATUS_NOT_SORTED",
+	"SPARSE_STATUS_KERNEL_NOT_FOUND",
+	"SPARSE_STATUS_KERNEL_ERROR",
+	"SPARSE_STATUS_LAUNCH_ERROR",
+	"SPARSE_STATUS_INVALID_VALUE",
+	"SPARSE_STATUS_DEVICE_ERROR",
+	"SPARSE_STATUS_INTERNAL_ERROR"
+};
+
+const char* SPARSEAPI sparseStatusString(sparseStatus_t status) {
+	int code = (int)status;
+	if(code >= (int)(sizeof(SparseStatusStrings) / sizeof(char*))) return 0;
+	return SparseStatusStrings[code];
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // Create and destroy sparse engines
 
