@@ -1,5 +1,6 @@
 LIBRARY	"mgpusparse"
 EXPORTS
+	sparseStatusString
 	sparseCreate
 	sparseInc
 	sparseRelease
