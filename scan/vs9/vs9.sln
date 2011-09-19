@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "scantest", "scantest\scantest.vcproj", "{B6F594B8-84E5-4CC6-84D2-94E824AF2B9D}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mgpuscan", "mgpuscan\mgpuscan.vcproj", "{6CA91D39-1373-493D-B2D6-48E3C4900E79}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B6F594B8-84E5-4CC6-84D2-94E824AF2B9D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B6F594B8-84E5-4CC6-84D2-94E824AF2B9D}.Debug|Win32.Build.0 = Debug|Win32
+		{B6F594B8-84E5-4CC6-84D2-94E824AF2B9D}.Release|Win32.ActiveCfg = Release|Win32
+		{B6F594B8-84E5-4CC6-84D2-94E824AF2B9D}.Release|Win32.Build.0 = Release|Win32
+		{6CA91D39-1373-493D-B2D6-48E3C4900E79}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6CA91D39-1373-493D-B2D6-48E3C4900E79}.Debug|Win32.Build.0 = Debug|Win32
+		{6CA91D39-1373-493D-B2D6-48E3C4900E79}.Release|Win32.ActiveCfg = Release|Win32
+		{6CA91D39-1373-493D-B2D6-48E3C4900E79}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
