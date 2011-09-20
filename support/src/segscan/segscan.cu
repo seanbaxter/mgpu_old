@@ -188,6 +188,62 @@ extern "C" __global__ void SegScanWarp8(const uint* dataIn_global,
 // Use a multiscan pattern to execute segmented scan over an entire block with
 // 8 values per thread.
 
+////////////////////////////////////////////////////////////////////////////////
+// INTER-WARP REDUCTION 
+// Calculate the length of the last segment in the last lane in each warp.
+
+DEVICE uint BlockScan(uint warp, uint lane, uint last, uint warpFlags, 
+	uint mask, volatile uint* shared, volatile uint* threadShared) {
+
+	__shared__ volatile uint blockShared[3 * NUM_WARPS];
+	if(WARP_SIZE - 1 == lane) {
+		blockShared[NUM_WARPS + warp] = last;
+		blockShared[2 * NUM_WARPS + warp] = warpFlags;
+	}
+	__syncthreads();
+
+	if(lane < NUM_WARPS) {
+		// Pull out the sum and flags for each warp.
+		volatile uint* s = blockShared + NUM_WARPS + lane;
+		uint warpLast = blockShared[NUM_WARPS + lane];
+		uint flag = blockShared[2 * NUM_WARPS + lane];
+		blockShared[lane] = 0;
+
+		uint blockFlags = __ballot(flag);
+
+		// Mask out the bits at or above the current warp.
+		blockFlags &= mask;
+
+		// Find the distance from the current warp to the warp at the start of 
+		// this segment.
+		int preceding = 31 - __clz(blockFlags);
+		uint distance = lane - preceding;
+
+		// INTER-WARP reduction
+		uint warpSum = warpLast;
+		uint warpFirst = blockShared[NUM_WARPS + preceding];
+
+		#pragma unroll
+		for(int i = 0; i < LOG_NUM_WARPS; ++i) {
+			uint offset = 1<< i;
+			if(distance > offset) warpSum += s[-offset];
+			s[0] = warpSum;
+		}
+		// Subtract warpLast to make exclusive and add first to grab the
+		// fragment sum of the preceding warp.
+		warpSum += warpFirst - warpLast;
+
+		// Store warpSum back into shared memory. This is added to all the
+		// lane sums and those are added into all the threads in the first 
+		// segment of each lane.
+		blockShared[lane] = warpSum;
+	}
+	__syncthreads();
+
+	return blockShared[warp];
+}
+
+
 extern "C" __global__ __launch_bounds__(NUM_THREADS, 4) 
 void SegScanBlock8(const uint* dataIn_global, uint* dataOut_global) {
 
@@ -197,7 +253,6 @@ void SegScanBlock8(const uint* dataIn_global, uint* dataOut_global) {
 	
 	const int Size = NUM_WARPS * VALUES_PER_THREAD * (WARP_SIZE + 1);
 	__shared__ volatile uint shared[Size];
-	__shared__ volatile uint blockShared[3 * NUM_WARPS];
 
 	// Use a stride of 33 slots per warp per value to allow conflict-free
 	// transposes from strided to thread order.
@@ -260,7 +315,8 @@ void SegScanBlock8(const uint* dataIn_global, uint* dataOut_global) {
 	uint warpFlags = __ballot(hasHeadFlag);
 
 	// Mask out the bits at or above the current thread.
-	uint warpFlagsMask = warpFlags & bfi(0, 0xffffffff, 0, lane);
+	uint mask = bfi(0, 0xffffffff, 0, lane);
+	uint warpFlagsMask = warpFlags & mask;
 
 	// Find the distance from the current thread to the thread at the start of
 	// the segment.
@@ -291,65 +347,15 @@ void SegScanBlock8(const uint* dataIn_global, uint* dataOut_global) {
 	// the preceding thread.
 	sum += first - last;
 
-	
-	////////////////////////////////////////////////////////////////////////////
-	// INTER-WARP REDUCTION 
-	// Calculate the length of the last segment in the last lane in each warp.
 
-	__syncthreads();
-	if(WARP_SIZE - 1 == lane) {
-		uint lastSegLength = last;
-		if(!hasHeadFlag) lastSegLength += sum;
+	// Call BlockScan for inter-warp scan on the reductions of the last segment
+	// in each warp.
+	uint lastSegLength = last;
+	if(!hasHeadFlag) lastSegLength += sum;
 
-		blockShared[NUM_WARPS + warp] = lastSegLength;
-		blockShared[2 * NUM_WARPS + warp] = warpFlags;
-	}
-	__syncthreads();
-	
-
-	if(tid < NUM_WARPS) {
-		blockShared[tid] = 0;
-		uint warpLast = blockShared[NUM_WARPS + tid];
-		uint warpSegFlag = blockShared[2 * NUM_WARPS + tid];
-
-		uint blockFlags = __ballot(warpSegFlag);
-
-		// Mask out the bits at or above the current warp.
-		blockFlags &= bfi(0, 0xffffffff, 0, tid);
-
-		// Find the distance from the current warp to the warp at the start of 
-		// this segment.
-		int preceding = 31 - __clz(blockFlags);
-		uint distance = tid - preceding;
-
-		// INTER-WARP REDUCTION
-		blockShared[tid] = 0;
-
-		volatile uint* shifted = blockShared + NUM_WARPS + tid;
-		uint warpSum = warpLast;
-		uint warpFirst = blockShared[NUM_WARPS + preceding];
-
-		#pragma unroll
-		for(int i = 0; i < LOG_NUM_WARPS; ++i) {
-			uint offset = 1<< i;
-			if(distance > offset) warpSum += shifted[-offset];
-			shifted[0] = warpSum;
-		}
-		// Subtract warpLast to make exclusive and add first to grab the
-		// fragment sum of the preceding warp.
-		warpSum += warpFirst - warpLast;
-
-		// Store warpSum back into shared memory. This is added to all the
-		// lane sums and those are added into all the threads in the first 
-		// segment of each lane.
-		blockShared[tid] = warpSum;
-	}
-	__syncthreads();
-
-
-	// If there are no head flags before this thread in the warp, add the block
-	// scan to sum.
-	if(!warpFlagsMask) sum += blockShared[warp];
+	uint blockScan = BlockScan(warp, lane, lastSegLength, warpFlags, mask, 
+		shared, threadShared);
+	if(!warpFlagsMask) sum += blockScan;
 
 
 	////////////////////////////////////////////////////////////////////////////
