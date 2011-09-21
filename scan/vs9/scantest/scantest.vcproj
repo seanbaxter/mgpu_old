@@ -66,7 +66,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="cuda.lib cudart.lib ../../../support/vs9/debug/mgpuscan.lib"
+				AdditionalDependencies="cuda.lib cudart.lib ../../../scan/vs9/debug/mgpuscan.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -145,7 +145,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="cuda.lib cudart.lib ../../../support/vs9/release/mgpuscan.lib"
+				AdditionalDependencies="cuda.lib cudart.lib ../../../scan/vs9/release/mgpuscan.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -191,22 +191,6 @@
 			<File
 				RelativePath="..\..\src\scantest\scantest.cpp"
 				>
-			</File>
-			<File
-				RelativePath="..\..\src\scantest\scantest.cu"
-				>
-				<FileConfiguration
-					Name="Debug|Win32"
-					>
-					<Tool
-						Name="Cudart Build Rule"
-						Arch1="20"
-						Arch2="0"
-						HostDebugInfo="true"
-						Optimization="0"
-						Runtime="3"
-					/>
-				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter

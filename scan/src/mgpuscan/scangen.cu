@@ -1,10 +1,18 @@
 #define WARP_SIZE 32
 #define LOG_WARP_SIZE 5
 
+// Use a 33-slot stride for shared mem transpose.
+#define WARP_STRIDE (WARP_SIZE + 1)
+
 typedef unsigned int uint;
 
 #define DEVICE extern "C" __forceinline__ __device__ 
 #define DEVICE2 __forceinline__ __device__
+
+#define ROUND_UP(x, y) (~(y - 1) & (x + y - 1))
+
+#include <device_functions.h>
+#include <vector_functions.h>
 
 
 DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
@@ -15,5 +23,6 @@ DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
 }
 
 
-#include "globalseg.cu"
+#include "globalscan.cu"
 
+#include "globalseg.cu"

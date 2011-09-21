@@ -9,9 +9,6 @@
 #define VALUES_PER_WARP (WARP_SIZE * VALUES_PER_THREAD)
 #define NUM_VALUES (NUM_THREADS * VALUES_PER_THREAD)
 
-// Use a 33-slot stride for shared mem transpose.
-#define WARP_STRIDE (WARP_SIZE + 1)
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // UPSWEEP PASS. Find the sum of all values in the last segment in each block.
@@ -53,14 +50,14 @@ DEVICE int Reduce(uint tid, int x, int code, int init) {
 			WARP_SIZE - 1];
 
 		totals_shared[tid] = init;
-		volatile int* s2 = totals_shared + NUM_WARPS / 2 + tid;
-		s2[0] = x;
+		volatile int* s = totals_shared + NUM_WARPS / 2 + tid;
+		s[0] = x;
 		#pragma unroll
 		for(int i = 0; i < LOG_NUM_WARPS; ++i) {
 			int offset = 1<< i;
 			if(0 == code) x += s[-offset];
 			else if(1 == code) x = max(x, s[-offset]);
-			s2[0] = x;
+			s[0] = x;
 		}
 
 		if(NUM_WARPS - 1 == tid) totals_shared[0] = x;
@@ -73,7 +70,7 @@ DEVICE int Reduce(uint tid, int x, int code, int init) {
 }
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
-void SegScanUpsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
+void SegScanUpsweepFlag(const uint* valuesIn_global, uint* blockLast_global,
 	int* headFlagPos_global, const int2* rangePairs_global) {
 
 	uint tid = threadIdx.x;
@@ -144,15 +141,16 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 	uint total = (uint)Reduce(tid, (int)threadSum, 0, 0);
 
 	if(0 == tid) {
-		valuesOut_global[block] = total;
+		blockLast_global[block] = total;
+		int headFlag = -1 != segmentStart;
 		if(-1 != segmentStart) segmentStart += current;
-		headFlagPos_global[block] = segmentStart;
+		headFlagPos_global[block] = headFlag;
 	}
 }
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
 void SegScanUpsweepKeys(const uint* valuesIn_global, const uint* keysIn_global,
-	uint* valuesOut_global, const int2* rangePairs_global) {
+	uint* blockLast_global, const int2* rangePairs_global) {
 
 
 }
@@ -162,7 +160,7 @@ void SegScanUpsweepKeys(const uint* valuesIn_global, const uint* keysIn_global,
 // REDUCTION PASS. 
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, 1)
-void SegScanReduction(const uint* headFlags_global, uint* sums_global,
+void SegScanReduction(const uint* headFlags_global, uint* blockLast_global,
 	uint numBlocks) {
 
 	uint tid = threadIdx.x;
@@ -175,36 +173,41 @@ void SegScanReduction(const uint* headFlags_global, uint* sums_global,
 	uint x = 0;
 	if(tid < numBlocks) {
 		flag = headFlags_global[tid];
-		x = sums_global[tid];
+		x = blockLast_global[tid];
 	}
 
 	// Get the start flags for each thread in the warp.
 	uint flags = __ballot(flag);
 
-	// Mask out the bits above the current lane.
-	uint mask = bfi(0, 0xffffffff, 0, lane + 1);
+	// Mask out the bits at or above the current lane.
+	uint mask = bfi(0, 0xffffffff, 0, lane);
 	uint flagsMasked = flags & mask;
 
 	// Find the distance from the current thread to the thread at the start of
 	// the segment.
-	uint distance = __clz(flagsMasked) + lane - 31;
+	int preceding = 31 - __clz(flagsMasked);
+	uint distance = lane - preceding;
 
 	__shared__ volatile uint shared[NUM_WARPS * (WARP_SIZE + 1)];
 	__shared__ volatile uint blockShared[NUM_WARPS];
-	volatile uint* warpShared = shared + warp * (WARP_SIZE + 1);
+	volatile uint* warpShared = shared + warp * (WARP_SIZE + 1) + 1;
 	volatile uint* threadShared = warpShared + lane;
 
 	// Run an inclusive scan for each warp. This does not require any special 
 	// treatment of segment edges, as we have only one value per thread.
+	threadShared[-1] = 0;
 	threadShared[0] = x;
 	uint sum = x;
+	uint first = warpShared[preceding];
+
 	#pragma unroll
 	for(int i = 0; i < LOG_WARP_SIZE; ++i) {
 		int offset = 1<< i;
-		if(distance >= offset)
+		if(distance > offset)
 			sum += threadShared[-offset];
-		threadShared[0] = offset; 
+		threadShared[0] = sum; 
 	}
+	sum += first;
 
 	// sum now holds the inclusive scan for the part of the segment within the
 	// warp. Run a multiscan by having each warp store its flags value to
@@ -213,21 +216,23 @@ void SegScanReduction(const uint* headFlags_global, uint* sums_global,
 
 	__syncthreads();
 	if(tid < NUM_WARPS) {
+
 		// Load the inclusive sums for the last value in each warp and the head
 		// flags for each warp.
-		uint x = shared[tid * (WARP_SIZE + 1) + WARP_SIZE - 1];
+		uint x = shared[tid * (WARP_SIZE + 1) + WARP_SIZE];
 		uint flag = blockShared[tid];
 		uint flags = __ballot(flag) & mask;
 
 		int preceding = 31 - __clz(flags);
 		uint distance = tid - preceding;
 		
-		shared[0] = 0;
 		volatile uint* s = shared + tid + 1;
+		s[-1] = 0;
 		s[0] = x;
+
 		uint sum = x;
 		uint first = shared[1 + preceding];
-		
+
 		#pragma unroll
 		for(int i = 0; i < LOG_NUM_WARPS; ++i) {
 			int offset = 1<< i;
@@ -236,19 +241,20 @@ void SegScanReduction(const uint* headFlags_global, uint* sums_global,
 		}
 		
 		// Add preceding and subtract x to get an exclusive sum.
-		sum += preceding - x;
+		sum += first - x;
 
-		shared[tid] = sum;
+		blockShared[tid] = sum;
 	}
+
 	__syncthreads();
 
-	uint blockScan = shared[warp];
+	uint blockScan = blockShared[warp];
 
 	// Add blockScan if the warp doesn't hasn't encountered a head flag yet.
-	if(flagsMasked) sum += blockScan;
+	if(!flagsMasked) sum += blockScan;
 	sum -= x;
 
-	sums_global[tid] = x;
+	blockLast_global[tid] = sum;
 }
 
 
@@ -315,7 +321,8 @@ DEVICE uint BlockScan(uint warp, uint lane, uint last, uint warpFlags,
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
 void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
-	const uint* start_global, int count, const int2* rangePairs_global) {
+	const uint* start_global, const int2* rangePairs_global, int count,
+	uint init, bool inclusive) {
 
 	uint tid = threadIdx.x;
 	uint lane = (WARP_SIZE - 1) & tid;
@@ -455,7 +462,7 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 
 			// NOTE: if inclusive, add x into last before storing to shared mem.
 
-			warpShared[offset + i] = last;
+			warpShared[offset + i] = last + init;
 			last += x[i];
 		}
 
@@ -482,4 +489,17 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 }
 
 
-////////////////////////////////////////////////////////////////////////////////
+extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
+void SegScanDownsweepKeys(const uint* valuesIn_global, uint* valuesOut_global,
+	const uint* start_global, const int2* rangePairs_global, int count,
+	uint init, bool inclusive) {
+
+}
+
+#undef NUM_THREADS
+#undef NUM_WARPS
+#undef LOG_NUM_WARPS
+#undef BLOCKS_PER_SM
+#undef VALUES_PER_THREAD
+#undef VALUES_PER_WARP
+#undef NUM_VALUES

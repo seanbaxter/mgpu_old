@@ -2,6 +2,9 @@
 Microsoft Visual Studio Solution File, Format Version 10.00
 # Visual Studio 2008
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "scantest", "scantest\scantest.vcproj", "{B6F594B8-84E5-4CC6-84D2-94E824AF2B9D}"
+	ProjectSection(ProjectDependencies) = postProject
+		{6CA91D39-1373-493D-B2D6-48E3C4900E79} = {6CA91D39-1373-493D-B2D6-48E3C4900E79}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mgpuscan", "mgpuscan\mgpuscan.vcproj", "{6CA91D39-1373-493D-B2D6-48E3C4900E79}"
 EndProject
