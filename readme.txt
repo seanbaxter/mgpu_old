@@ -37,3 +37,19 @@ likely that the 64bit builds can be optimized to run at the same occupancy as
 32bit builds, but this has not been done yet.
 
 Additionally, GNU makefile support is spotty at this point.
+
+Directories:
+
+inc - header files for top-level libraries.
+
+scan - development branch for new MGPU Scan library. Don't use this if you're following the tutorial.
+
+snippets - fragments of code presented in the tutorial, here in .cu and .cpp files for convenience.
+
+sort - MGPU Sort library. Functional. use the inc/mgpusort.h interface.
+
+sparse - development branch for the MGPU Sparse library.
+
+support - small projects from the Introduction section of the tutorial. This includes the globalscan example. inc/mgpuscan.h is currently implemented by support/src/mgpuscan.
+
+util - cucpp wrapper for CUDA driver API.
