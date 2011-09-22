@@ -63,6 +63,15 @@ int main(int argc, char** argv) {
 	status = scanSegmentedFlag(engine, valuesDevice->Handle(),
 		scanDevice->Handle(), count, 0, false);
 
+	std::vector<uint> scanHost;
+	result = scanDevice->ToHost(scanHost);
+
+	for(int i(0); i < count; ++i)
+		if(scanHost[i] != scanRef[i]) {
+			int j =0;
+		}
+	int j = 0;
+
 
 //	scanSegmentedFlag(engine, valuesDevice-
 //scanStatus_t SCANAPI scanSegmentedFlag(scanEngine_t engine, CUdeviceptr data,

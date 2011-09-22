@@ -192,7 +192,7 @@ scanStatus_t SCANAPI scanArray(scanEngine_t engine, CUdeviceptr values,
 
 	callStack.Reset();
 	callStack.Push(values, scan, engine->blockScanMem, engine->rangeMem, 
-		count, init, inclusive);
+		count, init, (int)inclusive);
 	result = engine->scanFuncs[2]->Launch(numBlocks, 1, callStack);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
 
@@ -212,11 +212,13 @@ scanStatus_t SCANAPI scanSegmentedFlag(scanEngine_t engine, CUdeviceptr packed,
 	engine->rangeMem->FromHost(ranges);
 
 	CuCallStack callStack;
+	CUresult result;
+
 	callStack.Push(packed, engine->blockScanMem, engine->headFlagsMem,
 		engine->rangeMem);
 
 		
-	CUresult result = engine->scanFlagFuncs[0]->Launch(numBlocks, 1, callStack);
+	result = engine->scanFlagFuncs[0]->Launch(numBlocks, 1, callStack);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
 
 	std::vector<uint> blockTotalsHost;
@@ -224,7 +226,6 @@ scanStatus_t SCANAPI scanSegmentedFlag(scanEngine_t engine, CUdeviceptr packed,
 
 	std::vector<uint> headFlagsHost;
 	engine->headFlagsMem->ToHost(headFlagsHost);
-
 
 	callStack.Reset();
 	callStack.Push(engine->headFlagsMem, engine->blockScanMem, numBlocks);
@@ -234,11 +235,9 @@ scanStatus_t SCANAPI scanSegmentedFlag(scanEngine_t engine, CUdeviceptr packed,
 	std::vector<uint> blockScanHost;
 	engine->blockScanMem->ToHost(blockScanHost);
 
-
-
 	callStack.Reset();
 	callStack.Push(packed, scan, engine->blockScanMem, engine->rangeMem, 
-		count, init, inclusive);
+		count, init, (int)inclusive);
 	result = engine->scanFlagFuncs[2]->Launch(numBlocks, 1, callStack);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
 

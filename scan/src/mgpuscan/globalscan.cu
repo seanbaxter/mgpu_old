@@ -139,7 +139,7 @@ extern "C" __global__ void GlobalScanReduction(uint* blockTotals_global,
 extern "C" __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) __global__ 
 void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 	const uint* blockScan_global, const int2* range_global, int count, 
-	uint init, bool inclusive) {
+	uint init, int inclusive) {
 
 	uint block = blockIdx.x;
 	uint tid = threadIdx.x;
