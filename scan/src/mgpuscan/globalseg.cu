@@ -397,7 +397,8 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 
 		uint hasHeadFlag = 0;
 
-		uint x[VALUES_PER_THREAD];
+		uint x[VALUES_PER_THREAD];			// unpacked values.
+		uint x2[VALUES_PER_THREAD];			// thread-local exc scan of x.
 
 		uint flags[VALUES_PER_THREAD];
 
@@ -405,9 +406,12 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 			flags[i] = 0x80000000 & packed[i];
 			x[i] = 0x7fffffff & packed[i];
+
 			if(flags[i]) last = 0;
 			hasHeadFlag |= flags[i];
 			last += x[i];
+
+			x2[i] = last;
 		}
 
 
@@ -471,21 +475,16 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 	//	if(!lane)
 	//		valuesOut_global[16 * block + 8 + warp] = sum;
 		
-		last = sum;
-
+		uint shift = sum;
 
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
-			if(flags[i]) last = 0;
-
-			// NOTE: if inclusive, add x into last before storing to shared mem.
-
-			warpShared[offset + i] = last;
-			last += x[i];
+			if(flags[i]) shift = 0;
+			warpShared[offset + i] = x2[i] + shift;
 		}
 
-		if(NUM_THREADS - 1 == tid)
-			blockOffset_shared = last;
+//		if(NUM_THREADS - 1 == tid)
+//			blockOffset_shared = ;
 
 		// Store values
 		/*if(range.x >= lastOffset) {
