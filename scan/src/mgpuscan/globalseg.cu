@@ -263,8 +263,8 @@ void SegScanReduction(const uint* headFlags_global, uint* blockLast_global,
 // INTER-WARP REDUCTION 
 // Calculate the length of the last segment in the last lane in each warp.
 
-DEVICE uint BlockScan(uint warp, uint lane, uint last, uint warpFlags, 
-	uint mask) {
+DEVICE uint BlockScan(uint tid, uint warp, uint lane, uint last,
+	uint warpFlags, uint mask) {
 
 	__shared__ volatile uint blockShared[3 * NUM_WARPS];
 	if(WARP_SIZE - 1 == lane) {
@@ -273,7 +273,7 @@ DEVICE uint BlockScan(uint warp, uint lane, uint last, uint warpFlags,
 	}
 	__syncthreads();
 
-	if(lane < NUM_WARPS) {
+	if(tid < NUM_WARPS) {
 		// Pull out the sum and flags for each warp.
 		volatile uint* s = blockShared + NUM_WARPS + lane;
 		uint warpLast = s[0];
@@ -331,11 +331,10 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 	uint warp = tid / WARP_SIZE;
 	uint block = blockIdx.x;
 	uint index = VALUES_PER_WARP * warp + lane;
-//	if(0 != block) return;
 
 	int2 range = rangePairs_global[block];
 
-	const int Size = 2 * NUM_WARPS * VALUES_PER_THREAD * (WARP_SIZE + 1);
+	const int Size = NUM_WARPS * VALUES_PER_THREAD * (WARP_SIZE + 1);
 	__shared__ volatile uint shared[Size];
 	__shared__ volatile uint blockOffset_shared;
 
@@ -380,6 +379,7 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 			}
 		//}
 
+			__syncthreads();
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i)
 			packed[i] = warpShared[offset + i];
@@ -446,12 +446,14 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 		uint sum = last;
 		uint first = warpShared[1 + preceding];
 
+		__syncthreads();
 		#pragma unroll
 		for(int i = 0; i < LOG_WARP_SIZE; ++i) {
 			uint offset = 1<< i;
 			if(distance > offset) sum += shifted[-offset];
 			shifted[0] = sum;
 		}
+		__syncthreads();
 		// Subtract last to make exclusive and add first to grab the fragment
 		// sum of the preceding thread.
 		sum += first - last;
@@ -464,9 +466,12 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 	//	if(31 == lane)
 	//		valuesOut_global[ warp] = lastSegLength;
 	
-		uint blockScan = BlockScan(warp, lane, lastSegLength, warpFlags, mask);
+		__syncthreads();
+		uint blockScan = BlockScan(tid, warp, lane, lastSegLength, warpFlags, 
+			mask);
 		if(!warpFlagsMask) sum += blockScan;
 
+		__syncthreads();
 
 		////////////////////////////////////////////////////////////////////////
 		// INTRA-WARP PASS
@@ -501,6 +506,7 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 			}
 		} else {*/
 	
+		__syncthreads();
 			#pragma unroll
 			for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 				uint target = range.x + index + i * WARP_SIZE;
