@@ -7,9 +7,9 @@
 #include <tr1/random>
 #endif
 
-const int NumElements = 3 * 60 * 256 * 8;
-const int NumIterations = 1;
-const int NumTests = 1;
+const int NumElements = 40<< 20;//6 * 60 * 256 * 8;
+const int NumIterations = 200;
+const int NumTests = 4;
 
 
 
@@ -35,14 +35,14 @@ int main(int argc, char** argv) {
 	int count = NumElements;
 
 	std::tr1::uniform_int<uint> r1(1, 1);
-	std::tr1::uniform_int<uint> r2(0, 5000);
+	std::tr1::uniform_int<uint> r2(0, 499);
 
 	std::vector<uint> values(count), scanRef(count);
 	uint last = 0;
 	for(int i(0); i < count; ++i) {
-		if(0 == (i % 2048)) {
-			printf("%2d: %d\n", i / 2048, last);
-		}
+	//	if(0 == (i % 2048)) {
+	//		printf("%2d: %d\n", i / 2048, last);
+	//	}
 		uint x = r1(mt19937);
 		values[i] = x;
 		bool head = 0 == r2(mt19937);
@@ -51,26 +51,41 @@ int main(int argc, char** argv) {
 		if(head) last = 0;
 		scanRef[i] = last;
 		last += x;
-	}
-	printf("%2d: %d\n", count / 2048, last);
-
-	
+	}	
 
 	DeviceMemPtr valuesDevice, scanDevice;
 	result = context->MemAlloc(values, &valuesDevice);
 	result = context->MemAlloc<uint>(count, &scanDevice);
 
-	status = scanSegmentedFlag(engine, valuesDevice->Handle(),
-		scanDevice->Handle(), count, 0, false);
+	
+	//		status = scanSegmentedFlag(engine, valuesDevice->Handle(),
+	//			scanDevice->Handle(), count, false);
+	
+	for(int test(0); test < NumTests; ++test) {
+
+		CuEventTimer timer;
+		timer.Start();
+
+		for(int i(0); i < NumIterations; ++i) {
+			status = scanSegmentedFlag(engine, valuesDevice->Handle(),
+				scanDevice->Handle(), count, false);
+		}
+
+		double elapsed = timer.Stop();
+
+		double throughput = (NumElements / elapsed) * NumIterations;
+		printf("Elapsed: %2.8lf billion/s.\n", throughput / 1.0e9);
+	}
 
 	std::vector<uint> scanHost;
 	result = scanDevice->ToHost(scanHost);
 
 	for(int i(0); i < count; ++i)
 		if(scanHost[i] != scanRef[i]) {
-			int j =0;
+			printf("Error on item %d.\n", i);
+			return 0;
 		}
-	int j = 0;
+	printf("Success.\n");
 
 
 //	scanSegmentedFlag(engine, valuesDevice-

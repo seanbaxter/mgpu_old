@@ -38,15 +38,13 @@ scanStatus_t SCANAPI scanCreateEngine(const char* cubin, scanEngine_t* engine);
 scanStatus_t SCANAPI scanDestroyEngine(scanEngine_t engine);
 
 scanStatus_t SCANAPI scanArray(scanEngine_t engine, CUdeviceptr values,
-	CUdeviceptr scan, int count, unsigned int init, unsigned int* scanTotal,
-	bool inclusive);
+	CUdeviceptr scan, int count, unsigned int* scanTotal, bool inclusive);
 
 scanStatus_t SCANAPI scanSegmentedFlag(scanEngine_t engine, CUdeviceptr packed,
-	CUdeviceptr scan, int count, unsigned int init, bool inclusive);
+	CUdeviceptr scan, int count, bool inclusive);
 
 scanStatus_t SCANAPI scanSegmentedKeys(scanEngine_t engine, CUdeviceptr values,
-	CUdeviceptr keys, CUdeviceptr scan, int count, unsigned int init,
-	bool inclusive);
+	CUdeviceptr keys, CUdeviceptr scan, int count, bool inclusive);
 
 
 #ifdef __cplusplus
