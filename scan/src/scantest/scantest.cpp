@@ -7,7 +7,7 @@
 #include <tr1/random>
 #endif
 
-const int NumElements = 60 * 256 * 8;
+const int NumElements = 3 * 60 * 256 * 8;
 const int NumIterations = 1;
 const int NumTests = 1;
 
