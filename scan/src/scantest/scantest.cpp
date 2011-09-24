@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
 	int count = NumElements;
 
 	std::tr1::uniform_int<uint> r1(1, 1);
-	std::tr1::uniform_int<uint> r2(1, 1);
+	std::tr1::uniform_int<uint> r2(0, 499);
 
 	std::vector<uint> values(count), scanRef(count);
 	uint last = 0;

@@ -1,11 +1,11 @@
 
-#define NUM_THREADS 256
+#define NUM_THREADS 1024
 #define NUM_WARPS (NUM_THREADS / WARP_SIZE)
-#define LOG_NUM_WARPS 3
+#define LOG_NUM_WARPS 5
 
-#define BLOCKS_PER_SM 2
+#define BLOCKS_PER_SM 1
 
-#define VALUES_PER_THREAD 16
+#define VALUES_PER_THREAD 4
 #define VALUES_PER_WARP (WARP_SIZE * VALUES_PER_THREAD)
 #define NUM_VALUES (NUM_THREADS * VALUES_PER_THREAD)
 
@@ -19,18 +19,14 @@
 // There must be at least 48 slots of memory. They should also be aligned so
 // that the difference between the start of consecutive warps differ by an 
 // interval that is relatively prime to 32 (any odd number will do).
-DEVICE uint2 Multiscan(uint tid, uint x, volatile uint* warpShared,
-	int warpStride) {
+
+DEVICE uint2 Multiscan(uint tid, uint x, volatile uint* warpShared) {
 
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
 
-
-	__shared__ volatile uint totals_shared[NUM_WARPS + NUM_WARPS / 2];
-
-	volatile uint* s = reduction_shared + ScanStride * warp + lane + 
-		WARP_SIZE / 2;
-	s[-16] = 0;
+	volatile uint* s = warpShared + lane + WARP_SIZE / 2;
+	warpShared[lane] = 0;
 	s[0] = x;
 
 	// Run inclusive scan on each warp's data.
@@ -39,7 +35,12 @@ DEVICE uint2 Multiscan(uint tid, uint x, volatile uint* warpShared,
 	for(int i = 0; i < LOG_WARP_SIZE; ++i) {
 		uint offset = 1<< i;
 		sum += s[-offset];
-		s[0] = sum;
+		if(i < LOG_WARP_SIZE - 1) s[0] = sum;
+	}
+
+	__shared__ volatile uint totals_shared[2 * NUM_WARPS];
+	if(WARP_SIZE - 1 == lane) {
+		totals_shared[NUM_WARPS + warp] = sum;
 	}
 
 	// Synchronize to make all the totals available to the reduction code.
@@ -48,19 +49,17 @@ DEVICE uint2 Multiscan(uint tid, uint x, volatile uint* warpShared,
 		// Grab the block total for the tid'th block. This is the last element
 		// in the block's scanned sequence. This operation avoids bank 
 		// conflicts.
-		uint total = reduction_shared[ScanStride * tid + WARP_SIZE / 2 +
-			WARP_SIZE - 1];
-
+		uint total = totals_shared[NUM_WARPS + tid];
 		totals_shared[tid] = 0;
-		volatile uint* s2 = totals_shared + NUM_WARPS / 2 + tid;
+		volatile uint* s = totals_shared + NUM_WARPS + tid;
+
 		uint totalsSum = total;
-		s2[0] = total;
 
 		#pragma unroll
 		for(int i = 0; i < LOG_NUM_WARPS; ++i) {
 			int offset = 1<< i;
-			totalsSum += s2[-offset];
-			s2[0] = totalsSum;	
+			totalsSum += s[-offset];
+			s[0] = totalsSum;	
 		}
 
 		// Subtract total from totalsSum for an exclusive scan.
@@ -72,8 +71,17 @@ DEVICE uint2 Multiscan(uint tid, uint x, volatile uint* warpShared,
 
 	// Add the block scan to the inclusive sum for the block.
 	sum += totals_shared[warp];
-	uint total = totals_shared[NUM_WARPS + NUM_WARPS / 2 - 1];
+	uint total = totals_shared[2 * NUM_WARPS - 1];
 	return make_uint2(sum, total);
+}
+
+DEVICE uint2 Multiscan2(uint tid, uint x) {
+	uint warp = tid / WARP_SIZE;
+	const int WarpStride = WARP_SIZE + WARP_SIZE / 2;
+	const int SharedSize = NUM_WARPS * WarpStride;
+	__shared__ volatile uint shared[SharedSize];
+	volatile uint* warpShared = shared + warp * WarpStride;
+	return Multiscan(tid, x, warpShared);
 }
 
 
@@ -92,17 +100,15 @@ void GlobalScanUpsweep(const uint* valuesIn_global, const uint2* range_global,
 	// Loop through all elements in the interval, adding up values.
 	// There is no need to synchronize until we perform the multiscan.
 	uint sum = 0;
-	for(uint index = range.x + tid; index < range.y; index += NUM_THREADS)
-		sum += valuesIn_global[index];
+	for(uint index = range.x + tid; index < range.y; index += 2 * NUM_THREADS)
+		sum += valuesIn_global[index] + valuesIn_global[index + NUM_THREADS];
 
 	// A full multiscan is unnecessary here - we really only need the total.
 	// But this is easy and won't slow us down since this kernel is already
 	// bandwidth limited.
-	uint total = Multiscan(tid, sum).y;
+	uint total = Multiscan2(tid, sum).y;
 
-	// The last scan element in the block is the total for all values summed
-	// in this block.
-	if(tid == NUM_THREADS - 1)
+	if(!tid)
 		blockTotals_global[block] = total;
 }
 
@@ -119,7 +125,7 @@ extern "C" __global__ void GlobalScanReduction(uint* blockTotals_global,
 	if(tid < numBlocks) x = blockTotals_global[tid];
 
 	// Subtract the value from the inclusive scan for the exclusive scan.
-	uint2 scan = Multiscan(tid, x);
+	uint2 scan = Multiscan2(tid, x);
 	if(tid < numBlocks) blockTotals_global[tid] = scan.x - x;
 
 	// Have the first thread in the block set the scan total.
@@ -141,6 +147,7 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 	uint tid = threadIdx.x;
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
+	uint index = VALUES_PER_WARP * warp + lane;
 
 	uint blockScan = blockScan_global[block];
 	int2 range = range_global[block];
@@ -149,34 +156,26 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 	// Allocate 33 slots of shared memory per warp of data read. This allows
 	// use to perform a conflict-free transpose from strided order to thread
 	// order.
-	const int WarpStride = VALUES_PER_THREAD * (WARP_SIZE + 1);
-	const int SharedSize = NUM_WARPS * WarpStride;
+	const int Size = NUM_WARPS * VALUES_PER_THREAD * (WARP_SIZE + 1);
+	__shared__ volatile uint shared[Size];
 
-	__shared__ volatile uint shared[SharedSize];
+	// warpShared points to the start of the warp's data.
+	volatile uint* warpShared = shared +
+		warp * VALUES_PER_THREAD * (WARP_SIZE + 1);
+	volatile uint* threadShared = warpShared + lane;	
 
-	// warpValues points to the start of the warp's data.
-	volatile uint* warpValues = shared + warp * WarpStride;
-	volatile uint* threadValues = warpValues + lane;	
+	// Transpose values into thread order.
+	uint offset = VALUES_PER_THREAD * lane;
+	offset += offset / WARP_SIZE;
 
-	// Have each warp read a consecutive block of memory. Because threads in a
-	// warp are implicitly synchronized, we can "transpose" the terms into
-	// thread-order without a __syncthreads().
-	uint first = range.x + warp * (VALUES_PER_THREAD * WARP_SIZE) + lane;
-	uint end = ROUND_UP(range.y, NUM_VALUES);
-
-	uint valueOffset = lane * VALUES_PER_THREAD;
-	volatile uint* transposeValues = warpValues + valueOffset + 
-		valueOffset / WARP_SIZE;
-
-	for(uint index = first; index < end; index += NUM_VALUES) {
+	while(range.x < range.y) {
 
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
-			uint index2 = index + i * WARP_SIZE;
-			uint value = 0;
-			if(index2 < range.y) value = valuesIn_global[index2];
+			uint source = range.x + index + i * WARP_SIZE;
+			uint x = valuesIn_global[source];
 
-			threadValues[i * SHARED_STRIDE] = value;
+			threadShared[i * (WARP_SIZE + 1)] = x;
 		}
 
 		// Transpose into thread order by reading from transposeValues.
@@ -186,7 +185,7 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 		uint sum = 0;
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
-			uint x = transposeValues[i];
+			uint x = warpShared[offset + i];
 			scan[i] = sum;
 			if(inclusive) scan[i] += x;
 			sum += x;
@@ -194,7 +193,7 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 
 		// Multiscan for each thread's scan offset within the block. Subtract
 		// sum to make it an exclusive scan.
-		uint2 localScan = Multiscan(tid, sum);
+		uint2 localScan = Multiscan(tid, sum, warpShared);
 		uint scanOffset = localScan.x + blockScan - sum;
 
 		// Add the scan offset to each exclusive scan and put the values back
@@ -202,20 +201,22 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 			uint x = scan[i] + scanOffset;
-			transposeValues[i] = x;
+			warpShared[offset + i] = x;
 		}
 
 		// Store the scan back to global memory.
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
-			uint x = threadValues[i * SHARED_STRIDE];
-			uint index2 = index + i * WARP_SIZE;			
-			if(index2 < range.y) valuesOut_global[index2] = x;
+			uint x = threadShared[i * (WARP_SIZE + 1)];
+			uint target = range.x + index + i * WARP_SIZE;
+			valuesOut_global[target] = x;
 		}
 
 		// Grab the last element of totals_shared, which was set in Multiscan.
 		// This is the total for all the values encountered in this pass.
 		blockScan += localScan.y;
+
+		range.x += NUM_VALUES;
 	}
 }
 

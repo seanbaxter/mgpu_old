@@ -27,20 +27,23 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, uint* blockLast_global,
 
 	int2 range = rangePairs_global[block];
 
+	const int UpsweepValues = 8;
+	const int NumValues = UpsweepValues * NUM_THREADS;
 	// Start at the last tile (NUM_VALUES before the end iterator). Because
 	// upsweep isn't executed for the last block, we don't have to worry about
 	// the ending edge case.
-	int current = range.y - NUM_VALUES;
+	int current = range.y - NumValues;
 
 	uint threadSum = 0;
 	int segmentStart = -1;
 
+
 	while(current >= range.x) {
 
-		uint packed[VALUES_PER_THREAD];
+		uint packed[UpsweepValues];
 	
 		#pragma unroll
-		for(int i = 0; i < VALUES_PER_THREAD; ++i) 
+		for(int i = 0; i < UpsweepValues; ++i) 
 			packed[i] = valuesIn_global[current + tid + i * NUM_THREADS];
 
 
@@ -48,7 +51,7 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, uint* blockLast_global,
 		int lastHeadFlagPos = -1;
 
 		#pragma unroll
-		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
+		for(int i = 0; i < UpsweepValues; ++i) {
 			uint flag = 0x80000000 & packed[i];
 			if(flag) lastHeadFlagPos = i;
 		}
@@ -64,14 +67,14 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, uint* blockLast_global,
 		// Subtract tid from both sides to simplify expression.
 		int cmp = segmentStart - tid;
 		#pragma unroll
-		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
+		for(int i = 0; i < UpsweepValues; ++i) {
 			uint value = 0x7fffffff & packed[i];
 			if(i * NUM_THREADS >= cmp)
 				threadSum += value;
 		}
 		if(-1 != segmentStart) break;
 
-		current -= NUM_VALUES;
+		current -= NumValues;
 	}
 
 	// We've either hit the head flag or run out of values. Do a horizontal sum
@@ -230,7 +233,6 @@ void SegScanDownsweepFlag(const uint* valuesIn_global, uint* valuesOut_global,
 	offset += offset / WARP_SIZE;
 
 	int lastOffset = ~(NUM_VALUES - 1) & count;
-
 
 	if(!tid) blockOffset_shared = start_global[block];
 

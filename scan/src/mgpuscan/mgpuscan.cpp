@@ -6,10 +6,10 @@
 
 // TODO: fiddle with these. probably put up to 64 threads and have 33% 
 // occupancy.
-const int NumScanThreads = 256;
-const int ScanValuesPerThread = 16;
+const int NumScanThreads = 1024;
+const int ScanValuesPerThread = 4;
 const int ScanValuesPerBlock = ScanValuesPerThread * NumScanThreads;
-const int ScanBlocksPerSM = 2;
+const int ScanBlocksPerSM = 1;
 
 const int NumSegScanThreads = 256;
 const int SegScanValuesPerThread = 16;
@@ -188,14 +188,16 @@ scanStatus_t SCANAPI scanArray(scanEngine_t engine, CUdeviceptr values,
 	// Don't run the upsweep on the last block - it contributes nothing to
 	// reduction.
 	CuCallStack callStack;
-	callStack.Push(values, engine->rangeMem, engine->blockScanMem);
-	CUresult result = engine->scanFuncs[0]->Launch(numBlocks - 1, 1, callStack);
-	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
+	CUresult result;
 
-	// Run a reduction for the block offsets if numBlocks > 1. We've already 
-	// poked a 0 to the start of blockScanMem, so we can pass this step in the
-	// case of a single block scan.
 	if(numBlocks > 1) {
+		callStack.Push(values, engine->rangeMem, engine->blockScanMem);
+		result = engine->scanFuncs[0]->Launch(numBlocks - 1, 1, callStack);
+		if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
+
+		// Run a reduction for the block offsets if numBlocks > 1. We've already 
+		// poked a 0 to the start of blockScanMem, so we can pass this step in the
+		// case of a single block scan.
 		callStack.Reset();
 		callStack.Push(engine->blockScanMem, numBlocks);
 		result = engine->scanFuncs[1]->Launch(1, 1, callStack);
@@ -235,23 +237,15 @@ scanStatus_t SCANAPI scanSegmentedFlag(scanEngine_t engine, CUdeviceptr packed,
 	result = engine->scanFlagFuncs[0]->Launch(numBlocks - 1, 1, callStack);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
 
-//	std::vector<uint> blockTotalsHost;
-//	engine->blockScanMem->ToHost(blockTotalsHost);
-//
-//	std::vector<uint> headFlagsHost;
-//	engine->headFlagsMem->ToHost(headFlagsHost);
-
-	// Run a reduction for the block offsets if numBlocks > 1. We've already 
-	// poked a 0 to the start of blockScanMem, so we can pass this step in the
-	// case of a single block scan.
 	if(numBlocks > 1) {
+		// Run a reduction for the block offsets if numBlocks > 1. We've already 
+		// poked a 0 to the start of blockScanMem, so we can pass this step in the
+		// case of a single block scan.
 		callStack.Reset();
 		callStack.Push(engine->headFlagsMem, engine->blockScanMem, numBlocks);
 		result = engine->scanFlagFuncs[1]->Launch(1, 1, callStack);
 		if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
 	}
-	//std::vector<uint> blockScanHost;
-//	engine->blockScanMem->ToHost(blockScanHost);
 
 	callStack.Reset();
 	callStack.Push(packed, scan, engine->blockScanMem, engine->rangeMem, 
