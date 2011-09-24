@@ -7,10 +7,11 @@
 #include <tr1/random>
 #endif
 
-const int NumElements = 40<< 20;//6 * 60 * 256 * 8;
-const int NumIterations = 200;
-const int NumTests = 4;
+const int NumElements = 50<< 20;
+const int NumIterations = 100;
+const int NumTests = 5;
 
+const bool TestSegmented = false;
 
 
 
@@ -35,20 +36,21 @@ int main(int argc, char** argv) {
 	int count = NumElements;
 
 	std::tr1::uniform_int<uint> r1(1, 1);
-	std::tr1::uniform_int<uint> r2(0, 499);
+	std::tr1::uniform_int<uint> r2(1, 1);
 
 	std::vector<uint> values(count), scanRef(count);
 	uint last = 0;
 	for(int i(0); i < count; ++i) {
-	//	if(0 == (i % 2048)) {
-	//		printf("%2d: %d\n", i / 2048, last);
-	//	}
 		uint x = r1(mt19937);
 		values[i] = x;
-		bool head = 0 == r2(mt19937);
-		if(head) values[i] |= 1<< 31;
-		
-		if(head) last = 0;
+
+		if(TestSegmented) {
+			bool head = 0 == r2(mt19937);
+			if(head) {
+				values[i] |= 1<< 31;
+				last = 0;
+			}
+		}
 		scanRef[i] = last;
 		last += x;
 	}	
@@ -67,8 +69,12 @@ int main(int argc, char** argv) {
 		timer.Start();
 
 		for(int i(0); i < NumIterations; ++i) {
-			status = scanSegmentedFlag(engine, valuesDevice->Handle(),
-				scanDevice->Handle(), count, false);
+			if(TestSegmented)
+				status = scanSegmentedFlag(engine, valuesDevice->Handle(),
+					scanDevice->Handle(), count, false);
+			else
+				status = scanArray(engine, valuesDevice->Handle(), 
+					scanDevice->Handle(), count, 0, false);
 		}
 
 		double elapsed = timer.Stop();

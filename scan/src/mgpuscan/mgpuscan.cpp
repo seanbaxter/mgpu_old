@@ -7,12 +7,15 @@
 // TODO: fiddle with these. probably put up to 64 threads and have 33% 
 // occupancy.
 const int NumScanThreads = 256;
-const int ScanValuesPerThread = 8;
+const int ScanValuesPerThread = 16;
 const int ScanValuesPerBlock = ScanValuesPerThread * NumScanThreads;
+const int ScanBlocksPerSM = 2;
 
 const int NumSegScanThreads = 256;
-const int SegScanValuesPerThread = 8;
+const int SegScanValuesPerThread = 16;
 const int SegScanValuesPerBlock = NumSegScanThreads * SegScanValuesPerThread;
+const int SegScanBlocksPerSM = 2;
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -119,8 +122,8 @@ scanStatus_t SCANAPI scanCreateEngine(const char* cubin, scanEngine_t* engine) {
 	int numSMs = e->context->Device()->Attributes().multiprocessorCount;
 
 	// Launch 4 256-thread blocks per SM.
-	e->numScanBlocks = 4 * numSMs;
-	e->numSegBlocks = 4 * numSMs;
+	e->numScanBlocks = ScanBlocksPerSM * numSMs;
+	e->numSegBlocks = SegScanBlocksPerSM * numSMs;
 
 	int numBlocks = std::max(e->numScanBlocks, e->numSegBlocks);
 
@@ -166,7 +169,7 @@ int SetBlockRanges(scanEngine_t engine, int count, bool segScan) {
 		int2 range;
 		range.x = i ? engine->ranges[i - 1].y : 0;
 		int bricks = (i < brickDiv.rem) ? (brickDiv.quot + 1) : brickDiv.quot;
-		range.y = std::min(range.x + bricks * 256 * 8, count);
+		range.y = std::min(range.x + bricks * blockSize, count);
 		engine->ranges[i] = range;
 	}
 	engine->rangeMem->FromHost(engine->ranges);

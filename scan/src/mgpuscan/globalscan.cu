@@ -3,33 +3,29 @@
 #define NUM_WARPS (NUM_THREADS / WARP_SIZE)
 #define LOG_NUM_WARPS 3
 
-#define BLOCKS_PER_SM 4
+#define BLOCKS_PER_SM 2
 
-#define VALUES_PER_THREAD 8
+#define VALUES_PER_THREAD 16
 #define VALUES_PER_WARP (WARP_SIZE * VALUES_PER_THREAD)
 #define NUM_VALUES (NUM_THREADS * VALUES_PER_THREAD)
 
-
-// Parameters for efficient sequential scan.
-#define VALUES_PER_THREAD 8
-#define NUM_VALUES (NUM_THREADS * VALUES_PER_THREAD)
-#define SHARED_STRIDE (WARP_SIZE + 1)
-#define SHARED_SIZE (NUM_VALUES + NUM_VALUES / WARP_SIZE)
-
-__shared__ volatile uint values_shared[SHARED_SIZE];
 
 ////////////////////////////////////////////////////////////////////////////////
 // Multiscan utility function. Used in the first and third passes of the
 // global scan function. Returns the inclusive scan of the arguments in .x and
 // the sum of all arguments in .y.
 
-DEVICE uint2 Multiscan(uint tid, uint x) {
+// Each warp is passed a pointer to its own contiguous area of shared memory.
+// There must be at least 48 slots of memory. They should also be aligned so
+// that the difference between the start of consecutive warps differ by an 
+// interval that is relatively prime to 32 (any odd number will do).
+DEVICE uint2 Multiscan(uint tid, uint x, volatile uint* warpShared,
+	int warpStride) {
+
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
 
-	const int ScanStride = WARP_SIZE + WARP_SIZE / 2 + 1;
-	const int ScanSize = NUM_WARPS * ScanStride;
-	__shared__ volatile uint reduction_shared[ScanSize];
+
 	__shared__ volatile uint totals_shared[NUM_WARPS + NUM_WARPS / 2];
 
 	volatile uint* s = reduction_shared + ScanStride * warp + lane + 
@@ -149,21 +145,25 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 	uint blockScan = blockScan_global[block];
 	int2 range = range_global[block];
 
+
+	// Allocate 33 slots of shared memory per warp of data read. This allows
+	// use to perform a conflict-free transpose from strided order to thread
+	// order.
+	const int WarpStride = VALUES_PER_THREAD * (WARP_SIZE + 1);
+	const int SharedSize = NUM_WARPS * WarpStride;
+
+	__shared__ volatile uint shared[SharedSize];
+
+	// warpValues points to the start of the warp's data.
+	volatile uint* warpValues = shared + warp * WarpStride;
+	volatile uint* threadValues = warpValues + lane;	
+
 	// Have each warp read a consecutive block of memory. Because threads in a
 	// warp are implicitly synchronized, we can "transpose" the terms into
 	// thread-order without a __syncthreads().
 	uint first = range.x + warp * (VALUES_PER_THREAD * WARP_SIZE) + lane;
 	uint end = ROUND_UP(range.y, NUM_VALUES);
 
-	// Get a pointer to the start of this warp's shared memory storage for 
-	// value transpose.
-	volatile uint* warpValues = values_shared +
-		warp * SHARED_STRIDE * VALUES_PER_THREAD;
-
-	// The threads write to threadValues[i * SHARED_STRIDE]
-	volatile uint* threadValues = warpValues + lane;
-
-	// The threads read from transposeValues[i]
 	uint valueOffset = lane * VALUES_PER_THREAD;
 	volatile uint* transposeValues = warpValues + valueOffset + 
 		valueOffset / WARP_SIZE;
@@ -218,3 +218,11 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 		blockScan += localScan.y;
 	}
 }
+
+#undef NUM_THREADS
+#undef NUM_WARPS
+#undef LOG_NUM_WARPS
+#undef BLOCKS_PER_SM
+#undef VALUES_PER_THREAD
+#undef VALUES_PER_WARP
+#undef NUM_VALUES

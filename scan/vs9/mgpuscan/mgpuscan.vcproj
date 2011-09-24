@@ -223,6 +223,10 @@
 			RelativePath="..\..\src\mgpuscan\scangen.cu"
 			>
 		</File>
+		<File
+			RelativePath="..\..\src\mgpuscan\segscancommon.cu"
+			>
+		</File>
 	</Files>
 	<Globals>
 	</Globals>
