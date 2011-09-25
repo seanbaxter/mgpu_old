@@ -25,4 +25,4 @@ DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
 
 #include "globalscan.cu"
 
-#include "globalseg.cu"
+#include "segscancommon.cu"

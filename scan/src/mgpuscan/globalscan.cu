@@ -152,17 +152,14 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 	uint blockScan = blockScan_global[block];
 	int2 range = range_global[block];
 
-
-	// Allocate 33 slots of shared memory per warp of data read. This allows
-	// use to perform a conflict-free transpose from strided order to thread
-	// order.
 	const int Size = NUM_WARPS * VALUES_PER_THREAD * (WARP_SIZE + 1);
 	__shared__ volatile uint shared[Size];
 
-	// warpShared points to the start of the warp's data.
-	volatile uint* warpShared = shared +
+	// Use a stride of 33 slots per warp per value to allow conflict-free
+	// transposes from strided to thread order.
+	volatile uint* warpShared = shared + 
 		warp * VALUES_PER_THREAD * (WARP_SIZE + 1);
-	volatile uint* threadShared = warpShared + lane;	
+	volatile uint* threadShared = warpShared + lane;
 
 	// Transpose values into thread order.
 	uint offset = VALUES_PER_THREAD * lane;
@@ -170,6 +167,11 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 
 	while(range.x < range.y) {
 
+	//	uint4 packed = *(const uint4*)(valuesIn_global + range.x + 4 * tid);
+
+	//	uint x[VALUES_PER_THREAD] = { packed.x, packed.y, packed.z, packed.w };
+
+		
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 			uint source = range.x + index + i * WARP_SIZE;
@@ -183,6 +185,15 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 		// their sum.
 		uint scan[VALUES_PER_THREAD];
 		uint sum = 0;
+		
+		/*
+		#pragma unroll
+		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
+			scan[i] = sum;
+			if(inclusive) scan[i] += x[i];
+			sum += x[i];
+		}
+*/
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 			uint x = warpShared[offset + i];
@@ -191,13 +202,22 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 			sum += x;
 		}
 
+
 		// Multiscan for each thread's scan offset within the block. Subtract
 		// sum to make it an exclusive scan.
-		uint2 localScan = Multiscan(tid, sum, warpShared);
+		uint2 localScan = Multiscan2(tid, sum);
 		uint scanOffset = localScan.x + blockScan - sum;
 
 		// Add the scan offset to each exclusive scan and put the values back
 		// into the shared memory they came out of.
+	/*	packed.x = scan[0] + scanOffset;
+		packed.y = scan[1] + scanOffset;
+		packed.z = scan[2] + scanOffset;
+		packed.w = scan[3] + scanOffset;
+
+		*(uint4*)(valuesOut_global + range.x + 4 * tid) = packed;
+		*/
+
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 			uint x = scan[i] + scanOffset;

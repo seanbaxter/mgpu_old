@@ -216,15 +216,19 @@
 			>
 		</File>
 		<File
-			RelativePath="..\..\src\mgpuscan\globalseg.cu"
-			>
-		</File>
-		<File
 			RelativePath="..\..\src\mgpuscan\scangen.cu"
 			>
 		</File>
 		<File
 			RelativePath="..\..\src\mgpuscan\segscancommon.cu"
+			>
+		</File>
+		<File
+			RelativePath="..\..\src\mgpuscan\segscanflags.cu"
+			>
+		</File>
+		<File
+			RelativePath="..\..\src\mgpuscan\segscankeys.cu"
 			>
 		</File>
 	</Files>
