@@ -1,6 +1,7 @@
-#define NUM_THREADS FLAGS_NUM_THREADS
-#define BLOCKS_PER_SM FLAGS_BLOCKS_PER_SM
-#define VALUES_PER_THREAD FLAGS_VALUES_PER_THREAD
+#define NUM_THREADS PACKED_NUM_THREADS
+#define BLOCKS_PER_SM PACKED_BLOCKS_PER_SM
+#define VALUES_PER_THREAD PACKED_VALUES_PER_THREAD
+
 
 #define NUM_WARPS (NUM_THREADS / WARP_SIZE)
 #define LOG_NUM_WARPS LOG_BASE_2(NUM_WARPS)
@@ -15,9 +16,8 @@
 // up to the reduction pass.
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
-void SegScanUpsweepFlag(const uint* valuesIn_global, const uint* flagsIn_global,
-	uint* blockLast_global, int* headFlagPos_global, 
-	const int2* rangePairs_global) {
+void SegScanUpsweepPacked(const uint* packedIn_global, uint* blockLast_global,
+	int* headFlagPos_global, const int2* rangePairs_global) {
 
 	uint tid = threadIdx.x;
 	uint block = blockIdx.x;
@@ -37,21 +37,21 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, const uint* flagsIn_global,
 
 	while(current >= range.x) {
 
-		uint x[UpsweepValues], flags[UpsweepValues];
+		uint packed[UpsweepValues];
 	
 		#pragma unroll
-		for(int i = 0; i < UpsweepValues; ++i) {
-			x[i] = valuesIn_global[current + tid + i * NUM_THREADS];
-			flags[i] = flagsIn_global[current + tid + i * NUM_THREADS];
-		}
+		for(int i = 0; i < UpsweepValues; ++i) 
+			packed[i] = packedIn_global[current + tid + i * NUM_THREADS];
+
 
 		// Find the index of the latest value loaded with a head flag set.
 		int lastHeadFlagPos = -1;
 
 		#pragma unroll
-		for(int i = 0; i < UpsweepValues; ++i)
-			if(flags[i]) lastHeadFlagPos = i;
-		
+		for(int i = 0; i < UpsweepValues; ++i) {
+			uint flag = 0x80000000 & packed[i];
+			if(flag) lastHeadFlagPos = i;
+		}
 		if(-1 != lastHeadFlagPos)
 			lastHeadFlagPos = tid + lastHeadFlagPos * NUM_THREADS;
 
@@ -64,10 +64,11 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, const uint* flagsIn_global,
 		// Subtract tid from both sides to simplify expression.
 		int cmp = segmentStart - tid;
 		#pragma unroll
-		for(int i = 0; i < UpsweepValues; ++i)
+		for(int i = 0; i < UpsweepValues; ++i) {
+			uint value = 0x7fffffff & packed[i];
 			if(i * NUM_THREADS >= cmp)
-				threadSum += x[i];
-		
+				threadSum += value;
+		}
 		if(-1 != segmentStart) break;
 
 		current -= NumValues;
@@ -90,9 +91,9 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, const uint* flagsIn_global,
 // DOWNSWEEP PASS.
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
-void SegScanDownsweepFlag(const uint* valuesIn_global, 
-	const uint* flagsIn_global,uint* valuesOut_global, const uint* start_global,
-	const int2* rangePairs_global, int count, int inclusive) {
+void SegScanDownsweepPacked(const uint* packedIn_global, uint* valuesOut_global,
+	const uint* start_global, const int2* rangePairs_global, int count,
+	int inclusive) {
 
 	uint tid = threadIdx.x;
 	uint lane = (WARP_SIZE - 1) & tid;
@@ -125,49 +126,30 @@ void SegScanDownsweepFlag(const uint* valuesIn_global,
 		uint x[VALUES_PER_THREAD];
 		uint flags[VALUES_PER_THREAD];
 
-
 		////////////////////////////////////////////////////////////////////////
 		// Load and transpose values.
 
 			#pragma unroll
 			for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 				uint source = range.x + index + i * WARP_SIZE;
-				uint value = valuesIn_global[source];
-				threadShared[i * (WARP_SIZE + 1)] = value;
+				uint packed = packedIn_global[source];
+				threadShared[i * (WARP_SIZE + 1)] = packed;
 			}
 
 		// Transpose into thread order and separate values from head flags.
+
 		#pragma unroll
-		for(int i = 0; i < VALUES_PER_THREAD; ++i)
-			x[i] = warpShared[offset + i];
-			
-
-		////////////////////////////////////////////////////////////////////////
-		// Load and transpose flags
-
-			#pragma unroll
-			for(int i = 0; i < VALUES_PER_THREAD; ++i) {
-				uint source = range.x + index + i * WARP_SIZE;
-				uint flag = flagsIn_global[source];
-				threadShared[i * (WARP_SIZE + 1)] = flag;
-			}
-
-		// Transpose into thread order and separate values from head flags.
-		#pragma unroll
-		for(int i = 0; i < VALUES_PER_THREAD; ++i)
-			flags[i] = warpShared[offset + i];
-		
-
-
-
-
-
+		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
+			uint packed = warpShared[offset + i];
+			x[i] = 0x7fffffff & packed;
+			flags[i] = 0x80000000 & packed;
+		}
 
 
 		////////////////////////////////////////////////////////////////////////
 		// Run downsweep function on values and head flags.
 
-		SegScanDownsweep<NUM_WARPS, VALUES_PER_THREAD>(tid, lane, warp, x,
+		SegScanDownsweep<NUM_WARPS, VALUES_PER_THREAD>(tid, lane, warp, x, 
 			flags, warpShared, threadShared, inclusive, &blockOffset_shared);
 
 		////////////////////////////////////////////////////////////////////////
@@ -195,3 +177,4 @@ void SegScanDownsweepFlag(const uint* valuesIn_global,
 #undef VALUES_PER_THREAD
 #undef VALUES_PER_WARP
 #undef NUM_VALUES
+

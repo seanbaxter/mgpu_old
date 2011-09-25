@@ -197,6 +197,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\src\mgpuscan\kernelparams.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\..\inc\mgpuscan.h"
 				>
 			</File>
@@ -216,6 +220,10 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\src\mgpuscan\scancommon.cu"
+			>
+		</File>
+		<File
 			RelativePath="..\..\src\mgpuscan\scangen.cu"
 			>
 		</File>
@@ -229,6 +237,14 @@
 		</File>
 		<File
 			RelativePath="..\..\src\mgpuscan\segscankeys.cu"
+			>
+		</File>
+		<File
+			RelativePath="..\..\src\mgpuscan\segscanpacked.cu"
+			>
+		</File>
+		<File
+			RelativePath="..\..\src\mgpuscan\segscanreduction.cu"
 			>
 		</File>
 	</Files>

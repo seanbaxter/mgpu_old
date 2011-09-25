@@ -1,3 +1,12 @@
+#define NUM_THREADS KEYS_NUM_THREADS
+#define BLOCKS_PER_SM KEYS_BLOCKS_PER_SM
+#define VALUES_PER_THREAD KEYS_VALUES_PER_THREAD
+
+#define NUM_WARPS (NUM_THREADS / WARP_SIZE)
+#define LOG_NUM_WARPS LOG_BASE_2(NUM_WARPS)
+#define VALUES_PER_WARP (WARP_SIZE * VALUES_PER_THREAD)
+#define NUM_VALUES (NUM_THREADS * VALUES_PER_THREAD)
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // UPSWEEP PASS. Find the sum of all values in the last segment in each block.
@@ -76,7 +85,7 @@ void SegScanUpsweepKeys(const uint* valuesIn_global, const uint* keysIn_global,
 
 	// We've either hit the preceding segment or run out of values. Do a
 	// horizontal sum of the thread values and store to global memory.
-	uint total = (uint)Reduce(tid, (int)threadSum, 0);
+	uint total = (uint)Reduce<NUM_WARPS>(tid, (int)threadSum, 0);
 
 	if(0 == tid) {
 		blockLast_global[block] = total;
@@ -197,8 +206,8 @@ void SegScanDownsweepKeys(const uint* valuesIn_global,
 		////////////////////////////////////////////////////////////////////////
 		// Run downsweep function on values and head flags.
 
-		SegScanDownsweep(tid, lane, warp, x, flags, warpShared, 
-			threadShared, inclusive, &blockOffset_shared);
+		SegScanDownsweep<NUM_WARPS, VALUES_PER_THREAD>(tid, lane, warp, x, 
+			flags, warpShared, threadShared, inclusive, &blockOffset_shared);
 
 		// Transpose 
 		#pragma unroll
@@ -213,5 +222,13 @@ void SegScanDownsweepKeys(const uint* valuesIn_global,
 
 		range.x += NUM_VALUES;
 	}
-
 }
+
+
+#undef NUM_THREADS
+#undef NUM_WARPS
+#undef LOG_NUM_WARPS
+#undef BLOCKS_PER_SM
+#undef VALUES_PER_THREAD
+#undef VALUES_PER_WARP
+#undef NUM_VALUES

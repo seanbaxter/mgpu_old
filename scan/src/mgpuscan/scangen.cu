@@ -14,6 +14,21 @@ typedef unsigned int uint;
 #include <device_functions.h>
 #include <vector_functions.h>
 
+// Macro for computing LOG of NUM_WARPS
+
+
+#define LOG_BASE_2(x) \
+	((1 == x) ? 0 : \
+		((2 == x) ? 1 : \
+			((4 == x) ? 2 : \
+				((8 == x) ? 3 : \
+					((16 == x) ? 4 : \
+						((32 == x) ? 5 : 0) \
+					) \
+				) \
+			) \
+		) \
+	)
 
 DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
 	uint ret;
@@ -22,7 +37,15 @@ DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
 	return ret;
 }
 
-
-#include "globalscan.cu"
+#include "kernelparams.h"
+#include "scancommon.cu"
 
 #include "segscancommon.cu"
+
+#include "globalscan.cu"
+	
+#include "segscanpacked.cu"
+#include "segscanflags.cu"
+#include "segscankeys.cu"
+#include "segscanreduction.cu"
+

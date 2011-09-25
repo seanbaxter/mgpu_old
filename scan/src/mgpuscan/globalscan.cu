@@ -1,11 +1,10 @@
+#define NUM_THREADS SCAN_NUM_THREADS
+#define VALUES_PER_THREAD SCAN_VALUES_PER_THREAD
+#define BLOCKS_PER_SM SCAN_BLOCKS_PER_SM
 
-#define NUM_THREADS 1024
+
 #define NUM_WARPS (NUM_THREADS / WARP_SIZE)
-#define LOG_NUM_WARPS 5
-
-#define BLOCKS_PER_SM 1
-
-#define VALUES_PER_THREAD 4
+#define LOG_NUM_WARPS LOG_BASE_2(NUM_WARPS)
 #define VALUES_PER_WARP (WARP_SIZE * VALUES_PER_THREAD)
 #define NUM_VALUES (NUM_THREADS * VALUES_PER_THREAD)
 
@@ -20,69 +19,6 @@
 // that the difference between the start of consecutive warps differ by an 
 // interval that is relatively prime to 32 (any odd number will do).
 
-DEVICE uint2 Multiscan(uint tid, uint x, volatile uint* warpShared) {
-
-	uint warp = tid / WARP_SIZE;
-	uint lane = (WARP_SIZE - 1) & tid;
-
-	volatile uint* s = warpShared + lane + WARP_SIZE / 2;
-	warpShared[lane] = 0;
-	s[0] = x;
-
-	// Run inclusive scan on each warp's data.
-	uint sum = x;	
-	#pragma unroll
-	for(int i = 0; i < LOG_WARP_SIZE; ++i) {
-		uint offset = 1<< i;
-		sum += s[-offset];
-		if(i < LOG_WARP_SIZE - 1) s[0] = sum;
-	}
-
-	__shared__ volatile uint totals_shared[2 * NUM_WARPS];
-	if(WARP_SIZE - 1 == lane) {
-		totals_shared[NUM_WARPS + warp] = sum;
-	}
-
-	// Synchronize to make all the totals available to the reduction code.
-	__syncthreads();
-	if(tid < NUM_WARPS) {
-		// Grab the block total for the tid'th block. This is the last element
-		// in the block's scanned sequence. This operation avoids bank 
-		// conflicts.
-		uint total = totals_shared[NUM_WARPS + tid];
-		totals_shared[tid] = 0;
-		volatile uint* s = totals_shared + NUM_WARPS + tid;
-
-		uint totalsSum = total;
-
-		#pragma unroll
-		for(int i = 0; i < LOG_NUM_WARPS; ++i) {
-			int offset = 1<< i;
-			totalsSum += s[-offset];
-			s[0] = totalsSum;	
-		}
-
-		// Subtract total from totalsSum for an exclusive scan.
-		totals_shared[tid] = totalsSum - total;
-	}
-
-	// Synchronize to make the block scan available to all warps.
-	__syncthreads();
-
-	// Add the block scan to the inclusive sum for the block.
-	sum += totals_shared[warp];
-	uint total = totals_shared[2 * NUM_WARPS - 1];
-	return make_uint2(sum, total);
-}
-
-DEVICE uint2 Multiscan2(uint tid, uint x) {
-	uint warp = tid / WARP_SIZE;
-	const int WarpStride = WARP_SIZE + WARP_SIZE / 2;
-	const int SharedSize = NUM_WARPS * WarpStride;
-	__shared__ volatile uint shared[SharedSize];
-	volatile uint* warpShared = shared + warp * WarpStride;
-	return Multiscan(tid, x, warpShared);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -106,7 +42,7 @@ void GlobalScanUpsweep(const uint* valuesIn_global, const uint2* range_global,
 	// A full multiscan is unnecessary here - we really only need the total.
 	// But this is easy and won't slow us down since this kernel is already
 	// bandwidth limited.
-	uint total = Multiscan2(tid, sum).y;
+	uint total = Multiscan2<NUM_WARPS>(tid, sum).y;
 
 	if(!tid)
 		blockTotals_global[block] = total;
@@ -117,7 +53,8 @@ void GlobalScanUpsweep(const uint* valuesIn_global, const uint2* range_global,
 // GlobalScanReduction performs an exclusive scan on the elements in 
 // blockTotals_global and writes back in-place.
 
-extern "C" __global__ void GlobalScanReduction(uint* blockTotals_global, 
+extern "C" __global__ __launch_bounds__(REDUCTION_NUM_THREADS, 1)
+void GlobalScanReduction(uint* blockTotals_global, 
 	uint numBlocks) {
 
 	uint tid = threadIdx.x;
@@ -125,7 +62,7 @@ extern "C" __global__ void GlobalScanReduction(uint* blockTotals_global,
 	if(tid < numBlocks) x = blockTotals_global[tid];
 
 	// Subtract the value from the inclusive scan for the exclusive scan.
-	uint2 scan = Multiscan2(tid, x);
+	uint2 scan = Multiscan2<REDUCTION_NUM_THREADS / WARP_SIZE>(tid, x);
 	if(tid < numBlocks) blockTotals_global[tid] = scan.x - x;
 
 	// Have the first thread in the block set the scan total.
@@ -167,11 +104,6 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 
 	while(range.x < range.y) {
 
-	//	uint4 packed = *(const uint4*)(valuesIn_global + range.x + 4 * tid);
-
-	//	uint x[VALUES_PER_THREAD] = { packed.x, packed.y, packed.z, packed.w };
-
-		
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 			uint source = range.x + index + i * WARP_SIZE;
@@ -185,15 +117,7 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 		// their sum.
 		uint scan[VALUES_PER_THREAD];
 		uint sum = 0;
-		
-		/*
-		#pragma unroll
-		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
-			scan[i] = sum;
-			if(inclusive) scan[i] += x[i];
-			sum += x[i];
-		}
-*/
+	
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 			uint x = warpShared[offset + i];
@@ -205,19 +129,11 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 
 		// Multiscan for each thread's scan offset within the block. Subtract
 		// sum to make it an exclusive scan.
-		uint2 localScan = Multiscan2(tid, sum);
+		uint2 localScan = Multiscan2<NUM_WARPS>(tid, sum);
 		uint scanOffset = localScan.x + blockScan - sum;
 
 		// Add the scan offset to each exclusive scan and put the values back
 		// into the shared memory they came out of.
-	/*	packed.x = scan[0] + scanOffset;
-		packed.y = scan[1] + scanOffset;
-		packed.z = scan[2] + scanOffset;
-		packed.w = scan[3] + scanOffset;
-
-		*(uint4*)(valuesOut_global + range.x + 4 * tid) = packed;
-		*/
-
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 			uint x = scan[i] + scanOffset;
@@ -239,6 +155,7 @@ void GlobalScanDownsweep(const uint* valuesIn_global, uint* valuesOut_global,
 		range.x += NUM_VALUES;
 	}
 }
+
 
 #undef NUM_THREADS
 #undef NUM_WARPS
