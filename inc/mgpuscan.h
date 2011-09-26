@@ -40,8 +40,11 @@ scanStatus_t SCANAPI scanDestroyEngine(scanEngine_t engine);
 scanStatus_t SCANAPI scanArray(scanEngine_t engine, CUdeviceptr values,
 	CUdeviceptr scan, int count, unsigned int* scanTotal, bool inclusive);
 
-scanStatus_t SCANAPI scanSegmentedFlag(scanEngine_t engine, CUdeviceptr packed,
-	CUdeviceptr scan, int count, bool inclusive);
+scanStatus_t SCANAPI scanSegmentedPacked(scanEngine_t engine,
+	CUdeviceptr packed, CUdeviceptr scan, int count, bool inclusive);
+
+scanStatus_t SCANAPI scanSegmentedFlags(scanEngine_t engine, CUdeviceptr values,
+	CUdeviceptr flags, CUdeviceptr scan, int count, bool inclusive);
 
 scanStatus_t SCANAPI scanSegmentedKeys(scanEngine_t engine, CUdeviceptr values,
 	CUdeviceptr keys, CUdeviceptr scan, int count, bool inclusive);

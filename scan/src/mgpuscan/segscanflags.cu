@@ -15,8 +15,8 @@
 // up to the reduction pass.
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
-void SegScanUpsweepFlag(const uint* valuesIn_global, const uint* flagsIn_global,
-	uint* blockLast_global, int* headFlagPos_global, 
+void SegScanUpsweepFlags(const uint* valuesIn_global, 
+	const uint* flagsIn_global, uint* blockLast_global, int* headFlagPos_global, 
 	const int2* rangePairs_global) {
 
 	uint tid = threadIdx.x;
@@ -24,7 +24,7 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, const uint* flagsIn_global,
 
 	int2 range = rangePairs_global[block];
 
-	const int UpsweepValues = 8;
+	const int UpsweepValues = 4;
 	const int NumValues = UpsweepValues * NUM_THREADS;
 
 	// Start at the last tile (NUM_VALUES before the end iterator). Because
@@ -70,6 +70,8 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, const uint* flagsIn_global,
 		
 		if(-1 != segmentStart) break;
 
+		__syncthreads();
+
 		current -= NumValues;
 	}
 
@@ -79,9 +81,7 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, const uint* flagsIn_global,
 
 	if(0 == tid) {
 		blockLast_global[block] = total;
-		int headFlag = -1 != segmentStart;
-		if(-1 != segmentStart) segmentStart += current;
-		headFlagPos_global[block] = headFlag;
+		headFlagPos_global[block] = -1 != segmentStart;
 	}
 }
 
@@ -90,9 +90,10 @@ void SegScanUpsweepFlag(const uint* valuesIn_global, const uint* flagsIn_global,
 // DOWNSWEEP PASS.
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
-void SegScanDownsweepFlag(const uint* valuesIn_global, 
-	const uint* flagsIn_global,uint* valuesOut_global, const uint* start_global,
-	const int2* rangePairs_global, int count, int inclusive) {
+void SegScanDownsweepFlags(const uint* valuesIn_global, 
+	const uint* flagsIn_global, uint* valuesOut_global, 
+	const uint* start_global, const int2* rangePairs_global, int count,
+	int inclusive) {
 
 	uint tid = threadIdx.x;
 	uint lane = (WARP_SIZE - 1) & tid;
@@ -158,12 +159,6 @@ void SegScanDownsweepFlag(const uint* valuesIn_global,
 			flags[i] = warpShared[offset + i];
 		
 
-
-
-
-
-
-
 		////////////////////////////////////////////////////////////////////////
 		// Run downsweep function on values and head flags.
 
@@ -180,7 +175,8 @@ void SegScanDownsweepFlag(const uint* valuesIn_global,
 			#pragma unroll
 			for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 				uint target = range.x + index + i * WARP_SIZE;
-				valuesOut_global[target] = threadShared[i * (WARP_SIZE + 1)];
+				uint value = threadShared[i * (WARP_SIZE + 1)];
+				valuesOut_global[target] = value;
 			}
 
 		range.x += NUM_VALUES;

@@ -26,8 +26,8 @@
 // range given by blockCount and writes to blockTotals_global[blockIdx.x].
 
 extern "C" __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) __global__ 
-void GlobalScanUpsweep(const uint* valuesIn_global, const uint2* range_global,
-	uint* blockTotals_global) {
+void GlobalScanUpsweep(const uint* valuesIn_global, uint* blockTotals_global, 
+	const uint2* range_global) {
 
 	uint block = blockIdx.x;
 	uint tid = threadIdx.x;

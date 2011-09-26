@@ -73,7 +73,7 @@ DEVICE2 uint BlockScan(uint tid, uint warp, uint lane, uint last,
 template<int NumWarps, int ValuesPerThread>
 DEVICE2 void SegScanDownsweep(uint tid, uint lane, uint warp, 
 	uint x[ValuesPerThread], const uint flags[ValuesPerThread],
-	volatile uint* warpShared, volatile uint* threadShared, bool inclusive, 
+	volatile uint* warpShared, volatile uint* threadShared, int inclusive, 
 	volatile uint* blockOffset_shared) {
 
 	////////////////////////////////////////////////////////////////////////////
@@ -89,6 +89,7 @@ DEVICE2 void SegScanDownsweep(uint tid, uint lane, uint warp,
 	// final thread offsets after the inter-warp multiscan pattern.
 	uint hasHeadFlag = 0;
 
+	/*
 	if(inclusive) {
 		#pragma unroll
 		for(int i = 0; i < ValuesPerThread; ++i) {
@@ -98,17 +99,16 @@ DEVICE2 void SegScanDownsweep(uint tid, uint lane, uint warp,
 			x[i] += last;
 			last = x[i];
 		}
-	} else {
+	} else {*/
 		#pragma unroll
 		for(int i = 0; i < ValuesPerThread; ++i) {
 			if(flags[i]) last = 0;
 			if(flags[i]) hasHeadFlag |= flags[i];
-			uint val = x[i];
-
-			x[i] = last;
-			last += val;
+			uint incLast = last;
+			last += x[i];
+			x[i] = incLast;
 		}
-	}
+//	}
 
 	////////////////////////////////////////////////////////////////////////////
 	// INTRA-WARP SEGMENT PASS

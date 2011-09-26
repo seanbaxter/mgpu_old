@@ -189,18 +189,6 @@
 				RelativePath="..\..\..\util\cucpp.cpp"
 				>
 			</File>
-			<File
-				RelativePath="..\..\src\scantest\scantest.cpp"
-				>
-				<FileConfiguration
-					Name="Release|Win32"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-					/>
-				</FileConfiguration>
-			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -225,6 +213,19 @@
 		<File
 			RelativePath="..\..\src\scantest\scantest.cu"
 			>
+			<FileConfiguration
+				Name="Debug|Win32"
+				>
+				<Tool
+					Name="Cudart Build Rule"
+					RequiredIncludes="$(CUDA_PATH_V4_0)\include;$(CUDA_PATH_V4_0)\cudpp\include"
+					Arch1="20"
+					Arch2="0"
+					HostDebugInfo="true"
+					Optimization="0"
+					Runtime="3"
+				/>
+			</FileConfiguration>
 			<FileConfiguration
 				Name="Release|Win32"
 				>

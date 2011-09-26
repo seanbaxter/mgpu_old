@@ -1,0 +1,9 @@
+LIBRARY	"mgpuscan"
+EXPORTS
+	scanStatusString
+	scanCreateEngine
+	scanDestroyEngine
+	scanArray
+	scanSegmentedPacked
+	scanSegmentedFlags
+	scanSegmentedKeys

@@ -28,8 +28,8 @@ const int Counts[3] = {
 };
 const int NumIterations[3] = {
 	1000, 
-	300,
-	100
+	200,
+	800
 };
 
 thrust::device_ptr<uint> ThrustPtr(CuDeviceMem* mem) {
@@ -41,41 +41,33 @@ double Throughput(double elapsed, int count, int numIterations) {
 }
 
 bool TestScan(int kind, int count, int numTests, int numIterations,
-	scanEngine_t engine, CUDPPHandle cudpp, CuContext* context) {
+	scanEngine_t engine, CUDPPHandle cudpp, CuContext* context,
+	double maxThroughputs[3]) {
 
 	std::tr1::mt19937 mt19937;
 	std::tr1::uniform_int<uint> r1(1, 1);
 	std::tr1::uniform_int<uint> r2(0, 499);
 
-	std::vector<uint> values(count), scanRef(count), keysHost, flagsHost;
-	if(2 == kind) {
-		keysHost.resize(count);
-		flagsHost.resize(count);
-	}
+	std::fill(maxThroughputs, maxThroughputs + 3, 0.0);
+
+	std::vector<uint> values(count), scanRef(count), flagsHost;
+	if(kind > 1) flagsHost.resize(count);
 	
 	uint last = 0;
 	uint prevKey = 0;
 	for(int i(0); i < count; ++i) {
-	//	if(i && (0 == (i % 4096))) {
-	//		printf("%d: %d\n", i / 4096 - 1, last);
-	//	}
 		uint x = r1(mt19937);
 		values[i] = x;
 
-		if(1 == kind) {
+		if(kind) {
 			bool head = 0 == r2(mt19937);
 			if(head) {
-				values[i] |= 1u<< 31;
 				last = 0;
+				if(1 == kind) values[i] |= 1u<< 31;
+				else if(2 == kind) flagsHost[i] = 1;
+				else if(3 == kind) ++prevKey;
 			}
-		} else if(2 == kind) {
-			bool head = 0 == r2(mt19937);
-			if(head) {
-				++prevKey;
-				last = 0;
-			}
-			keysHost[i] = prevKey;
-			flagsHost[i] = (uint)head;
+			if(3 == kind) flagsHost[i] = prevKey;
 		}
 
 		scanRef[i] = last;
@@ -83,16 +75,18 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 	}
 
 	// Allocate the device buffers.
-	DeviceMemPtr valuesDevice, scanDevice;
+	DeviceMemPtr valuesDevice, scanDevice, flagsDevice;
 	CUresult result = context->MemAlloc(values, &valuesDevice);
 	result = context->MemAlloc<uint>(count, &scanDevice);
+	if(kind > 1)
+		result = context->MemAlloc(flagsHost, &flagsDevice);
 
 	// Create the CUDPP plan.
 #ifdef USE_CUDPP
 	CUDPPConfiguration config;
 	if(0 == kind) config.algorithm = CUDPP_SCAN;
-	else if(1 == kind) cudpp = 0;
 	else if(2 == kind) config.algorithm = CUDPP_SEGMENTED_SCAN;
+	else cudpp = 0;
 	config.op = CUDPP_ADD;
 	config.datatype = CUDPP_UINT;
 	config.options = CUDPP_OPTION_FORWARD | CUDPP_OPTION_EXCLUSIVE;
@@ -108,16 +102,12 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 
 	for(int test(0); test < numTests; ++test) {
 
-		CuEventTimer timer;
+		CuEventTimer timer; 
 
 		////////////////////////////////////////////////////////////////////////
 		// MGPU benchmark
 
 		{
-			DeviceMemPtr keysDevice;
-			if(2 == kind)
-				result = context->MemAlloc(keysHost, &keysDevice);
-
 			timer.Start();
 			// Test MGPU Scan
 			for(int i(0); i < numIterations; ++i) {
@@ -126,12 +116,17 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 					status = scanArray(engine, valuesDevice->Handle(), 
 						scanDevice->Handle(), count, 0, false);
 				else if(1 == kind)
-					status = scanSegmentedFlag(engine, valuesDevice->Handle(),
+					status = scanSegmentedPacked(engine, valuesDevice->Handle(),
 						scanDevice->Handle(), count, false);
 				else if(2 == kind)
-					status = scanSegmentedKeys(engine, valuesDevice->Handle(),
-						keysDevice->Handle(), scanDevice->Handle(), count, 
+					status = scanSegmentedFlags(engine, valuesDevice->Handle(),
+						flagsDevice->Handle(), scanDevice->Handle(), count, 
 						false);
+				else if(3 == kind)
+					status = scanSegmentedKeys(engine, valuesDevice->Handle(),
+						flagsDevice->Handle(), scanDevice->Handle(), count, 
+						false);
+
 				if(SCAN_STATUS_SUCCESS != status) {
 					printf("\n\t\tMGPU error: %s.\n", scanStatusString(status));
 					return false;
@@ -144,10 +139,13 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 			std::vector<uint> scanHost;
 			result = scanDevice->ToHost(scanHost);
 
-			if(scanHost != scanRef) {
-				printf("\n\tMGPU SORT FAILED.\n");
-				return false;
-			}
+			for(int i = 0; i < count; ++i)
+				if(scanHost[i] != scanRef[i]) {
+					printf("Error on MGPU element %d.\n", i);
+					return false;
+				}
+
+			maxThroughputs[0] = std::max(maxThroughputs[0], mgpuThroughput);
 
 			printf("MGPU: %2.6lf B/s\t\t", mgpuThroughput / 1.0e9);
 		}
@@ -156,11 +154,10 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 		////////////////////////////////////////////////////////////////////////
 		// CUDPP benchmark
 
+		double cudppThroughput = 0;
+
 #ifdef USE_CUDPP
-		if(cudpp) {
-			DeviceMemPtr flagsDevice;
-			if(2 == kind)
-				result = context->MemAlloc(flagsHost, &flagsDevice);
+		if(cudpp && (0 == kind || 2 == kind)) {
 
 			timer.Start();
 
@@ -182,7 +179,7 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 				}
 			}
 
-			double cudppThroughput = Throughput(timer.Stop(), count, 
+			cudppThroughput = Throughput(timer.Stop(), count, 
 				numIterations);
 
 			// Test correctness.
@@ -194,31 +191,31 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 				return false;
 			}
 
-			printf("CUDPP: %2.6lf B/s\t\t", cudppThroughput / 1.0e9);
 		}
 #endif // USE_CUDPP
+
+		maxThroughputs[1] = std::max(maxThroughputs[0], cudppThroughput);
+
+		printf("CUDPP: %2.6lf B/s\t\t", cudppThroughput / 1.0e9);
 
 
 		////////////////////////////////////////////////////////////////////////
 		// Thrust benchmark
 
-		if(1 != kind) {
-			DeviceMemPtr keysDevice;
-			if(2 == kind)
-				result = context->MemAlloc(keysHost, &keysDevice);
-
+		double thrustThroughput = 0;
+		if(0 == kind || 3 == kind) {
 			timer.Start();
 			for(int i(0); i < numIterations; ++i) {
 				if(0 == kind)
 					thrust::exclusive_scan(ThrustPtr(valuesDevice),
 						ThrustPtr(valuesDevice) + count, ThrustPtr(scanDevice));
-				else if(2 == kind)
-					thrust::exclusive_scan_by_key(ThrustPtr(keysDevice), 
-						ThrustPtr(keysDevice) + count, ThrustPtr(valuesDevice),
+				else if(3 == kind)
+					thrust::exclusive_scan_by_key(ThrustPtr(flagsDevice), 
+						ThrustPtr(flagsDevice) + count, ThrustPtr(valuesDevice),
 						ThrustPtr(scanDevice));
 			}
 
-			double thrustThroughput = Throughput(timer.Stop(), count, 
+			thrustThroughput = Throughput(timer.Stop(), count, 
 				numIterations);
 
 			// Test correctness.
@@ -229,9 +226,12 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 				printf("\n\tTHRUST SORT FAILED.\n");
 				return false;
 			}
-
-			printf("thrust: %2.6lf B/s\t\t", thrustThroughput / 1.0e9);
 		}
+
+		maxThroughputs[2] = std::max(maxThroughputs[2], thrustThroughput);
+
+		printf("thrust: %2.6lf B/s\t\t", thrustThroughput / 1.0e9);
+		
 
 		printf("\n");
 	}
@@ -265,19 +265,26 @@ int main(int argc, char** argv) {
 	CUDPPResult cudppResult = cudppCreate(&cudpp);
 #endif
 
-	for(int size = 2; size < NumSizes; ++size) {
-		/*
-		printf("Global scan -- %d elements:\n", Counts[size]);
+	double throughputs[4][NumSizes][3];
+	for(int size = 0; size < NumSizes; ++size) {
+
+		printf("-------------- %d elements\n", Counts[size]);
+		
+		printf("Global scan:\n");
 		TestScan(0, Counts[size], NumTests, NumIterations[size], engine, cudpp,
-			context);
+			context, throughputs[0][size]);
 
-		printf("Segmented scan (flags) -- %d elements:\n", Counts[size]);
+		printf("Segmented scan (packed):\n");
 		TestScan(1, Counts[size], NumTests, NumIterations[size], engine, cudpp,
-			context);*/
+			context, throughputs[1][size]);
 
-		printf("Segmented scan (keys) -- %d elements:\n", Counts[size]);
+		printf("Segmented scan (flags):\n");
 		TestScan(2, Counts[size], NumTests, NumIterations[size], engine, cudpp,
-			context);
+			context, throughputs[2][size]);
+
+		printf("Segmented scan (keys):\n");
+		TestScan(3, Counts[size], NumTests, NumIterations[size], engine, cudpp,
+			context, throughputs[3][size]);
 	}
 }
 

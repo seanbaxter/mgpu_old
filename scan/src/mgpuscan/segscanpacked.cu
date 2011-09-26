@@ -2,7 +2,6 @@
 #define BLOCKS_PER_SM PACKED_BLOCKS_PER_SM
 #define VALUES_PER_THREAD PACKED_VALUES_PER_THREAD
 
-
 #define NUM_WARPS (NUM_THREADS / WARP_SIZE)
 #define LOG_NUM_WARPS LOG_BASE_2(NUM_WARPS)
 #define VALUES_PER_WARP (WARP_SIZE * VALUES_PER_THREAD)
@@ -21,10 +20,9 @@ void SegScanUpsweepPacked(const uint* packedIn_global, uint* blockLast_global,
 
 	uint tid = threadIdx.x;
 	uint block = blockIdx.x;
-
 	int2 range = rangePairs_global[block];
 
-	const int UpsweepValues = 8;
+	const int UpsweepValues = 4;
 	const int NumValues = UpsweepValues * NUM_THREADS;
 
 	// Start at the last tile (NUM_VALUES before the end iterator). Because
@@ -42,7 +40,6 @@ void SegScanUpsweepPacked(const uint* packedIn_global, uint* blockLast_global,
 		#pragma unroll
 		for(int i = 0; i < UpsweepValues; ++i) 
 			packed[i] = packedIn_global[current + tid + i * NUM_THREADS];
-
 
 		// Find the index of the latest value loaded with a head flag set.
 		int lastHeadFlagPos = -1;
@@ -69,20 +66,21 @@ void SegScanUpsweepPacked(const uint* packedIn_global, uint* blockLast_global,
 			if(i * NUM_THREADS >= cmp)
 				threadSum += value;
 		}
+
 		if(-1 != segmentStart) break;
+
+		__syncthreads();
 
 		current -= NumValues;
 	}
 
-	// We've either hit the head flag or run out of values. Do a horizontal sum
-	// of the thread values and store to global memory.
+	__syncthreads();
+
 	uint total = (uint)Reduce<NUM_WARPS>(tid, (int)threadSum, 0);
 
 	if(0 == tid) {
 		blockLast_global[block] = total;
-		int headFlag = -1 != segmentStart;
-		if(-1 != segmentStart) segmentStart += current;
-		headFlagPos_global[block] = headFlag;
+		headFlagPos_global[block] = -1 != segmentStart;
 	}
 }
 
@@ -121,6 +119,7 @@ void SegScanDownsweepPacked(const uint* packedIn_global, uint* valuesOut_global,
 
 	if(!tid) blockOffset_shared = start_global[block];
 
+
 	while(range.x < range.y) {
 		// Load values into packed.
 		uint x[VALUES_PER_THREAD];
@@ -137,14 +136,12 @@ void SegScanDownsweepPacked(const uint* packedIn_global, uint* valuesOut_global,
 			}
 
 		// Transpose into thread order and separate values from head flags.
-
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 			uint packed = warpShared[offset + i];
 			x[i] = 0x7fffffff & packed;
 			flags[i] = 0x80000000 & packed;
 		}
-
 
 		////////////////////////////////////////////////////////////////////////
 		// Run downsweep function on values and head flags.

@@ -14,7 +14,7 @@ void SegScanReduction(const uint* headFlags_global, uint* blockLast_global,
 
 	// Load the head flag and last segment counts for each thread. These map
 	// to blocks in the upsweep/downsweep passes.
-	uint flag = 0;
+	uint flag = 1;
 	uint x = 0;
 	if(tid < numBlocks) {
 		flag = headFlags_global[tid];
@@ -76,8 +76,9 @@ void SegScanReduction(const uint* headFlags_global, uint* blockLast_global,
 		int preceding = 31 - __clz(flags);
 		uint distance = tid - preceding;
 
+		// Set the first value to zero to allow a -1 dereference.
+		blockShared[tid] = 0;
 		volatile uint* s = blockShared + NumWarps + tid;
-		s[-NumWarps] = 0;
 
 		uint sum = x;
 		uint first = blockShared[NumWarps + preceding];

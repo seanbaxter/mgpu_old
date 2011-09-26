@@ -96,11 +96,11 @@ DEVICE2 int Reduce(uint tid, int x, int code) {
 	const int ScanStride = WARP_SIZE + WARP_SIZE / 2 + 1;
 	const int ScanSize = NumWarps * ScanStride;
 	__shared__ volatile int reduction_shared[ScanSize];
-	__shared__ volatile int totals_shared[NumWarps + NumWarps / 2];
+	__shared__ volatile int totals_shared[2 * WARP_SIZE];
 
-	volatile int* s = reduction_shared + ScanStride * warp + lane + 
+	volatile int* s = reduction_shared + ScanStride * warp + lane +
 		WARP_SIZE / 2;
-	s[-16] = init;
+	s[-(WARP_SIZE / 2)] = init;
 	s[0] = x;
 
 	// Run intra-warp max reduction.
@@ -118,27 +118,26 @@ DEVICE2 int Reduce(uint tid, int x, int code) {
 		// Grab the block total for the tid'th block. This is the last element
 		// in the block's scanned sequence. This operation avoids bank 
 		// conflicts.
-		x = reduction_shared[ScanStride * tid + WARP_SIZE / 2 +
-			WARP_SIZE - 1];
+		x = reduction_shared[ScanStride * tid + WARP_SIZE / 2 + WARP_SIZE - 1];
 
-		totals_shared[tid] = init;
 		volatile int* s = totals_shared + NumWarps / 2 + tid;
+		s[-(NumWarps / 2)] = init;
 		s[0] = x;
+
 		#pragma unroll
 		for(int i = 0; i < LogNumWarps; ++i) {
 			int offset = 1<< i;
 			if(0 == code) x += s[-offset];
 			else if(1 == code) x = max(x, s[-offset]);
-			s[0] = x;
+			if(i < LogNumWarps - 1) s[0] = x;
 		}
-
-		if(NumWarps - 1 == tid) totals_shared[0] = x;
+		totals_shared[tid] = x;
 	}
 
 	// Synchronize to make the block scan available to all warps.
 	__syncthreads();
 
-	return totals_shared[0];
+	return totals_shared[NumWarps - 1];
 }
 
 

@@ -1,25 +1,49 @@
 #include "../../../inc/mgpuscan.h"
 #include "../../../util/cucpp.h"
+#include "kernelparams.h"		// block size and density values.
 #include <sstream>
 
 
+struct KernelParams {
+	int numThreads;
+	int valuesPerThread;
+	int blocksPerSM;
+	const char* pass1;
+	const char* pass2;
+	const char* pass3;
+};
 
-// TODO: fiddle with these. probably put up to 64 threads and have 33% 
-// occupancy.
-const int NumScanThreads = 1024;
-const int ScanValuesPerThread = 4;
-const int ScanValuesPerBlock = ScanValuesPerThread * NumScanThreads;
-const int ScanBlocksPerSM = 1;
-
-const int NumSegFlagThreads = 256;
-const int SegFlagValuesPerThread = 16;
-const int SegFlagValuesPerBlock = NumSegFlagThreads * SegFlagValuesPerThread;
-const int SegFlagBlocksPerSM = 2;
-
-const int NumSegKeysThreads = 256;
-const int SegKeysValuesPerThread = 16;
-const int SegKeysValuesPerBlock = NumSegKeysThreads * SegKeysValuesPerThread;
-const int SegKeysBlocksPerSM = 2;
+const KernelParams Kernels[4] = {
+	{ 
+		SCAN_NUM_THREADS, 
+		SCAN_VALUES_PER_THREAD,
+		SCAN_BLOCKS_PER_SM,
+		"GlobalScanUpsweep",
+		"GlobalScanReduction",
+		"GlobalScanDownsweep"
+	}, {
+		PACKED_NUM_THREADS,
+		PACKED_VALUES_PER_THREAD,
+		PACKED_BLOCKS_PER_SM,
+		"SegScanUpsweepPacked",
+		"SegScanReduction",
+		"SegScanDownsweepPacked"
+	}, {
+		FLAGS_NUM_THREADS,
+		FLAGS_VALUES_PER_THREAD,
+		FLAGS_BLOCKS_PER_SM,
+		"SegScanUpsweepFlags",
+		"SegScanReduction",
+		"SegScanDownsweepFlags"
+	}, {
+		KEYS_NUM_THREADS,
+		KEYS_VALUES_PER_THREAD,
+		KEYS_BLOCKS_PER_SM,
+		"SegScanUpsweepKeys",
+		"SegScanReduction",
+		"SegScanDownsweepKeys"
+	}
+};
 
 
 
@@ -46,51 +70,25 @@ const char* SCANAPI scanStatusString(scanStatus_t status) {
 
 
 
-
-
 struct scanEngine_d {
 	ContextPtr context;
 
 	ModulePtr module;
 
-	FunctionPtr scanFuncs[3];
-	FunctionPtr scanFlagFuncs[3];
-	FunctionPtr scanKeysFuncs[3];
+	FunctionPtr funcs[4][3];
+	int numBlocks[4];
+	int blockSize[4];
 
 	DeviceMemPtr blockScanMem;
 	DeviceMemPtr headFlagsMem;
 	DeviceMemPtr rangeMem;
-	int numScanBlocks;
-	int numSegFlagBlocks;
-	int numSegKeysBlocks;
 
 	std::vector<int2> ranges;
 };
 
-struct FuncParams {
-	const char* pass1, *pass2, *pass3;
-	int numThreads;
-};
-
-CUresult LoadFuncs(CuModule* module, FuncParams params, FunctionPtr pass[3]) {
-
-	CUresult result = module->GetFunction(params.pass1, 
-		make_int3(params.numThreads, 1, 1), &pass[0]);
-	if(CUDA_SUCCESS != result) return result;
-
-	result = module->GetFunction(params.pass2,
-		make_int3(params.numThreads, 1, 1), &pass[1]);
-	if(CUDA_SUCCESS != result) return result;
-
-	result = module->GetFunction(params.pass3,
-		make_int3(params.numThreads, 1, 1), &pass[2]);
-	return result;
-}
-
-
 
 ////////////////////////////////////////////////////////////////////////////////
-
+// Initialize the scan engine.
 
 scanStatus_t SCANAPI scanCreateEngine(const char* cubin, scanEngine_t* engine) {
 	std::auto_ptr<scanEngine_d> e(new scanEngine_d);
@@ -104,44 +102,34 @@ scanStatus_t SCANAPI scanCreateEngine(const char* cubin, scanEngine_t* engine) {
 	result = e->context->LoadModuleFilename(cubin, &e->module);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_KERNEL_NOT_FOUND;
 
-	FuncParams funcParams;
-	funcParams.numThreads = NumScanThreads;
-	funcParams.pass1 = "GlobalScanUpsweep";
-	funcParams.pass2 = "GlobalScanReduction";
-	funcParams.pass3 = "GlobalScanDownsweep";
-	result = LoadFuncs(e->module, funcParams, e->scanFuncs);
-	if(CUDA_SUCCESS != result) return SCAN_STATUS_KERNEL_ERROR;
+	int maxBlocks = 0;
+	for(int i = 0; i < 4; ++i) {
+		CUresult result = e->module->GetFunction(Kernels[i].pass1,
+			make_int3(Kernels[i].numThreads, 1, 1), &e->funcs[i][0]);
+		if(CUDA_SUCCESS != result) return SCAN_STATUS_KERNEL_ERROR;
 
-	funcParams.numThreads = NumSegFlagThreads;
-	funcParams.pass1 = "SegScanUpsweepFlag";
-	funcParams.pass2 = "SegScanReduction";
-	funcParams.pass3 = "SegScanDownsweepFlag";
-	result = LoadFuncs(e->module, funcParams, e->scanFlagFuncs);
-	if(CUDA_SUCCESS != result) return SCAN_STATUS_KERNEL_ERROR;
+		result = e->module->GetFunction(Kernels[i].pass2,
+			make_int3(REDUCTION_NUM_THREADS, 1, 1), &e->funcs[i][1]);
+		if(CUDA_SUCCESS != result) return SCAN_STATUS_KERNEL_ERROR;
 
-	funcParams.numThreads = NumSegKeysThreads;
-	funcParams.pass1 = "SegScanUpsweepKeys";
-	funcParams.pass2 = "SegScanReduction";
-	funcParams.pass3 = "SegScanDownsweepKeys";
-	result = LoadFuncs(e->module, funcParams, e->scanKeysFuncs);
-	if(CUDA_SUCCESS != result) return SCAN_STATUS_KERNEL_ERROR;
+		result = e->module->GetFunction(Kernels[i].pass3,
+			make_int3(Kernels[i].numThreads, 1, 1), &e->funcs[i][2]);
+		if(CUDA_SUCCESS != result) return SCAN_STATUS_KERNEL_ERROR;
 
-	int numSMs = e->context->Device()->Attributes().multiprocessorCount;
+		int numSMs = e->context->Device()->Attributes().multiprocessorCount;
 
-	// Launch 4 256-thread blocks per SM.
-	e->numScanBlocks = ScanBlocksPerSM * numSMs;
-	e->numSegFlagBlocks = SegFlagBlocksPerSM * numSMs;
-	e->numSegKeysBlocks = SegKeysBlocksPerSM * numSMs;
+		e->numBlocks[i] = numSMs * Kernels[i].blocksPerSM;
+		e->blockSize[i] = Kernels[i].numThreads * Kernels[i].valuesPerThread;
 
-	int numSegBlocks = std::max(e->numSegFlagBlocks, e->numSegKeysBlocks);
-	int numBlocks = std::max(e->numScanBlocks, numSegBlocks);
+		maxBlocks = std::max(maxBlocks, e->numBlocks[i]);
+	}
 
 	// Allocate a uint per thread block plus a uint for the scan total.
-	result = e->context->MemAlloc<uint>(numBlocks + 1, &e->blockScanMem);
+	result = e->context->MemAlloc<uint>(1025 /*maxBlocks + 1*/, &e->blockScanMem);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_DEVICE_ALLOC_FAILED;
 
-	result = e->context->MemAlloc<uint2>(numBlocks, &e->rangeMem);
-	result = e->context->MemAlloc<uint>(numSegBlocks, &e->headFlagsMem);
+	result = e->context->MemAlloc<uint2>(maxBlocks, &e->rangeMem);
+	result = e->context->MemAlloc<uint>(1025, &e->headFlagsMem);
 	
 	// Poke a zero to the start of the blockScanMem array. If we scan only a 
 	// single block, this lets us skip the reduction step.
@@ -159,25 +147,13 @@ scanStatus_t SCANAPI scanDestroyEngine(scanEngine_t engine) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// 
+// Finds the ranges for each block to process. Note that each range must begin
+// a multiple of the block size.
 
 int SetBlockRanges(scanEngine_t engine, int count, int kind) {
 
-	int blockSize, numBlocks;
-	switch(kind) {
-		case 0:
-			blockSize = ScanValuesPerBlock;
-			numBlocks = engine->numScanBlocks;
-			break;
-		case 1:
-			blockSize = SegFlagValuesPerBlock;
-			numBlocks = engine->numSegFlagBlocks;
-			break;
-		case 2:
-			blockSize = SegKeysValuesPerBlock;
-			numBlocks = engine->numSegKeysBlocks;
-			break;
-	}
+	int numBlocks = engine->numBlocks[kind];
+	int blockSize = engine->blockSize[kind];
 	int numBricks = DivUp(count, blockSize);
 	if(numBlocks > numBricks) numBlocks = numBricks;
 	engine->ranges.resize(numBlocks);
@@ -199,118 +175,111 @@ int SetBlockRanges(scanEngine_t engine, int count, int kind) {
 }
 
 
-scanStatus_t SCANAPI scanArray(scanEngine_t engine, CUdeviceptr values,
-	CUdeviceptr scan, int count, uint* scanTotal, bool inclusive) {
+////////////////////////////////////////////////////////////////////////////////
+// Generic scan - single implementation for all four scan types. Switches 
+// over scan types when building the kernel's call stack.
 
-	if(!engine) return SCAN_STATUS_INVALID_VALUE;
+scanStatus_t scanGeneric(scanEngine_t e, int kind, CUdeviceptr values,
+	CUdeviceptr flags, CUdeviceptr scan, int count, uint* scanTotal,
+	bool inclusive) {
 
-	int numBlocks = SetBlockRanges(engine, count, 0);
+	if(!e) return SCAN_STATUS_INVALID_VALUE;
 
-	// Don't run the upsweep on the last block - it contributes nothing to
-	// reduction.
+	int numBlocks = SetBlockRanges(e, count, kind);
+
 	CuCallStack callStack;
 	CUresult result;
 
 	if(numBlocks > 1) {
-		callStack.Push(values, engine->rangeMem, engine->blockScanMem);
-		result = engine->scanFuncs[0]->Launch(numBlocks - 1, 1, callStack);
+
+		////////////////////////////////////////////////////////////////////////
+		// UPSWEEP
+		// Don't run the upsweep on the last block - it contributes nothing to
+		// reduction.
+
+		switch(kind) {
+			case 0:
+				callStack.Push(values, e->blockScanMem, e->rangeMem);
+				break;
+			case 1:
+				callStack.Push(values, e->blockScanMem, e->headFlagsMem,
+					e->rangeMem);
+				break;
+			case 2:
+			case 3:
+				callStack.Push(values, flags, e->blockScanMem, e->headFlagsMem,
+					e->rangeMem);
+				break;
+		}
+		result = e->funcs[kind][0]->Launch(numBlocks - 1, 1, callStack);
 		if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
 
+		
+		////////////////////////////////////////////////////////////////////////
+		// REDUCTION
 		// Run a reduction for the block offsets if numBlocks > 1. We've already 
 		// poked a 0 to the start of blockScanMem, so we can pass this step in
 		// the case of a single block scan.
+
 		callStack.Reset();
-		callStack.Push(engine->blockScanMem, numBlocks);
-		result = engine->scanFuncs[1]->Launch(1, 1, callStack);
+		if(0 == kind)
+			callStack.Push(e->blockScanMem, numBlocks);
+		else
+			callStack.Push(e->headFlagsMem, e->blockScanMem, numBlocks);
+
+		result = e->funcs[kind][1]->Launch(1, 1, callStack);
 		if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
 	}
 
 	// Retrieve the scan total from the end of blockScanMem.
 	if(scanTotal)
-		engine->blockScanMem->ToHostByte(scanTotal, sizeof(uint) * numBlocks,
+		e->blockScanMem->ToHostByte(scanTotal, sizeof(uint) * numBlocks,
 			sizeof(uint));
 
+
+	////////////////////////////////////////////////////////////////////////////
+	// DOWNSWEEP
+	
 	callStack.Reset();
-	callStack.Push(values, scan, engine->blockScanMem, engine->rangeMem, 
-		count, (int)inclusive);
-	result = engine->scanFuncs[2]->Launch(numBlocks, 1, callStack);
+	switch(kind) {
+		case 0:
+		case 1:
+			callStack.Push(values, scan, e->blockScanMem, e->rangeMem, count,
+				(int)inclusive);
+			break;
+		case 2:
+		case 3:
+			callStack.Push(values, flags, scan, e->blockScanMem, e->rangeMem,
+				count, (int)inclusive);
+			break;
+	}
+	result = e->funcs[kind][2]->Launch(numBlocks, 1, callStack);
 	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
 
 	return SCAN_STATUS_SUCCESS;
 }
 
 
-scanStatus_t SCANAPI scanSegmentedFlag(scanEngine_t engine, CUdeviceptr packed,
-	CUdeviceptr scan, int count, bool inclusive) {
+scanStatus_t SCANAPI scanArray(scanEngine_t engine, CUdeviceptr values,
+	CUdeviceptr scan, int count, uint* scanTotal, bool inclusive) {
 
-	if(!engine) return SCAN_STATUS_INVALID_VALUE;
+	return scanGeneric(engine, 0, values, 0, scan, count, scanTotal, inclusive);
+}
 
-	int numBlocks = SetBlockRanges(engine, count, 1);
+scanStatus_t SCANAPI scanSegmentedPacked(scanEngine_t engine,
+	CUdeviceptr packed, CUdeviceptr scan, int count, bool inclusive) {
 
-	CuCallStack callStack;
-	CUresult result;
+	return scanGeneric(engine, 1, packed, 0, scan, count, 0, inclusive);
+}
 
-	callStack.Push(packed, engine->blockScanMem, engine->headFlagsMem,
-		engine->rangeMem);
-		
-	// Don't run the upsweep on the last block - it contributes nothing to
-	// reduction.
-	result = engine->scanFlagFuncs[0]->Launch(numBlocks - 1, 1, callStack);
-	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
+scanStatus_t SCANAPI scanSegmentedFlags(scanEngine_t engine, CUdeviceptr values,
+	CUdeviceptr flags, CUdeviceptr scan, int count, bool inclusive) {
 
-	if(numBlocks > 1) {
-		// Run a reduction for the block offsets if numBlocks > 1. We've already 
-		// poked a 0 to the start of blockScanMem, so we can pass this step in
-		// the case of a single block scan.
-		callStack.Reset();
-		callStack.Push(engine->headFlagsMem, engine->blockScanMem, numBlocks);
-		result = engine->scanFlagFuncs[1]->Launch(1, 1, callStack);
-		if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
-	}
-
-	callStack.Reset();
-	callStack.Push(packed, scan, engine->blockScanMem, engine->rangeMem, 
-		count, (int)inclusive);
-	result = engine->scanFlagFuncs[2]->Launch(numBlocks, 1, callStack);
-	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
-
-	return SCAN_STATUS_SUCCESS;
-
+	return scanGeneric(engine, 2, values, flags, scan, count, 0, inclusive);
 }
 
 scanStatus_t SCANAPI scanSegmentedKeys(scanEngine_t engine, CUdeviceptr values,
 	CUdeviceptr keys, CUdeviceptr scan, int count, bool inclusive) {
-
-	if(!engine) return SCAN_STATUS_INVALID_VALUE;
-
-	int numBlocks = SetBlockRanges(engine, count, 2);
-
-	CuCallStack callStack;
-	CUresult result;
-
-	callStack.Push(values, keys, engine->blockScanMem, engine->headFlagsMem,
-		engine->rangeMem);
-		
-	// Don't run the upsweep on the last block - it contributes nothing to
-	// reduction.
-	result = engine->scanKeysFuncs[0]->Launch(numBlocks - 1, 1, callStack);
-	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
-
-	if(numBlocks > 1) {
-		// Run a reduction for the block offsets if numBlocks > 1. We've already 
-		// poked a 0 to the start of blockScanMem, so we can pass this step in 
-		// the case of a single block scan.
-		callStack.Reset();
-		callStack.Push(engine->headFlagsMem, engine->blockScanMem, numBlocks);
-		result = engine->scanKeysFuncs[1]->Launch(1, 1, callStack);
-		if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
-	}
-
-	callStack.Reset();
-	callStack.Push(values, keys, scan, engine->blockScanMem, engine->rangeMem, 
-		count, (int)inclusive);
-	result = engine->scanKeysFuncs[2]->Launch(numBlocks, 1, callStack);
-	if(CUDA_SUCCESS != result) return SCAN_STATUS_LAUNCH_ERROR;
-
-	return SCAN_STATUS_SUCCESS;
+	
+	return scanGeneric(engine, 3, values, keys, scan, count, 0, inclusive);
 }
