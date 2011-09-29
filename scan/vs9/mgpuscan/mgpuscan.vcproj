@@ -220,6 +220,10 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\src\mgpuscan\loadstore.cu"
+			>
+		</File>
+		<File
 			RelativePath="..\..\src\mgpuscan\scancommon.cu"
 			>
 		</File>

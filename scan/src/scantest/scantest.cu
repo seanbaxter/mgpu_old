@@ -23,7 +23,7 @@ const int NumSizes = 3;
 const int NumTests = 5;
 const int Counts[3] = {
 	2<< 20,
-	20<< 20,
+	10<< 20,
 	40<< 20
 };
 const int NumIterations[3] = {
@@ -147,7 +147,7 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 
 			maxThroughputs[0] = std::max(maxThroughputs[0], mgpuThroughput);
 
-			printf("MGPU: %2.6lf B/s\t\t", mgpuThroughput / 1.0e9);
+			printf("MGPU: %5.2lf B/s\t\t", mgpuThroughput / 1.0e9);
 		}
 
 
@@ -194,9 +194,9 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 		}
 #endif // USE_CUDPP
 
-		maxThroughputs[1] = std::max(maxThroughputs[0], cudppThroughput);
+		maxThroughputs[1] = std::max(maxThroughputs[1], cudppThroughput);
 
-		printf("CUDPP: %2.6lf B/s\t\t", cudppThroughput / 1.0e9);
+		printf("CUDPP: %5.2lf B/s\t\t", cudppThroughput / 1.0e9);
 
 
 		////////////////////////////////////////////////////////////////////////
@@ -230,9 +230,8 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 
 		maxThroughputs[2] = std::max(maxThroughputs[2], thrustThroughput);
 
-		printf("thrust: %2.6lf B/s\t\t", thrustThroughput / 1.0e9);
+		printf("thrust: %5.2lf B/s\t\t", thrustThroughput / 1.0e9);
 		
-
 		printf("\n");
 	}
 
@@ -241,6 +240,14 @@ bool TestScan(int kind, int count, int numTests, int numIterations,
 #endif
 
 	return true;
+}
+
+void PrintBestTime(const char* label, int test, int kind, 
+	const double throughputs[4][NumSizes][3]) {
+
+	printf("%s:\n", label);
+	for(int i(0); i < NumSizes; ++i)
+		printf("%5.2lf bn/s\n", throughputs[test][i][kind] / 1.0e9);
 }
 
 int main(int argc, char** argv) {
@@ -268,7 +275,7 @@ int main(int argc, char** argv) {
 	double throughputs[4][NumSizes][3];
 	for(int size = 0; size < NumSizes; ++size) {
 
-		printf("-------------- %d elements\n", Counts[size]);
+		printf("\n-------------- %d elements\n", Counts[size]);
 		
 		printf("Global scan:\n");
 		TestScan(0, Counts[size], NumTests, NumIterations[size], engine, cudpp,
@@ -286,5 +293,16 @@ int main(int argc, char** argv) {
 		TestScan(3, Counts[size], NumTests, NumIterations[size], engine, cudpp,
 			context, throughputs[3][size]);
 	}
+
+	printf("\nBest times:\n");
+	PrintBestTime("MGPU scan", 0, 0, throughputs);
+	PrintBestTime("CUDPP scan", 0, 1, throughputs);
+	PrintBestTime("thrust scan", 0, 2, throughputs);
+	PrintBestTime("MGPU seg scan (packed)", 1, 0, throughputs);
+	PrintBestTime("MGPU seg scan (flags)", 2, 0, throughputs);
+	PrintBestTime("CUDPP seg scan (flags)", 2, 1, throughputs);
+	PrintBestTime("MGPU seg scan (keys)", 3, 0, throughputs);
+	PrintBestTime("thrust seg scan (keys)", 3, 2, throughputs);
+	
 }
 

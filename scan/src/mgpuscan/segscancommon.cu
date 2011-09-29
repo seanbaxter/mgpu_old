@@ -89,7 +89,7 @@ DEVICE2 void SegScanDownsweep(uint tid, uint lane, uint warp,
 	// final thread offsets after the inter-warp multiscan pattern.
 	uint hasHeadFlag = 0;
 
-	/*
+	
 	if(inclusive) {
 		#pragma unroll
 		for(int i = 0; i < ValuesPerThread; ++i) {
@@ -99,7 +99,7 @@ DEVICE2 void SegScanDownsweep(uint tid, uint lane, uint warp,
 			x[i] += last;
 			last = x[i];
 		}
-	} else {*/
+	} else {
 		#pragma unroll
 		for(int i = 0; i < ValuesPerThread; ++i) {
 			if(flags[i]) last = 0;
@@ -108,7 +108,7 @@ DEVICE2 void SegScanDownsweep(uint tid, uint lane, uint warp,
 			last += x[i];
 			x[i] = incLast;
 		}
-//	}
+	}
 
 	////////////////////////////////////////////////////////////////////////////
 	// INTRA-WARP SEGMENT PASS

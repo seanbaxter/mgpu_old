@@ -1,93 +1,111 @@
-#define REDUCTION_NUM_THREADS 256
-
-#define SCAN_NUM_THREADS 1024
-#define SCAN_VALUES_PER_THREAD 4
-#define SCAN_BLOCKS_PER_SM 1
-
-#define PACKED_NUM_THREADS 256
-#define PACKED_VALUES_PER_THREAD 16
-#define PACKED_BLOCKS_PER_SM 2
-
-#define FLAGS_NUM_THREADS 1024
-#define FLAGS_VALUES_PER_THREAD 4
-#define FLAGS_BLOCKS_PER_SM 1
-
-#define KEYS_NUM_THREADS 256
-#define KEYS_VALUES_PER_THREAD 16
-#define KEYS_BLOCKS_PER_SM 2
-
 -------------- 2097152 elements
 Global scan:
-MGPU: 7.686024 B/s              CUDPP: 7.487763 B/s             thrust: 5.288093 B/s
-MGPU: 7.890411 B/s              CUDPP: 7.779953 B/s             thrust: 5.246017 B/s
-MGPU: 7.747756 B/s              CUDPP: 7.795049 B/s             thrust: 5.241657 B/s
-MGPU: 7.940099 B/s              CUDPP: 7.786897 B/s             thrust: 5.231989 B/s
-MGPU: 7.832367 B/s              CUDPP: 7.793913 B/s             thrust: 5.246270 B/s
+MGPU:  7.59 B/s         CUDPP:  7.44 B/s                thrust:  5.12 B/s
+MGPU:  7.47 B/s         CUDPP:  7.73 B/s                thrust:  5.29 B/s
+MGPU:  7.51 B/s         CUDPP:  7.73 B/s                thrust:  5.18 B/s
+MGPU:  7.79 B/s         CUDPP:  7.75 B/s                thrust:  5.08 B/s
+MGPU:  7.56 B/s         CUDPP:  7.80 B/s                thrust:  5.20 B/s
 Segmented scan (packed):
-MGPU: 9.835567 B/s              CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 9.936244 B/s              CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 9.941814 B/s              CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 9.867432 B/s              CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 9.778741 B/s              CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
+MGPU:  9.64 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU:  9.46 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU:  9.48 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU:  9.91 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU:  9.64 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
 Segmented scan (flags):
-MGPU: 7.160979 B/s              CUDPP: 7.212241 B/s             thrust: 0.000000 B/s
-MGPU: 7.370623 B/s              CUDPP: 7.220920 B/s             thrust: 0.000000 B/s
-MGPU: 7.153327 B/s              CUDPP: 7.220280 B/s             thrust: 0.000000 B/s
-MGPU: 7.394118 B/s              CUDPP: 7.200216 B/s             thrust: 0.000000 B/s
-MGPU: 7.234016 B/s              CUDPP: 7.173307 B/s             thrust: 0.000000 B/s
+MGPU:  7.55 B/s         CUDPP:  7.23 B/s                thrust:  0.00 B/s
+MGPU:  7.26 B/s         CUDPP:  7.21 B/s                thrust:  0.00 B/s
+MGPU:  7.36 B/s         CUDPP:  7.23 B/s                thrust:  0.00 B/s
+MGPU:  7.26 B/s         CUDPP:  7.22 B/s                thrust:  0.00 B/s
+MGPU:  7.38 B/s         CUDPP:  7.21 B/s                thrust:  0.00 B/s
 Segmented scan (keys):
-MGPU: 7.364980 B/s              CUDPP: 0.000000 B/s             thrust: 0.863681 B/s
-MGPU: 7.353080 B/s              CUDPP: 0.000000 B/s             thrust: 0.864600 B/s
-MGPU: 7.295702 B/s              CUDPP: 0.000000 B/s             thrust: 0.866747 B/s
-MGPU: 7.381601 B/s              CUDPP: 0.000000 B/s             thrust: 0.866138 B/s
-MGPU: 7.248747 B/s              CUDPP: 0.000000 B/s             thrust: 0.866562 B/s
--------------- 20971520 elements
+MGPU:  7.14 B/s         CUDPP:  0.00 B/s                thrust:  0.86 B/s
+MGPU:  7.11 B/s         CUDPP:  0.00 B/s                thrust:  0.86 B/s
+MGPU:  7.21 B/s         CUDPP:  0.00 B/s                thrust:  0.86 B/s
+MGPU:  7.12 B/s         CUDPP:  0.00 B/s                thrust:  0.87 B/s
+MGPU:  6.96 B/s         CUDPP:  0.00 B/s                thrust:  0.86 B/s
+
+-------------- 10485760 elements
 Global scan:
-MGPU: 10.467429 B/s             CUDPP: 8.344616 B/s             thrust: 6.323310 B/s
-MGPU: 10.477128 B/s             CUDPP: 8.350267 B/s             thrust: 6.339872 B/s
-MGPU: 10.454303 B/s             CUDPP: 8.353797 B/s             thrust: 6.221131 B/s
-MGPU: 10.443307 B/s             CUDPP: 8.347255 B/s             thrust: 6.340922 B/s
-MGPU: 10.441419 B/s             CUDPP: 8.348676 B/s             thrust: 6.329775 B/s
+MGPU:  9.93 B/s         CUDPP:  8.30 B/s                thrust:  6.21 B/s
+MGPU:  9.97 B/s         CUDPP:  8.29 B/s                thrust:  6.24 B/s
+MGPU:  9.93 B/s         CUDPP:  8.30 B/s                thrust:  6.26 B/s
+MGPU: 10.00 B/s         CUDPP:  8.29 B/s                thrust:  6.24 B/s
+MGPU: 10.00 B/s         CUDPP:  8.30 B/s                thrust:  6.26 B/s
 Segmented scan (packed):
-MGPU: 14.554116 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 14.524241 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 14.538165 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 14.490260 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 14.571313 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
+MGPU: 13.65 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU: 13.62 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU: 13.79 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU: 13.65 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU: 13.82 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
 Segmented scan (flags):
-MGPU: 10.100011 B/s             CUDPP: 8.347923 B/s             thrust: 0.000000 B/s
-MGPU: 10.055328 B/s             CUDPP: 8.345563 B/s             thrust: 0.000000 B/s
-MGPU: 10.076297 B/s             CUDPP: 8.347978 B/s             thrust: 0.000000 B/s
-MGPU: 10.089906 B/s             CUDPP: 8.341613 B/s             thrust: 0.000000 B/s
-MGPU: 10.097860 B/s             CUDPP: 8.342602 B/s             thrust: 0.000000 B/s
+MGPU:  9.65 B/s         CUDPP:  8.21 B/s                thrust:  0.00 B/s
+MGPU:  9.65 B/s         CUDPP:  8.21 B/s                thrust:  0.00 B/s
+MGPU:  9.70 B/s         CUDPP:  8.21 B/s                thrust:  0.00 B/s
+MGPU:  9.56 B/s         CUDPP:  8.21 B/s                thrust:  0.00 B/s
+MGPU:  9.65 B/s         CUDPP:  8.22 B/s                thrust:  0.00 B/s
 Segmented scan (keys):
-MGPU: 9.968416 B/s              CUDPP: 0.000000 B/s             thrust: 1.223831 B/s
-MGPU: 9.973149 B/s              CUDPP: 0.000000 B/s             thrust: 1.224122 B/s
-MGPU: 9.969608 B/s              CUDPP: 0.000000 B/s             thrust: 1.224380 B/s
-MGPU: 9.974236 B/s              CUDPP: 0.000000 B/s             thrust: 1.224434 B/s
-MGPU: 10.002642 B/s             CUDPP: 0.000000 B/s             thrust: 1.224900 B/s
+MGPU:  9.54 B/s         CUDPP:  0.00 B/s                thrust:  1.17 B/s
+MGPU:  9.55 B/s         CUDPP:  0.00 B/s                thrust:  1.17 B/s
+MGPU:  9.57 B/s         CUDPP:  0.00 B/s                thrust:  1.18 B/s
+MGPU:  9.59 B/s         CUDPP:  0.00 B/s                thrust:  1.17 B/s
+MGPU:  9.58 B/s         CUDPP:  0.00 B/s                thrust:  1.17 B/s
+
 -------------- 41943040 elements
 Global scan:
-MGPU: 10.718733 B/s             CUDPP: 8.386371 B/s             thrust: 6.360588 B/s
-MGPU: 10.708167 B/s             CUDPP: 8.385212 B/s             thrust: 6.358271 B/s
-MGPU: 10.720121 B/s             CUDPP: 8.387789 B/s             thrust: 6.356108 B/s
-MGPU: 10.712956 B/s             CUDPP: 8.386780 B/s             thrust: 6.362121 B/s
-MGPU: 10.719410 B/s             CUDPP: 8.385492 B/s             thrust: 6.350843 B/s
+MGPU: 10.72 B/s         CUDPP:  8.41 B/s                thrust:  6.42 B/s
+MGPU: 10.72 B/s         CUDPP:  8.41 B/s                thrust:  6.40 B/s
+MGPU: 10.72 B/s         CUDPP:  8.41 B/s                thrust:  6.40 B/s
+MGPU: 10.72 B/s         CUDPP:  8.41 B/s                thrust:  6.40 B/s
+MGPU: 10.72 B/s         CUDPP:  8.40 B/s                thrust:  6.43 B/s
 Segmented scan (packed):
-MGPU: 15.060673 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 15.054488 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 15.091296 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 15.108144 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
-MGPU: 15.116700 B/s             CUDPP: 0.000000 B/s             thrust: 0.000000 B/s
+MGPU: 15.12 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU: 15.10 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU: 15.09 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU: 15.10 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
+MGPU: 15.09 B/s         CUDPP:  0.00 B/s                thrust:  0.00 B/s
 Segmented scan (flags):
-MGPU: 10.306182 B/s             CUDPP: 8.403143 B/s             thrust: 0.000000 B/s
-MGPU: 10.303040 B/s             CUDPP: 8.401961 B/s             thrust: 0.000000 B/s
-MGPU: 10.303668 B/s             CUDPP: 8.402660 B/s             thrust: 0.000000 B/s
-MGPU: 10.300815 B/s             CUDPP: 8.402432 B/s             thrust: 0.000000 B/s
-MGPU: 10.307584 B/s             CUDPP: 8.402082 B/s             thrust: 0.000000 B/s
+MGPU: 10.31 B/s         CUDPP:  8.42 B/s                thrust:  0.00 B/s
+MGPU: 10.31 B/s         CUDPP:  8.42 B/s                thrust:  0.00 B/s
+MGPU: 10.30 B/s         CUDPP:  8.42 B/s                thrust:  0.00 B/s
+MGPU: 10.33 B/s         CUDPP:  8.42 B/s                thrust:  0.00 B/s
+MGPU: 10.31 B/s         CUDPP:  8.42 B/s                thrust:  0.00 B/s
 Segmented scan (keys):
-MGPU: 10.270083 B/s             CUDPP: 0.000000 B/s             thrust: 1.245405 B/s
-MGPU: 10.269416 B/s             CUDPP: 0.000000 B/s             thrust: 1.246908 B/s
-MGPU: 10.269699 B/s             CUDPP: 0.000000 B/s             thrust: 1.245724 B/s
-MGPU: 10.272972 B/s             CUDPP: 0.000000 B/s             thrust: 1.245341 B/s
-MGPU: 10.268508 B/s             CUDPP: 0.000000 B/s             thrust: 1.245432 B/s
+MGPU: 10.28 B/s         CUDPP:  0.00 B/s                thrust:  1.24 B/s
+MGPU: 10.28 B/s         CUDPP:  0.00 B/s                thrust:  1.24 B/s
+MGPU: 10.27 B/s         CUDPP:  0.00 B/s                thrust:  1.24 B/s
+MGPU: 10.28 B/s         CUDPP:  0.00 B/s                thrust:  1.24 B/s
+MGPU: 10.27 B/s         CUDPP:  0.00 B/s                thrust:  1.24 B/s
+
+Best times:
+MGPU scan:
+ 7.79 bn/s
+10.00 bn/s
+10.72 bn/s
+CUDPP scan:
+ 7.80 bn/s
+ 8.30 bn/s
+ 8.41 bn/s
+thrust scan:
+ 5.29 bn/s
+ 6.26 bn/s
+ 6.43 bn/s
+MGPU seg scan (packed):
+ 9.91 bn/s
+13.82 bn/s
+15.12 bn/s
+MGPU seg scan (flags):
+ 7.55 bn/s
+ 9.70 bn/s
+10.33 bn/s
+CUDPP seg scan (flags):
+ 7.23 bn/s
+ 8.22 bn/s
+ 8.42 bn/s
+MGPU seg scan (keys):
+ 7.21 bn/s
+ 9.59 bn/s
+10.28 bn/s
+thrust seg scan (keys):
+ 0.87 bn/s
+ 1.18 bn/s
+ 1.24 bn/s
