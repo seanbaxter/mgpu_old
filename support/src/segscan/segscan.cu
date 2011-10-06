@@ -99,7 +99,6 @@ extern "C" __global__ void SegScanWarp8(const uint* dataIn_global,
 	for(int i = 0; i < VALUES_PER_THREAD; ++i)
 		packed[i] = shared[offset + i];
 
-
 	////////////////////////////////////////////////////////////////////////////
 	// UPSWEEP PASS
 	// Run a sequential segmented scan for all values in the packed array. Find
@@ -109,18 +108,18 @@ extern "C" __global__ void SegScanWarp8(const uint* dataIn_global,
 	uint last = 0;
 	uint hasHeadFlag = 0;
 
-	uint x[VALUES_PER_THREAD];
+	uint scan[VALUES_PER_THREAD];
 	uint flags[VALUES_PER_THREAD];
 
 	#pragma unroll
 	for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 		flags[i] = 0x80000000 & packed[i];
-		x[i] = 0x7fffffff & packed[i];
+		uint x = 0x7fffffff & packed[i];
 		if(flags[i]) last = 0;
 		hasHeadFlag |= flags[i];
-		last += x[i];
+		scan[i] = last;
+		last += x;
 	}
-
 
 	////////////////////////////////////////////////////////////////////////////
 	// SEGMENT PASS
@@ -136,7 +135,6 @@ extern "C" __global__ void SegScanWarp8(const uint* dataIn_global,
 	// the segment.
 	int preceding = 31 - __clz(warpFlags);
 	uint distance = tid - preceding;
-
 
 	////////////////////////////////////////////////////////////////////////////
 	// REDUCTION PASS
@@ -162,7 +160,6 @@ extern "C" __global__ void SegScanWarp8(const uint* dataIn_global,
 	// the preceding thread.
 	sum += first - last;
 
-
 	////////////////////////////////////////////////////////////////////////////
 	// DOWNSWEEP PASS
 	// Add sum to all the values in the continuing segment (that is, before the
@@ -171,8 +168,7 @@ extern "C" __global__ void SegScanWarp8(const uint* dataIn_global,
 	#pragma unroll
 	for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 		if(flags[i]) sum = 0;
-		shared[offset + i] = sum;
-		sum += x[i];
+		shared[offset + i] = scan[i] + sum;
 	}
 
 	// Store the values back to global memory.

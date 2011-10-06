@@ -11,7 +11,7 @@
 
 std::tr1::mt19937 mt19937;
 std::tr1::uniform_int<uint> r(0, 3);
-std::tr1::uniform_int<uint> r2(0, 16 * 8);
+std::tr1::uniform_int<uint> r2(0, 7);
 
 void SegmentedScan(uint* packed, int count) {
 	int last = 0;
@@ -87,9 +87,9 @@ int main(int argc, char** argv) {
 	printf("Warp segmented scan (1 val/thread):\n");
 	PrintSegScan(&host1[0], WarpSize);
 
-//	SegmentedScan(&host1[0], WarpSize);
-//	printf("\nCPU segmented scan:\n");
-//	PrintSegScan(&host1[0], WarpSize);
+	SegmentedScan(&host1[0], WarpSize);
+	printf("\nCPU segmented scan:\n");
+	PrintSegScan(&host1[0], WarpSize);
 
 	CuCallStack callStack;
 	callStack.Push(device1, device1);

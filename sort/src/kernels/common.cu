@@ -155,3 +155,32 @@ DEVICE2 void StoreShifted(volatile uint* shared, uint shiftedIndex, uint val) {
 	*((volatile uint*)(((volatile char*)shared) + shiftedIndex)) = val;
 }
 
+
+// Put a float into radix order.
+DEVICE float UintToFloat(uint u) {
+	int adjusted = (int)u;
+	
+	// Negative now has high bit set, positive has high bit clear.
+	int flipped = adjusted - 0x80000000;
+	
+	// Fill the register with set bits if negative.	
+	int bits = flipped>> 31;
+
+	int x = flipped ^ (0x7fffffff & bits);
+
+	float f = __int_as_float(x);
+	return f;
+}
+
+// Put a radix order into back into a float.
+DEVICE uint FloatToUint(float f) {
+	int x = __float_as_int(f);
+	int bits = x>> 31;
+
+	int flipped = x ^ (0x7fffffff & bits);
+
+	int adjusted = 0x80000000 + flipped;
+
+	uint u = (uint)adjusted;
+	return u;
+}

@@ -22,6 +22,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kernels", "kernels", "{6F25
 		..\src\kernels\hist3_64.cu = ..\src\kernels\hist3_64.cu
 		..\src\kernels\histgen.cu = ..\src\kernels\histgen.cu
 		..\src\kernels\histogram.cu = ..\src\kernels\histogram.cu
+		..\src\kernels\ksmallest.cu = ..\src\kernels\ksmallest.cu
 		..\src\kernels\params.cu = ..\src\kernels\params.cu
 		..\src\kernels\sort.cu = ..\src\kernels\sort.cu
 		..\src\kernels\sortcommon.cu = ..\src\kernels\sortcommon.cu
