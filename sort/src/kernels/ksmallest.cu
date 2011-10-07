@@ -1,4 +1,213 @@
-#include "common.cu"
+#include "countcommon.cu"
+
+
+// Use 128 threads and 6 blocks per SM for 50% occupancy.
+#define NUM_THREADS 128
+#define NUM_WARPS (NUM_THREADS / WARP_SIZE)
+#define BLOCKS_PER_SM 6
+
+#define INNER_LOOP 8
+
+__shared__ volatile uint counts_shared[NUM_THREADS * 16];
+
+DEVICE2 uint ConvertToUint(uint x) { return x; }
+DEVICE2 uint ConvertToUint(int x) { return x + 0x80000000; }
+DEVICE2 uint ConvertToUint(float x) { return (uint)__float_as_int(x); }
+
+
+////////////////////////////////////////////////////////////////////////////////
+// COUNT PASS
+
+DEVICE void IncCounter(volatile uint* counters, uint bucket) {
+	uint index = (32 / 4) * (~3 & bucket);
+	uint counter = counters[index];
+	counter = shl_add(1, bfi(0, bucket, 3, 2), counter);
+	counters[index] = counter;
+}
+
+DEVICE void ClearCounters(volatile uint* counters) {
+	#pragma unroll
+	for(int i = 0; i < 16; ++i)
+		counters[i * WARP_SIZE] = 0;
+}
+
+DEVICE void ExpandCounters(uint lane, volatile uint* warpCounters,
+	uint threadTotals[2]) {
+
+	GatherSums<16>(lane, 2, warpCounters);
+	GatherSums<16>(lane, 0, warpCounters);
+	GatherSums<8>(lane, 0, warpCounters);
+	GatherSums<4>(lane, 0, warpCounters);
+	GatherSums<2>(lane, 0, warpCounters);
+
+	// Unpack even and odd counters.
+	uint x = warpCounters[lane];
+	threadTotals[0] += 0xffff & x;
+	threadTotals[1] += x>> 16;
+
+	ClearCounters(warpCounters + lane);
+}
+
+
+template<typename T>
+DEVICE2 void KSmallestCount(const T* source_global, uint* hist_global, 
+	const int2* range_global, uint shift) {
+
+	uint tid = threadIdx.x;
+	uint block = blockIdx.x;
+	uint warp = tid / WARP_SIZE;
+	uint lane = (WARP_SIZE - 1) & tid;
+	uint gid = NUM_WARPS * block + warp;
+
+	int2 range = range_global[gid];
+
+	volatile uint* warpShared = counts_shared + 16 * WARP_SIZE * warp;
+	volatile uint* tidShared = warpShared + lane;
+
+	ClearCounters(tidShared);
+
+	// Each warp holds two unpacked totals.
+	uint threadTotals[2] = { 0, 0 };
+	int dumpTime = 0;
+
+	while(range.x < range.y) {
+		
+		#pragma unroll
+		for(int i = 0; i < INNER_LOOP; ++i) {
+			T x = source_global[range.x + i * WARP_SIZE + lane];
+			uint digit = bfe(ConvertToUint(x), shift, 6);
+			IncCounter(tidShared, digit);
+		}
+		dumpTime += INNER_LOOP;
+		range.x += INNER_LOOP * WARP_SIZE;
+
+		if(dumpTime >= (256 - INNER_LOOP)) {
+			ExpandCounters(lane, warpShared, threadTotals);
+			dumpTime = 0;
+		}
+	}
+	ExpandCounters(lane, warpShared, threadTotals);
+
+	hist_global[64 * gid + 2 * lane] = threadTotals[0];
+	hist_global[64 * gid + 2 * lane + 1] = threadTotals[1];
+}
+
+
+extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
+void KSmallestCountUint(const uint* source_global, uint* hist_global,
+	const int2* range_global, uint shift) {
+
+	KSmallestCount(source_global, hist_global, range_global, shift);
+
+}
+
+extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
+void KSmallestCountInt(const int* source_global, uint* hist_global,
+	const int2* range_global, uint shift) {
+
+	KSmallestCount(source_global, hist_global, range_global, shift);
+}
+
+extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
+void KSmallestCountFloat(const float* source_global, uint* hist_global,
+	const int2* range_global, uint shift) {
+
+	KSmallestCount(source_global, hist_global, range_global, shift);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// HISTOGRAM PASS
+
+//extern "C" __global__
+//void 
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+// STREAM PASS
+
+
+template<typename T>
+DEVICE2 void KSmallestStream(const T* source_global, const uint* streamOffset,
+	const int2* range_global, uint* target_global, uint mask, uint digit) {
+
+	uint tid = threadIdx.x;
+	uint block = blockIdx.x;
+	uint warp = tid / WARP_SIZE;
+	uint lane = (WARP_SIZE - 1) & tid;
+	uint gid = NUM_WARPS * block + warp;
+
+	int2 range = range_global[gid];
+
+	volatile uint* warpShared = counts_shared + 16 * WARP_SIZE * warp;
+	volatile uint* tidShared = warpShared + lane;
+
+	uint warpMask = bfi(0, 0xffffffff, 0, lane);
+
+	while(range.x < range.y) {
+		
+		#pragma unroll
+		for(int i = 0; i < INNER_LOOP; ++i) {
+			T x = source_global[range.x + i * WARP_SIZE + lane];
+			uint masked = mask & ConvertToUint(x);
+			bool stream = masked == digit;
+						
+			uint warpStream = __ballot(stream);
+			uint streamOffset = __popc(warpMask & warpStream);
+			uint streamAdvance = __popc(warpStream);
+
+			if(stream) {
+
+			}
+
+			// If 
+
+		}
+		range.x += INNER_LOOP * WARP_SIZE;
+	}
+
+}
+	
+	
+
+
+extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) 
+void KSmallestStreamUint(const uint* source_global, const uint* streamOffset,
+	const int2* range_global, uint* target_global, uint mask, uint digit) {
+
+	KSmallestStream(source_global, streamOffset, range_global, target_global,
+		mask, digit);
+}
+	
+extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) 
+void KSmallestStreamInt(const int* source_global, const uint* streamOffset,
+	const int2* range_global, uint* target_global, uint mask, uint digit) {
+
+	KSmallestStream(source_global, streamOffset, range_global, target_global,
+		mask, digit);
+}
+
+extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) 
+void KSmallestStreamFloat(const float* source_global, const uint* streamOffset,
+	const int2* range_global, uint* target_global, uint mask, uint digit) {
+
+	KSmallestStream(source_global, streamOffset, range_global, target_global,
+		mask, digit);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
 
 __global__ int ksmallestStream_global;
 __global__ int ksmallestLeft_global;
@@ -139,3 +348,6 @@ DEVICE2 void CompareAndStream(const T* source_global, uint* dest_global,
 			left, right, capacity, true, tid, lane, warp);
 	}
 }
+
+
+#endif // 0
