@@ -21,8 +21,8 @@ struct sortEngine_d : public CuBase {
 		FunctionPtr pass1[6], pass2[6], pass3[6];
 	};
 
-	// Sort kernels have a large number of permutations. Load these on demand after
-	// encountering a sort request.
+	// Sort kernels have a large number of permutations. Load these on demand 
+	// after encountering a sort request.
 	struct SortKernel {
 		ModulePtr module;
 		FunctionPtr functions[6];

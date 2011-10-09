@@ -1,0 +1,6 @@
+LIBRARY	"mgpuselect"
+EXPORTS
+	selectStatusString
+	selectCreateEngine
+	selectDestroyEngine
+	selectValue

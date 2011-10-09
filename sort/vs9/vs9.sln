@@ -47,8 +47,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simpletest", "simpletest\si
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simpletest2", "simpletest2\simpletest2.vcproj", "{CF155772-8D82-41B4-9CD0-2B1386B8BD0E}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ksmallesttest", "ksmallesttest\ksmallesttest.vcproj", "{1B7521A8-A86E-4ACC-8437-34FBE3E4A574}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -87,10 +85,6 @@ Global
 		{CF155772-8D82-41B4-9CD0-2B1386B8BD0E}.Debug|Win32.Build.0 = Debug|Win32
 		{CF155772-8D82-41B4-9CD0-2B1386B8BD0E}.Release|Win32.ActiveCfg = Release|Win32
 		{CF155772-8D82-41B4-9CD0-2B1386B8BD0E}.Release|Win32.Build.0 = Release|Win32
-		{1B7521A8-A86E-4ACC-8437-34FBE3E4A574}.Debug|Win32.ActiveCfg = Debug|Win32
-		{1B7521A8-A86E-4ACC-8437-34FBE3E4A574}.Debug|Win32.Build.0 = Debug|Win32
-		{1B7521A8-A86E-4ACC-8437-34FBE3E4A574}.Release|Win32.ActiveCfg = Release|Win32
-		{1B7521A8-A86E-4ACC-8437-34FBE3E4A574}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

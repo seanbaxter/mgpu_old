@@ -39,8 +39,10 @@ typedef enum {
 const char* SORTAPI sortStatusString(sortStatus_t status);
 
 
-// Create the sort engine on the CUDA device API context
+////////////////////////////////////////////////////////////////////////////////
+// MGPU SORT FUNCTIONS
 
+// Create the sort engine on the CUDA device API context
 struct sortEngine_d;
 typedef struct sortEngine_d* sortEngine_t;
 

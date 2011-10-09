@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="ksmallesttest"
-	ProjectGUID="{1B7521A8-A86E-4ACC-8437-34FBE3E4A574}"
-	RootNamespace="ksmallesttest"
+	Name="mgpuselect"
+	ProjectGUID="{FDC9C494-3AC2-493B-9CE5-FE34FAAD0E09}"
+	RootNamespace="mgpuselect"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -20,7 +20,7 @@
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
 			IntermediateDirectory="$(ConfigurationName)"
-			ConfigurationType="1"
+			ConfigurationType="2"
 			CharacterSet="1"
 			>
 			<Tool
@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;MGPUSELECT_EXPORTS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -62,8 +62,9 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="cuda.lib"
 				LinkIncremental="2"
+				ModuleDefinitionFile="mgpuselect.def"
 				GenerateDebugInformation="true"
-				SubSystem="1"
+				SubSystem="2"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -92,7 +93,7 @@
 			Name="Release|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
 			IntermediateDirectory="$(ConfigurationName)"
-			ConfigurationType="1"
+			ConfigurationType="2"
 			CharacterSet="1"
 			WholeProgramOptimization="1"
 			>
@@ -115,7 +116,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;MGPUSELECT_EXPORTS"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
 				UsePrecompiledHeader="0"
@@ -133,10 +134,10 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="cuda.lib"
 				LinkIncremental="1"
+				ModuleDefinitionFile="mgpuselect.def"
 				GenerateDebugInformation="true"
-				SubSystem="1"
+				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
 				TargetMachine="1"
@@ -177,7 +178,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\ksmallesttest\ksmallesttest.cpp"
+				RelativePath="..\..\src\mgpuselect\mgpuselect.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\mgpuselect.def"
 				>
 			</File>
 		</Filter>
@@ -191,6 +196,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\..\inc\mgpuselect.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\..\util\util.h"
 				>
 			</File>
@@ -201,6 +210,14 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 		</Filter>
+		<File
+			RelativePath="..\..\src\kernels\common.cu"
+			>
+		</File>
+		<File
+			RelativePath="..\..\src\kernels\ksmallest.cu"
+			>
+		</File>
 	</Files>
 	<Globals>
 	</Globals>
