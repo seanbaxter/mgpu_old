@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
 	selectStatus_t status = selectCreateEngine(
 		"../../src/cubin/ksmallest.cubin", &engine);
 
-	int count = 500001;
+	int count = 500000;
 	std::vector<uint> values(count);
 	for(int i(0); i < count; ++i)
 		values[i] = r(mt19937);
@@ -35,8 +35,6 @@ int main(int argc, char** argv) {
 	uint value;
 	status = selectValue(engine, sourceDevice->Handle(), count, count / 2,
 		SELECT_TYPE_UINT, &value, 0);
-
-
 
 
 	selectDestroyEngine(engine);

@@ -210,14 +210,30 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 		</Filter>
-		<File
-			RelativePath="..\..\src\kernels\common.cu"
+		<Filter
+			Name="kernels"
 			>
-		</File>
-		<File
-			RelativePath="..\..\src\kernels\ksmallest.cu"
-			>
-		</File>
+			<File
+				RelativePath="..\..\src\kernels\common.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\kernels\selectcount.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\kernels\selectgen.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\kernels\selecthist.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\kernels\selectstream.cu"
+				>
+			</File>
+		</Filter>
 	</Files>
 	<Globals>
 	</Globals>

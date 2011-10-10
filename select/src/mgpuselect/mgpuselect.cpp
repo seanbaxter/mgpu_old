@@ -11,8 +11,51 @@ const char* HistKernels[2] = {
 	"KSmallestHistValue",
 	"KSmallestHistInterval"
 };
-
-
+const char* StreamKernels[3][3][3] = {
+	{
+		{
+			"KSmallestStreamUintA",
+			"KSmallestStreamIntA",
+			"KSmallestStreamFloatA"
+		}, {
+			"KSmallestStreamUintAB",
+			"KSmallestStreamIntAB",
+			"KSmallestStreamFloatAB"
+		}, {
+			"KSmallestStreamUintInterval",
+			"KSmallestStreamIntInterval",
+			"KSmallestStreamFloatInterval"
+		}
+	}, {
+		{
+			"KSmallestStreamUintGenA",
+			"KSmallestStreamUintGenA",
+			"KSmallestStreamFloatGenA"
+		}, {
+			"KSmallestStreamUintGenAB",
+			"KSmallestStreamIntGenB",
+			"KSmallestStreamFloatGenAB"
+		}, {
+			"KSmallestStreamUintGenInterval",
+			"KSmallestStreamIntGenInterval",
+			"KSmallestStreamFloatGenInterval"
+		}
+	}, {
+		{
+			"KSmallestStreamUintPairA",
+			"KSmallestStreamIntPairA",
+			"KSmallestStreamFloatPairA"
+		}, {
+			"KSmallestStreamUintPairAB",
+			"KSmallestStreamIntPairAB",
+			"KSmallestStreamFloatPairAB"
+		}, {
+			"KSmallestStreamUintPairInterval",
+			"KSmallestStreamIntPairInterval",
+			"KSmallestStreamFloatPairInterval"
+		}
+	}
+};
 
 
 const char* SelectStatusStrings[] = {
@@ -46,8 +89,7 @@ struct selectEngine_d {
 	// Index is single/interval.
 	FunctionPtr histFuncs[2];
 
-	// Indices are (uint, int, float), (single, interval), (value, pair).
-	FunctionPtr streamFuncs[3][2][2];
+	FunctionPtr streamFuncs[3][3][3];
 
 	int blockSize;
 	int warpsPerBlock;
@@ -108,7 +150,12 @@ selectStatus_t SELECTAPI selectCreateEngine(const char* kernelPath,
 	}
 
 
+
 	// Load the stream kernels.
+	result = e->module->GetFunction("KSmallestStreamValue", 
+		make_int3(128, 1, 1), &e->streamFuncs[0][0][0]);
+	if(CUDA_SUCCESS != result) return SELECT_STATUS_KERNEL_ERROR;
+
 
 
 	// Allocate a range pair for each warp that can be launched.
@@ -213,6 +260,17 @@ selectStatus_t SELECTAPI selectValue(selectEngine_t e, CUdeviceptr data,
 	e->scanWarpMem->ToHost(warpScan);
 
 	int b1 = globalScan[128];
+
+
+	// Allocate space to hold the first level select.
+	DeviceMemPtr buffer;
+	result = e->context->MemAlloc<uint>(globalScan[b1], &buffer);
+
+	
+	// Call the streaming function.
+
+
+
 
 	return SELECT_STATUS_SUCCESS;
 }
