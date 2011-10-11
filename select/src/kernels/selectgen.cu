@@ -6,8 +6,10 @@
 #define BLOCKS_PER_SM 6
 
 DEVICE2 uint ConvertToUint(uint x) { return x; }
-DEVICE2 uint ConvertToUint(int x) { return x + 0x80000000; }
-DEVICE2 uint ConvertToUint(float x) { return (uint)__float_as_int(x); }
+DEVICE2 uint ConvertToUint(int x) { return (uint)x + 0x80000000; }
+DEVICE2 uint ConvertToUint(float x) { 
+	return FloatToUint(x);
+}
 
 #include "selectcount.cu"
 
