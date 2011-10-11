@@ -110,7 +110,7 @@ DEVICE2 void KSmallestCountItem(const T* source_global, uint lane, int& offset,
 	for(int i = 0; i < loopCount; ++i) {
 		int source = offset + i * WARP_SIZE + lane;
 		if(!check || (source < end)) {
-			T x = source_global[offset + i * WARP_SIZE + lane];
+			T x = source_global[source];
 			uint digit = bfe(ConvertToUint(x), shift, bits);
 			IncCounter(warpShared + lane, digit);
 		}
