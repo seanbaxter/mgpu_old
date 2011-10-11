@@ -98,8 +98,8 @@ DEVICE void KSmallestHist(const uint* counts_global, uint* scanTotal_global,
 		uint total = counts_shared[tid];
 
 		#pragma unroll
-		for(int i = 64 + lane; i < 2048; i += 64)
-			total += counts_shared[i];
+		for(int i = 64; i < 2048; i += 64)
+			total += counts_shared[tid + i];
 
 		scan_shared[tid] = total;
 

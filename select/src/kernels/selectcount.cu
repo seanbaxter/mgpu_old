@@ -158,7 +158,7 @@ DEVICE2 void KSmallestCount(const T* source_global, uint* hist_global,
 
 	// Process the end of the array. For an expansion of the counters.
 	KSmallestCountItem(source_global, lane, range.x, range.y, shift, bits, 
-		1, warpShared, threadTotals, true, dumpTime, true);
+		InnerLoop, warpShared, threadTotals, true, dumpTime, true);
 
 	hist_global[64 * gid + 2 * lane] = threadTotals[0];
 	hist_global[64 * gid + 2 * lane + 1] = threadTotals[1];

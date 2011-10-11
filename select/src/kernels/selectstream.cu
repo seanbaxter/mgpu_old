@@ -74,24 +74,21 @@ DEVICE2 void StreamValues(volatile uint* values, uint lane, int2& counters,
 
 	if(-1 == streamCount) {
 		// Stream all values to the target. This is called after the end of
-		// each warp's range.
+		// each warp's range. Keep it simple by performang a range check each
+		// iteration.
+		for(int i = lane; i < counters.y; i += WARP_SIZE)
+			if((i >= counters.x) && (i < counters.y))
+				values_global[i] = values[i];
 
-		// Stream the values in the first segment.
-		if(lane >= counters.x && lane < counters.y)
-			values_global[lane] = values[lane];
+		// Adjust the counters to point to the position after the last element
+		// stored. These are likely not generated, as StreamValues with a -1
+		// streamCount is only called at the end of the kernel (except when
+		// debugging).
+		values_global += ROUND_DOWN(counters.y, WARP_SIZE);
+		counters.x = (WARP_SIZE - 1) & counters.y;
+		counters.y = counters.x;
 
-		// Stream the values in all complete segments.
-		int end = ~(WARP_SIZE - 1) & counters.y;
-		for(int i = WARP_SIZE; i < end; ++i) {
-			uint index = i + lane;
-			values_global[index] = values[index];
-		}
-
-		// Stream the values in the last segment.
-		if(end + lane < counters.y)
-			values_global[end + lane] = values[end + lane];
-
-	} else if(counters.y > WARP_SIZE * streamCount) {
+	} else if(counters.y > streamCount * WARP_SIZE) {
 		// Stream only the first and all the complete segments. The tail values
 		// are compacted back to the front to give coalesced stores. This is 
 		// called in the main loop for the warp's range.
@@ -108,23 +105,28 @@ DEVICE2 void StreamValues(volatile uint* values, uint lane, int2& counters,
 		// Move the fractional last segment to the front.
 		values[lane] = values[streamCount * WARP_SIZE + lane];
 
-		// Reset the indices.
 		counters.x = 0;
-		counters.y -= WARP_SIZE * streamCount;
+		counters.y -= WARP_SIZE * streamCount;;
+		values_global += streamCount * WARP_SIZE;
 	}
 }
 
+
+// Pass gid for debugging.
 template<typename T>
-DEVICE2 void KSmallestStreamValueIt(const T* source_global, int& offset,
+DEVICE2 void KSmallestStreamValueIt(const T* source_global, uint gid, int& offset,
 	int end, uint digitMask, uint digit, volatile uint* warpShared, 
-	int2& counters, uint*& values_global, int streamCount, uint warpMask) {
+	int2& counters, bool check, uint warpMask) {
 
 	// Set x to an invalid value. If the offset is in the warp's range, load
 	// the source data, convert it to radix order, and mask out the bits of
 	// interest.
+	uint val;
 	uint x = 0xffffffff;
-	if((-1 != streamCount) || (offset < end))
-		x = digitMask & ConvertToUint(source_global[offset]);
+	if(!check || (offset < end)) {
+		val = source_global[offset];
+		x = digitMask & ConvertToUint(val);
+	}
 
 	// Push this iteration's values.
 	PushValue(warpShared, x, x == digit, warpMask, counters);
@@ -138,26 +140,24 @@ DEVICE2 void KSmallestStreamValueIt(const T* source_global, int& offset,
 //		Advisory: Loop was not unrolled, unexpected call OPs
 // error when calling __ballot from an unrolled loop.
 template<typename T, int LoopCount>
-DEVICE2 void KSmallestStreamValueLoop(const T* source_global, int& offset,
-	int end, uint lane, uint digitMask, uint digit, volatile uint* warpShared,
-	int2& counters, uint*& values_global, int streamCount, uint warpMask) {
+DEVICE2 void KSmallestStreamValueLoop(const T* source_global, uint gid, bool check,
+	int& offset, int end, uint lane, uint digitMask, uint digit,
+	volatile uint* warpShared, int2& counters, uint*& values_global,
+	uint warpMask) {
 
-	KSmallestStreamValueIt(source_global, offset, end, digitMask, digit,
-		warpShared, counters, values_global, streamCount, warpMask);
+	KSmallestStreamValueIt(source_global, gid, offset, end, digitMask, digit,
+		warpShared, counters, check, warpMask);
 
 	if(LoopCount >= 2)
-		KSmallestStreamValueIt(source_global, offset, end, digitMask, digit,
-		warpShared, counters, values_global, streamCount, warpMask);
+		KSmallestStreamValueIt(source_global, gid, offset, end, digitMask, digit,
+			warpShared, counters, check, warpMask);
 
 	if(LoopCount >= 4) {
-		KSmallestStreamValueIt(source_global, offset, end, digitMask, digit,
-			warpShared, counters, values_global, streamCount, warpMask);
-		KSmallestStreamValueIt(source_global, offset, end, digitMask, digit,
-			warpShared, counters, values_global, streamCount, warpMask);
+		KSmallestStreamValueIt(source_global, gid, offset, end, digitMask, digit,
+			warpShared, counters, check, warpMask);
+		KSmallestStreamValueIt(source_global, gid, offset, end, digitMask, digit,
+			warpShared, counters, check, warpMask);
 	}
-
-	// Attempt to stream the values if half the buffer is filled.
-	StreamValues(warpShared, lane, counters, values_global, streamCount);
 }
 
 
@@ -167,7 +167,7 @@ DEVICE2 void KSmallestStreamValueLoop(const T* source_global, int& offset,
 template<typename T>
 DEVICE2 void KSmallestStreamValue(const T* source_global, 
 	const int2* range_global, const int* streamOffset_global, 
-	uint* values_global, uint digitMask, uint digit) {
+	uint* values_global, uint digitMask, uint digit, uint* debug_global) {
 
 	// Buffer up to 16 values per thread.
 	const int ValuesPerThread = 16;
@@ -192,21 +192,28 @@ DEVICE2 void KSmallestStreamValue(const T* source_global,
 
 	int2 counters = InitValueStream(lane, values_global, streamOffset);
 
+	debug_global[2 * (32 * gid + lane)] = counters.x;
 	range.x += lane;
 
 	// Round range.y down.
 	int end = ROUND_DOWN(range.y, WARP_SIZE * InnerLoop);
-	while(range.x < end) 
-		KSmallestStreamValueLoop<T, InnerLoop>(source_global, range.x, end, 
+	while(range.x < end) {
+		KSmallestStreamValueLoop<T, InnerLoop>(source_global, gid, false, range.x, end, 
 			lane, digitMask, digit, warpShared, counters, values_global, 
-			InnerLoop, warpMask);
+			warpMask);
+		StreamValues(warpShared, lane, counters, values_global, InnerLoop);
+	}
 
 	end = ROUND_UP(range.y, WARP_SIZE) + lane;
 	while(range.x < end)
 		// Process the end of the array.
-		KSmallestStreamValueLoop<T, 1>(source_global, range.x, range.y,
+		KSmallestStreamValueLoop<T, 1>(source_global, gid, true, range.x, range.y,
 			lane, digitMask, digit, warpShared, counters, values_global, 
-			-1, warpMask);
+			warpMask);
+
+	StreamValues(warpShared, lane, counters, values_global, -1);
+
+	debug_global[2 * (32 * gid + lane) + 1] = counters.y;
 }
 
 
@@ -215,29 +222,29 @@ DEVICE2 void KSmallestStreamValue(const T* source_global,
 
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) 
-void KSmallestStreamUint(const uint* source_global, const int2* range_global, 
-	const int* streamOffset_global, uint* target_global, uint mask,
-	uint digit) {
+void KSmallestStreamUintValue(const uint* source_global,
+	const int2* range_global, const int* streamOffset_global,
+	uint* target_global, uint mask, uint digit, uint* debug_global) {
 
 	KSmallestStreamValue(source_global, range_global, streamOffset_global,
-		target_global, mask, digit);
+		target_global, mask, digit, debug_global);
 }
 	
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) 
 void KSmallestStreamIntValue(const int* source_global, const int2* range_global, 
 	const int* streamOffset_global, uint* target_global, uint mask,
-	uint digit) {
+	uint digit, uint* debug_global) {
 
 	KSmallestStreamValue(source_global, range_global, streamOffset_global, 
-		target_global, mask, digit);
+		target_global, mask, digit, debug_global);
 }
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) 
 void KSmallestStreamFloat(const float* source_global, const int2* range_global, 
 	const int* streamOffset_global, uint* target_global, uint mask, 
-	uint digit) {
+	uint digit, uint* debug_global) {
 
 	KSmallestStreamValue(source_global, range_global, streamOffset_global,
-		target_global, mask, digit);
+		target_global, mask, digit, debug_global);
 }
 

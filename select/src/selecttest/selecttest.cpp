@@ -17,9 +17,9 @@ int main(int argc, char** argv) {
 
 	selectEngine_t engine;
 	selectStatus_t status = selectCreateEngine(
-		"../../src/cubin/ksmallest.cubin", &engine);
+		"../../src/cubin/select.cubin", &engine);
 
-	int count = 500000;
+	int count = 2000000;
 	std::vector<uint> values(count);
 	for(int i(0); i < count; ++i)
 		values[i] = r(mt19937);

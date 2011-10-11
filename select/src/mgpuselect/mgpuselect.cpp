@@ -130,7 +130,7 @@ selectStatus_t SELECTAPI selectCreateEngine(const char* kernelPath,
 	e->warpsPerBlock = e->blockSize / WarpSize;
 	e->blocksPerSM = 6;
 	e->warpsPerSM = e->warpsPerBlock * e->blocksPerSM;
-	e->numWarps = e->warpsPerSM * e->context->Device()->NumSMs();
+	e->numWarps = e->warpsPerSM;// * e->context->Device()->NumSMs();
 	
 	// Allow for unrolled loops of 8 values per thread.
 	e->warpValues = 8 * 32;
@@ -152,7 +152,7 @@ selectStatus_t SELECTAPI selectCreateEngine(const char* kernelPath,
 
 
 	// Load the stream kernels.
-	result = e->module->GetFunction("KSmallestStreamValue", 
+	result = e->module->GetFunction("KSmallestStreamUintValue", 
 		make_int3(128, 1, 1), &e->streamFuncs[0][0][0]);
 	if(CUDA_SUCCESS != result) return SELECT_STATUS_KERNEL_ERROR;
 
@@ -232,6 +232,22 @@ selectStatus_t SELECTAPI selectValue(selectEngine_t e, CUdeviceptr data,
 	CUresult result;
 	int numWarps = SetBlockRanges(e, count);
 	int blockCount = DivUp(numWarps, e->warpsPerBlock);
+
+	std::vector<uint> hostData(count);
+	cuMemcpyDtoH(&hostData[0], data, 4 * count);
+
+	int histWarps[24][64] = { 0 };
+	for(int warp(0); warp < 24; ++warp) {
+		int2 range = e->ranges[warp];
+		for(int i(range.x); i < range.y; ++i)
+			++histWarps[warp][hostData[i]];
+	}
+
+	int hist[64] = { 0 };
+	for(int i(0); i < count; ++i)
+		++hist[hostData[i]];
+
+
 	
 	CuCallStack callStack;
 	callStack.Push(data, e->countMem, e->rangeMem, 0, 6);
@@ -240,14 +256,31 @@ selectStatus_t SELECTAPI selectValue(selectEngine_t e, CUdeviceptr data,
 	// DEBUG
 	std::vector<uint> counts;
 	e->countMem->ToHost(counts);
+
+	
+	for(int warp(0); warp < 24; ++warp) {
+		for(int i(0); i < 64; ++i) {
+			int index = warp * 64 + i;
+			if(histWarps[warp][i] != counts[index]) {
+				int j = 0;
+			}
+		}
+	}
+
 	int hist2[64] = { 0 };
 	for(int i(0); i < blockCount * e->warpsPerBlock; ++i)
 		for(int j(0); j < 64; ++j)
 			hist2[j] += counts[i * 64 + j];
 
+	for(int i = 0; i < 64; ++i)
+		if(hist[i] != hist2[i]) {
+			int j = 0;
+		}
+
 	int histScan[64] = { 0 };
 	for(int i(1); i < 64; ++i)
 		histScan[i] = hist2[i - 1] + histScan[i - 1];
+
 	// DEBUG
 
 
@@ -259,16 +292,49 @@ selectStatus_t SELECTAPI selectValue(selectEngine_t e, CUdeviceptr data,
 	e->scanTotalMem->ToHost(globalScan);
 	e->scanWarpMem->ToHost(warpScan);
 
+	for(int i(0); i < 64; ++i)
+		if(hist[i] != globalScan[i]) {
+			int j = 0;
+		}
+
+
 	int b1 = globalScan[128];
+
+	// Get the bucket scan
+	uint bucketSum = 0;
+	std::vector<uint> bucketCounts(e->numWarps);
+	for(int i(0); i < e->numWarps; ++i) {
+		bucketCounts[i] = counts[64 * i + b1];
+		bucketSum += bucketCounts[i];
+	}
+
+	std::vector<uint> bucketScan(e->numWarps);
+	for(int i(1); i < e->numWarps; ++i)
+		bucketScan[i] = bucketScan[i - 1] + counts[(i - 1) * 64 + b1];
+
+
+
 
 
 	// Allocate space to hold the first level select.
 	DeviceMemPtr buffer;
 	result = e->context->MemAlloc<uint>(globalScan[b1], &buffer);
+	buffer->Fill(0);
+
+	DeviceMemPtr debugDevice;
+	result = e->context->MemAlloc<uint>(e->numWarps * 2 * 32, &debugDevice);
 
 	
 	// Call the streaming function.
+	callStack.Reset();
+	callStack.Push(data, e->rangeMem, e->scanWarpMem, buffer, 63, b1, debugDevice);
+	result = e->streamFuncs[0][0][0]->Launch(blockCount, 1, callStack);
 
+	std::vector<uint> host;
+	buffer->ToHost(host);
+
+	std::vector<uint> debug;
+	debugDevice->ToHost(debug);
 
 
 
