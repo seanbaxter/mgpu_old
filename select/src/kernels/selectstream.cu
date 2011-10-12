@@ -4,29 +4,29 @@
 // STREAM PASS
 
 ////////////////////////////////////////////////////////////////////////////////
-// InitValueStream/InitPairStream adjusts the global pointers and returns a pair
+// InitKeyStream/InitPairStream adjusts the global pointers and returns a pair
 // of counter terms for indexing within the shared memory. .x is the offset of 
-// the first lane with a cached value/index. .y is the end of the cached array
+// the first lane with a cached key/index. .y is the end of the cached array
 // (one past the last element). To ensure coalesced stores, the pointer is
 // rounded down to a segment multiple and the counters.x term (the stream cache
 // start) is set to the offset within the segment. This way each thread stores
 // only to its own lane. After the first store, counters.x is cleared.
 
-DEVICE int2 InitValueStream(uint lane, uint*& values_global, int streamOffset) {
+DEVICE int2 InitKeyStream(uint lane, uint*& keys_global, int streamOffset) {
 	// Add streamOffset (the index for this warp's first store) and round down
 	// to a segment multiple.
-	values_global += ~(WARP_SIZE - 1) & streamOffset;
+	keys_global += ~(WARP_SIZE - 1) & streamOffset;
 	int start = (WARP_SIZE - 1) & streamOffset;
 
 	// The start and end terms begin the same, as they array is empty.
 	return make_int2(start, start);
 }
 
-DEVICE int2 InitPairStream(uint lane, uint*& values_global,
-	uint*& indices_global, int streamOffset) {
+DEVICE int2 InitPairStream(uint lane, uint*& keys_global, uint*& indices_global,
+	int streamOffset) {
 
 	int offset = ~(WARP_SIZE - 1) & streamOffset;
-	values_global += offset;
+	keys_global += offset;
 	indices_global += offset;
 
 	int start = (WARP_SIZE - 1) & streamOffset;
@@ -35,13 +35,13 @@ DEVICE int2 InitPairStream(uint lane, uint*& values_global,
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// PushValue/PushPair performs an in-order inserted of a value or pair into
+// PushValue/PushPair performs an in-order inserted of a key or pair into
 // shared memory. We may be able to save an instruction by always storing the
-// value or index to shared memory. This is not a risk, as PushValue/PushPair
+// key or index to shared memory. This is not a risk, as PushValue/PushPair
 // is only called when there is enough available space to accommodate an entire
 // warp of data.
 
-DEVICE void PushValue(volatile uint* values, uint x, bool push, uint warpMask,
+DEVICE void PushValue(volatile uint* keys, uint x, bool push, uint warpMask,
 	int2& counters) {
 
 	uint stream = __ballot(push);
@@ -49,10 +49,10 @@ DEVICE void PushValue(volatile uint* values, uint x, bool push, uint warpMask,
 	counters.y += __popc(stream);
 
 	// if(push)
-		values[streamDest] = x;
+		keys[streamDest] = x;
 }
 
-DEVICE void PushPair(volatile uint* values, volatile uint* indices, uint x,
+DEVICE void PushPair(volatile uint* keys, volatile uint* indices, uint x,
 	uint index, bool push, uint warpMask, int2& counters) {
 
 	uint stream = __ballot(push);
@@ -60,7 +60,7 @@ DEVICE void PushPair(volatile uint* values, volatile uint* indices, uint x,
 	counters.y += __popc(stream);
 
 	// if(push)
-		values[streamDest] = x;
+		keys[streamDest] = x;
 	// if(push)
 		indices[streamDest] = index;
 }
@@ -69,56 +69,60 @@ DEVICE void PushPair(volatile uint* values, volatile uint* indices, uint x,
 ////////////////////////////////////////////////////////////////////////////////
 // StreamValues/Stream
 
-DEVICE2 void StreamValues(volatile uint* values, uint lane, int2& counters,
-	uint*& values_global, int streamCount) {
+DEVICE2 void StreamKeys(volatile uint* keys, uint lane, int2& counters,
+	uint*& keys_global, int streamCount) {
 
 	if(-1 == streamCount) {
-		// Stream all values to the target. This is called after the end of
+		// Stream all keys to the target. This is called after the end of
 		// each warp's range. Keep it simple by performang a range check each
 		// iteration.
 		for(int i = lane; i < counters.y; i += WARP_SIZE)
 			if((i >= counters.x) && (i < counters.y))
-				values_global[i] = values[i];
+				keys_global[i] = keys[i];
 
 		// Adjust the counters to point to the position after the last element
 		// stored. These are likely not generated, as StreamValues with a -1
 		// streamCount is only called at the end of the kernel (except when
 		// debugging).
-		values_global += ROUND_DOWN(counters.y, WARP_SIZE);
+		keys_global += ROUND_DOWN(counters.y, WARP_SIZE);
 		counters.x = (WARP_SIZE - 1) & counters.y;
 		counters.y = counters.x;
 
 	} else if(counters.y > streamCount * WARP_SIZE) {
-		// Stream only the first and all the complete segments. The tail values
+		// Stream only the first and all the complete segments. The tail keys
 		// are compacted back to the front to give coalesced stores. This is 
 		// called in the main loop for the warp's range.
 
 		// Store the first segment, which is possibly fractional.
 		if(lane >= counters.x)
-			values_global[lane] = values[lane];
+			keys_global[lane] = keys[lane];
 
 		// Store the remaining complete segments.
 		#pragma unroll
 		for(int i = 1; i < streamCount; ++i)
-			values_global[i * WARP_SIZE + lane] = values[i * WARP_SIZE + lane];
+			keys_global[i * WARP_SIZE + lane] = keys[i * WARP_SIZE + lane];
 
 		// Move the fractional last segment to the front.
-		values[lane] = values[streamCount * WARP_SIZE + lane];
+		keys[lane] = keys[streamCount * WARP_SIZE + lane];
 
 		counters.x = 0;
 		counters.y -= WARP_SIZE * streamCount;;
-		values_global += streamCount * WARP_SIZE;
+		keys_global += streamCount * WARP_SIZE;
 	}
 }
 
 
-// Pass gid for debugging.
-template<typename T>
-DEVICE2 void KSmallestStreamValueIt(const T* source_global, uint gid, int& offset,
-	int end, uint digitMask, uint digit, volatile uint* warpShared, 
-	int2& counters, bool check, uint warpMask) {
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+// SINGLE BUCKET, NO INDEX
 
-	// Set x to an invalid value. If the offset is in the warp's range, load
+template<typename T>
+DEVICE2 void SelectStreamAIt(const T* source_global, int& offset, int end,
+	uint digitMask, uint digit, volatile uint* warpShared, int2& counters,
+	bool check, uint warpMask) {
+
+	// Set x to an invalid digit. If the offset is in the warp's range, load
 	// the source data, convert it to radix order, and mask out the bits of
 	// interest.
 	uint val;
@@ -128,48 +132,48 @@ DEVICE2 void KSmallestStreamValueIt(const T* source_global, uint gid, int& offse
 		x = digitMask & ConvertToUint(val);
 	}
 
-	// Push this iteration's values.
-	PushValue(warpShared, x, x == digit, warpMask, counters);
+	// Push this iteration's keys.
+	PushValue(warpShared, val, x == digit, warpMask, counters);
 
 	offset += WARP_SIZE;
 }
-
 
 
 // NOTE: have to manually unroll loop here because nvcc gives 
 //		Advisory: Loop was not unrolled, unexpected call OPs
 // error when calling __ballot from an unrolled loop.
 template<typename T, int LoopCount>
-DEVICE2 void KSmallestStreamValueLoop(const T* source_global, uint gid, bool check,
+DEVICE2 void SelectStreamALoop(const T* source_global, bool check,
 	int& offset, int end, uint lane, uint digitMask, uint digit,
-	volatile uint* warpShared, int2& counters, uint*& values_global,
+	volatile uint* warpShared, int2& counters, uint*& keys_global,
 	uint warpMask) {
 
-	KSmallestStreamValueIt(source_global, gid, offset, end, digitMask, digit,
-		warpShared, counters, check, warpMask);
+	SelectStreamAIt(source_global, offset, end, digitMask, digit, warpShared, 
+		counters, check, warpMask);
 
 	if(LoopCount >= 2)
-		KSmallestStreamValueIt(source_global, gid, offset, end, digitMask, digit,
+		SelectStreamAIt(source_global, offset, end, digitMask, digit, 
 			warpShared, counters, check, warpMask);
 
 	if(LoopCount >= 4) {
-		KSmallestStreamValueIt(source_global, gid, offset, end, digitMask, digit,
+		SelectStreamAIt(source_global, offset, end, digitMask, digit,
 			warpShared, counters, check, warpMask);
-		KSmallestStreamValueIt(source_global, gid, offset, end, digitMask, digit,
+		SelectStreamAIt(source_global, offset, end, digitMask, digit,
 			warpShared, counters, check, warpMask);
 	}
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
-
+// SelectStreamValue
+// Implements single-bucket stream with no indexing.
 
 template<typename T>
-DEVICE2 void KSmallestStreamValue(const T* source_global, 
+DEVICE2 void SelectStreamA(const T* source_global, 
 	const int2* range_global, const int* streamOffset_global, 
-	uint* values_global, uint digitMask, uint digit, uint* debug_global) {
+	uint* keys_global, uint digitMask, uint digit, uint* debug_global) {
 
-	// Buffer up to 16 values per thread.
+	// Buffer up to 16 keys per thread.
 	const int ValuesPerThread = 16;
 	const int InnerLoop = 4;
 
@@ -187,64 +191,115 @@ DEVICE2 void KSmallestStreamValue(const T* source_global,
 
 	uint warpMask = bfi(0, 0xffffffff, 0, lane);
 
-	// streamOffset is the first streaming offset for values.
+	// streamOffset is the first streaming offset for keys.
 	int streamOffset = streamOffset_global[gid];
+	int2 counters = InitKeyStream(lane, keys_global, streamOffset);
 
-	int2 counters = InitValueStream(lane, values_global, streamOffset);
-
-	debug_global[2 * (32 * gid + lane)] = counters.x;
 	range.x += lane;
 
 	// Round range.y down.
 	int end = ROUND_DOWN(range.y, WARP_SIZE * InnerLoop);
 	while(range.x < end) {
-		KSmallestStreamValueLoop<T, InnerLoop>(source_global, gid, false, range.x, end, 
-			lane, digitMask, digit, warpShared, counters, values_global, 
+		SelectStreamALoop<T, InnerLoop>(source_global, false, range.x,
+			end, lane, digitMask, digit, warpShared, counters, keys_global, 
 			warpMask);
-		StreamValues(warpShared, lane, counters, values_global, InnerLoop);
+		StreamKeys(warpShared, lane, counters, keys_global, InnerLoop);
 	}
 
 	end = ROUND_UP(range.y, WARP_SIZE) + lane;
 	while(range.x < end)
 		// Process the end of the array.
-		KSmallestStreamValueLoop<T, 1>(source_global, gid, true, range.x, range.y,
-			lane, digitMask, digit, warpShared, counters, values_global, 
-			warpMask);
+		SelectStreamALoop<T, 1>(source_global, true, range.x, range.y, lane,
+			digitMask, digit, warpShared, counters, keys_global, warpMask);
 
-	StreamValues(warpShared, lane, counters, values_global, -1);
-
-	debug_global[2 * (32 * gid + lane) + 1] = counters.y;
+	StreamKeys(warpShared, lane, counters, keys_global, -1);
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////
-
+// CUDA Kernels
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) 
-void KSmallestStreamUintValue(const uint* source_global,
-	const int2* range_global, const int* streamOffset_global,
-	uint* target_global, uint mask, uint digit, uint* debug_global) {
+void SelectStreamUintA(const uint* source_global, const int2* range_global, 
+	const int* streamOffset_global, uint* target_global, uint mask, uint digit,
+	uint* debug_global) {
 
-	KSmallestStreamValue(source_global, range_global, streamOffset_global,
+	SelectStreamA(source_global, range_global, streamOffset_global, 
 		target_global, mask, digit, debug_global);
 }
 	
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) 
-void KSmallestStreamIntValue(const int* source_global, const int2* range_global, 
-	const int* streamOffset_global, uint* target_global, uint mask,
-	uint digit, uint* debug_global) {
+void SelectStreamIntA(const int* source_global, const int2* range_global, 
+	const int* streamOffset_global, uint* target_global, uint mask, uint digit,
+	uint* debug_global) {
 
-	KSmallestStreamValue(source_global, range_global, streamOffset_global, 
+	SelectStreamA(source_global, range_global, streamOffset_global, 
 		target_global, mask, digit, debug_global);
 }
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM) 
-void KSmallestStreamFloat(const float* source_global, const int2* range_global, 
-	const int* streamOffset_global, uint* target_global, uint mask, 
-	uint digit, uint* debug_global) {
+void SelectStreamFloatA(const float* source_global, const int2* range_global, 
+	const int* streamOffset_global, uint* target_global, uint mask, uint digit,
+	uint* debug_global) {
 
-	KSmallestStreamValue(source_global, range_global, streamOffset_global,
+	SelectStreamA(source_global, range_global, streamOffset_global,
 		target_global, mask, digit, debug_global);
 }
 
+
+
+/*
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+// SINGLE BUCKET, GENERATE INDICES
+
+
+template<typename T>
+DEVICE2 void SelectStreamValueIt(const T* source_global, int& offset,
+	int end, uint digitMask, uint digit, volatile uint* warpShared, 
+	int2& counters, bool check, uint warpMask) {
+
+	// Set x to an invalid key. If the offset is in the warp's range, load
+	// the source data, convert it to radix order, and mask out the bits of
+	// interest.
+	uint val;
+	uint x = 0xffffffff;
+	if(!check || (offset < end)) {
+		val = source_global[offset];
+		x = digitMask & ConvertToUint(val);
+	}
+
+	// Push this iteration's keys.
+	PushValue(warpShared, x, x == digit, warpMask, counters);
+
+	offset += WARP_SIZE;
+}
+
+
+// NOTE: have to manually unroll loop here because nvcc gives 
+//		Advisory: Loop was not unrolled, unexpected call OPs
+// error when calling __ballot from an unrolled loop.
+template<typename T, int LoopCount>
+DEVICE2 void SelectStreamValueLoop(const T* source_global, bool check,
+	int& offset, int end, uint lane, uint digitMask, uint digit,
+	volatile uint* warpShared, int2& counters, uint*& keys_global,
+	uint warpMask) {
+
+	SelectStreamValueIt(source_global, offset, end, digitMask, digit,
+		warpShared, counters, check, warpMask);
+
+	if(LoopCount >= 2)
+		SelectStreamValueIt(source_global, offset, end, digitMask, digit,
+			warpShared, counters, check, warpMask);
+
+	if(LoopCount >= 4) {
+		SelectStreamValueIt(source_global, offset, end, digitMask, digit,
+			warpShared, counters, check, warpMask);
+		SelectStreamValueIt(source_global, offset, end, digitMask, digit,
+			warpShared, counters, check, warpMask);
+	}
+}
+
+
+*/

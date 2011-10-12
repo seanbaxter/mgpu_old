@@ -102,7 +102,7 @@ DEVICE void ExpandCounters(uint lane, volatile uint* warpCounters,
 }
 
 template<typename T>
-DEVICE2 void KSmallestCountItem(const T* source_global, uint lane, int& offset,
+DEVICE2 void SelectCountItem(const T* source_global, uint lane, int& offset,
 	int end, uint shift, uint bits, int loopCount, volatile uint* warpShared,
 	uint threadTotals[2], bool check, int& dumpTime, bool forceExpand) {
 
@@ -125,7 +125,7 @@ DEVICE2 void KSmallestCountItem(const T* source_global, uint lane, int& offset,
 }
 
 template<typename T>
-DEVICE2 void KSmallestCount(const T* source_global, uint* hist_global, 
+DEVICE2 void SelectCount(const T* source_global, uint* hist_global, 
 	const int2* range_global, uint shift, uint bits) {
 
 	// Process four values at a time in the inner loop.
@@ -153,11 +153,11 @@ DEVICE2 void KSmallestCount(const T* source_global, uint* hist_global,
 	// Use loop unrolling for the parts that aren't at the end of the array.
 	// This reduces the logic for bounds checking.
 	while(range.x < end)
-		KSmallestCountItem(source_global, lane, range.x, end, shift, bits, 
+		SelectCountItem(source_global, lane, range.x, end, shift, bits, 
 			InnerLoop, warpShared, threadTotals, false, dumpTime, false);
 
 	// Process the end of the array. For an expansion of the counters.
-	KSmallestCountItem(source_global, lane, range.x, range.y, shift, bits, 
+	SelectCountItem(source_global, lane, range.x, range.y, shift, bits, 
 		InnerLoop, warpShared, threadTotals, true, dumpTime, true);
 
 	hist_global[64 * gid + 2 * lane] = threadTotals[0];
@@ -166,24 +166,24 @@ DEVICE2 void KSmallestCount(const T* source_global, uint* hist_global,
 
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
-void KSmallestCountUint(const uint* source_global, uint* hist_global,
+void SelectCountUint(const uint* source_global, uint* hist_global,
 	const int2* range_global, uint shift, uint bits) {
 
-	KSmallestCount(source_global, hist_global, range_global, shift, bits);
+	SelectCount(source_global, hist_global, range_global, shift, bits);
 
 }
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
-void KSmallestCountInt(const int* source_global, uint* hist_global,
+void SelectCountInt(const int* source_global, uint* hist_global,
 	const int2* range_global, uint shift, uint bits) {
 
-	KSmallestCount(source_global, hist_global, range_global, shift, bits);
+	SelectCount(source_global, hist_global, range_global, shift, bits);
 }
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
-void KSmallestCountFloat(const float* source_global, uint* hist_global,
+void SelectCountFloat(const float* source_global, uint* hist_global,
 	const int2* range_global, uint shift, uint bits) {
 
-	KSmallestCount(source_global, hist_global, range_global, shift, bits);
+	SelectCount(source_global, hist_global, range_global, shift, bits);
 }
 

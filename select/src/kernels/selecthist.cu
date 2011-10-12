@@ -16,13 +16,13 @@ DEVICE uint MapToScan(uint k, uint x1, uint count1, uint x2, uint count2) {
 	return bucket;
 }
 
-//DEVICE void KSmallestIntervalScan(const uint* counts_global,
+//DEVICE void SelectIntervalScan(const uint* counts_global,
 //	uint* scanWarp_global, uint k1, uint k2, uint lane, uint warp, 
 //	volatile uint* shared,
 
 // Run a scan on only the counts in bucket b from a single warp. May be called
 // 
-DEVICE void KSmallestScanWarp(const uint* counts_global, uint* scanWarp_global,
+DEVICE void SelectScanWarp(const uint* counts_global, uint* scanWarp_global,
 	uint b, uint lane, uint numWarps, volatile uint* shared) {
 
 	shared[lane] = 0;
@@ -52,7 +52,7 @@ DEVICE void KSmallestScanWarp(const uint* counts_global, uint* scanWarp_global,
 	}
 }
 
-DEVICE void KSmallestHist(const uint* counts_global, uint* scanTotal_global,
+DEVICE void SelectHist(const uint* counts_global, uint* scanTotal_global,
 	int numWarps, uint k1, uint k2, bool interval, uint* bucket1Scan_global, 
 	uint* bucket2Scan_global, uint* intervalScan_global) {
 
@@ -173,7 +173,7 @@ DEVICE void KSmallestHist(const uint* counts_global, uint* scanTotal_global,
 
 	if(!interval || (b1 == b2)) {
 		if(tid < 32) 
-			KSmallestScanWarp(counts_global, bucket1Scan_global, b1, lane,
+			SelectScanWarp(counts_global, bucket1Scan_global, b1, lane,
 				numWarps, shared);		
 	} else if(b1 + 1 == b2) {
 		if(tid < 64) {
@@ -182,7 +182,7 @@ DEVICE void KSmallestHist(const uint* counts_global, uint* scanTotal_global,
 			uint* scanGlobal = warp ? bucket1Scan_global : bucket2Scan_global;
 
 			// Run the k-smallest scan on the first two warps in parallel.
-			KSmallestScanWarp(counts_global, scanGlobal, b, lane, numWarps, s);
+			SelectScanWarp(counts_global, scanGlobal, b, lane, numWarps, s);
 		}
 	} else {
 
@@ -195,19 +195,19 @@ DEVICE void KSmallestHist(const uint* counts_global, uint* scanTotal_global,
 
 
 extern "C" __global__ __launch_bounds__(1024, 1)
-void KSmallestHistValue(const uint* counts_global, uint* scanTotal_global,
+void SelectHistValue(const uint* counts_global, uint* scanTotal_global,
 	uint* scanWarps_global, int numWarps, uint k) {
 
 
-	KSmallestHist(counts_global, scanTotal_global, numWarps, k, 0, false,
+	SelectHist(counts_global, scanTotal_global, numWarps, k, 0, false,
 		scanWarps_global, 0, 0);
 }
 
 extern "C" __global__ __launch_bounds__(1024, 1)
-void KSmallestHistInterval(const uint* counts_global, uint* scanTotal_global,
+void SelectHistInterval(const uint* counts_global, uint* scanTotal_global,
 	uint* scanWarps_global, int numWarps, uint k1, uint k2) {
 
-	KSmallestHist(counts_global, scanTotal_global, numWarps, k1, k2, true,
+	SelectHist(counts_global, scanTotal_global, numWarps, k1, k2, true,
 		scanWarps_global, scanWarps_global + numWarps, 
 		scanWarps_global + 2 * numWarps);
 }

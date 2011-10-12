@@ -134,6 +134,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="cuda.lib"
 				LinkIncremental="1"
 				ModuleDefinitionFile="mgpuselect.def"
 				GenerateDebugInformation="true"

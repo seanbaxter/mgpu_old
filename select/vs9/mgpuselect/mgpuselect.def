@@ -3,4 +3,7 @@ EXPORTS
 	selectStatusString
 	selectCreateEngine
 	selectDestroyEngine
-	selectValue
+	selectItem
+	selectList
+	selectInterval
+	
