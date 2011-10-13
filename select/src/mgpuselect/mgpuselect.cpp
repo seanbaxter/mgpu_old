@@ -108,6 +108,11 @@ struct selectEngine_d {
 	DeviceMemPtr scanWarpMem;
 	DeviceMemPtr rangeMem;
 
+	// Temporary arrays for holding the destation data. We cache these because
+	// cuMemAlloc is incredibly slow. The user can free them with 
+	// selectResetCache.
+	DeviceMemPtr tempA, tempB;
+
 	// One pair of ranges per warp.
 	std::vector<int2> ranges;
 
@@ -147,8 +152,8 @@ selectStatus_t SELECTAPI selectCreateEngine(const char* kernelPath,
 	e->sortSpaceKeys.resize(CutoffSize);
 	e->sortSpaceVals.resize(CutoffSize);
 	
-	// Allow for unrolled loops of 8 values per thread.
-	e->warpValues = 8 * 32;
+	// Allow for unrolled loops of 4 values per thread.
+	e->warpValues = 4 * 32;
 
 	// Load the count kernels.
 	for(int i(0); i < 3; ++i) {
@@ -207,6 +212,19 @@ selectStatus_t SELECTAPI selectDestroyEngine(selectEngine_t engine) {
 	return SELECT_STATUS_SUCCESS;
 }
 
+selectStatus_t SELECTAPI selectCacheSize(selectEngine_t engine, size_t* size) {
+	*size = 0;
+	if(engine->tempA) *size = engine->tempA->Size();
+	if(engine->tempB) *size += engine->tempB->Size();
+	return SELECT_STATUS_SUCCESS;
+}
+
+selectStatus_t SELECTAPI selectResetCache(selectEngine_t engine) {
+	engine->tempA.reset();
+	engine->tempB.reset();
+	return SELECT_STATUS_SUCCESS;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Finds the ranges for each block to process. Note that each range must begin
@@ -246,7 +264,7 @@ int SetBlockRanges(selectEngine_t engine, int count) {
 void LocalSort(selectEngine_t e, selectData_t data, int k, void* key,
 	void* value) {
 
-	printf("Local sort on %d elements.\n", data.count);
+//	printf("Local sort on %d elements.\n", data.count);
 
 	// Grab the keys and perform a stable sort.
 	cuMemcpyDtoH(&e->sortSpaceKeys[0], data.keys, 4 * data.count);
@@ -286,8 +304,6 @@ void LocalSort(selectEngine_t e, selectData_t data, int k, void* key,
 		// Grab the value at index.
 		cuMemcpyDtoH(value, data.values + 4 * index, 4);
 }
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -332,10 +348,10 @@ selectStatus_t selectKeyPass(selectEngine_t e, selectData_t data, int k,
 		return SELECT_STATUS_SUCCESS;
 	}
 
-	// Allocate space for the target copy. 
-	if(!target.get()) {
-		CUresult result = e->context->MemAlloc<uint>(e->globalScan[b1], 
-			&target);
+	// Allocate space for the target copy.
+	if(!target.get() || target->Size() < 4 * *count) {
+		target.reset();
+		CUresult result = e->context->MemAlloc<uint>(*count, &target);
 		if(CUDA_SUCCESS != result) return SELECT_STATUS_DEVICE_ALLOC_FAILED;
 	}
 
@@ -367,15 +383,18 @@ selectStatus_t SELECTAPI selectItem(selectEngine_t e, selectData_t data,
 	// Set data.bit to one past the most significant bit we want to select by.
 	data.bit += data.numBits;
 
-	// a and b are temporary target buffers.
-	DeviceMemPtr a, b;
+	// Use the temporary buffers in the select engine. Put the larger one in 
+	// front.
+	int sizeA = e->tempA ? e->tempA->Size() : 0;
+	int sizeB = e->tempB ? e->tempB->Size() : 0;
+	if(sizeB > sizeA) e->tempA.swap(e->tempB);
 
 	// Loop until we've sorted all the requested bits.
 	while(data.bit > lsb) {
 		// Is the array small enough to break?
 		if(data.count < CutoffSize) break;		
 
-		printf("Selecting %d elements.\n", data.count);
+	//	printf("Selecting %d elements.\n", data.count);
 
 		// Find the bit range for the digit pass.
 		int bit = std::max(lsb, data.bit - 6);
@@ -384,8 +403,8 @@ selectStatus_t SELECTAPI selectItem(selectEngine_t e, selectData_t data,
 
 		int count, offset;
 		bool shortCircuit;
-		selectStatus_t status = selectKeyPass(e, data, k, &count, &offset, a, 
-			&shortCircuit);
+		selectStatus_t status = selectKeyPass(e, data, k, &count, &offset, 
+			e->tempA, &shortCircuit);
 		
 		if(SELECT_STATUS_SUCCESS != status) return status;
 
@@ -394,10 +413,13 @@ selectStatus_t SELECTAPI selectItem(selectEngine_t e, selectData_t data,
 
 		// The pass compacted the array. Adjust k and repeat.
 		k -= offset;
-		data.keys = a->Handle();
+		data.keys = e->tempA->Handle();
 		data.count = count;
-		a.swap(b);
+		e->tempA.swap(e->tempB);
 	}
+
+
+	// return SELECT_STATUS_SUCCESS;
 
 	// There are two paths to this point:
 	// 1) We ran out of key bits, and can assume that all the keys remaining in
@@ -420,7 +442,7 @@ selectStatus_t SELECTAPI selectItem(selectEngine_t e, selectData_t data,
 	} else
 		LocalSort(e, data, k, key, value);
 
-	printf("Select complete.\n", data.count);
+//	printf("Select complete.\n", data.count);
 
 	return SELECT_STATUS_SUCCESS;
 }

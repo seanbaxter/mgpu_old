@@ -3,6 +3,8 @@ EXPORTS
 	selectStatusString
 	selectCreateEngine
 	selectDestroyEngine
+	selectCacheSize
+	selectResetCache
 	selectItem
 	selectList
 	selectInterval
