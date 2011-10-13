@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <random>
 
+
 std::tr1::mt19937 mt19937;
 std::tr1::uniform_int<uint> r(0, 0xffffffff);
 
@@ -20,7 +21,7 @@ int main(int argc, char** argv) {
 	selectStatus_t status = selectCreateEngine(
 		"../../src/cubin/select.cubin", &engine);
 
-	int count = 2000000;
+	int count = 40000000;
 	std::vector<uint> values(count);
 	for(int i(0); i < count; ++i)
 		values[i] = r(mt19937);
@@ -31,8 +32,11 @@ int main(int argc, char** argv) {
 	CuEventTimer timer;
 	timer.Start();
 
-	int numIterations = 15000;
+	int numIterations = 1500;
 
+	// Select the item 2/3 into the sorted array.
+	int k = 2 * count / 3;
+	uint key;
 	for(int i(0); i < numIterations; ++i) {
 
 		selectData_t data;
@@ -43,9 +47,6 @@ int main(int argc, char** argv) {
 		data.type = SELECT_TYPE_UINT;
 		data.content = SELECT_CONTENT_KEYS;
 
-		// Select the item 2/3 into the sorted array.
-		int k = 2 * data.count / 3;
-		uint key;
 		status = selectItem(engine, data, k, &key, 0);
 
 	//	std::sort(values.begin(), values.end());
@@ -57,7 +58,15 @@ int main(int argc, char** argv) {
 
 	double elapsed = timer.Stop();
 	double throughput = (numIterations / elapsed) * count;
-	printf("Throughput: %lf M/s\n", throughput / 1.0e6);
+	printf("GPU Throughput: 0x%08x %6.3lf M/s\n", key, throughput / 1.0e6);
+
+
+	timer.Start();
+	std::nth_element(values.begin(), values.begin() + k, values.end());
+
+	elapsed = timer.Stop();
+	throughput = count / elapsed;
+	printf("CPU throughput: 0x%08x %6.3lf M/s\n", values[k], throughput / 1.06e6);
 
 //	printf("MGPU Select: 0x%08x     std::sort: 0x%08x\n", key, key2);
 

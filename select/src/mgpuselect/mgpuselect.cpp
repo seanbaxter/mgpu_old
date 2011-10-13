@@ -73,6 +73,7 @@ const char* SelectStatusStrings[] = {
 	"SELECT_STATUS_LAUNCH_ERROR",
 	"SELECT_STATUS_INVALID_VALUE",
 	"SELECT_STATUS_DEVICE_ERROR",
+	"SELECT_STATUS_NOT_IMPLEMENTED",
 	"sELECT_STATUS_UNSUPPORTED_DEVICE"
 };
 
@@ -102,11 +103,12 @@ struct selectEngine_d {
 	int warpsPerSM;
 	int numWarps;			// total number of warps.
 	int warpValues;			// min values processed per warp.
+	int prevCount1;			// for caching the ranges.
 
 	DeviceMemPtr countMem;
 	DeviceMemPtr scanTotalMem;
 	DeviceMemPtr scanWarpMem;
-	DeviceMemPtr rangeMem;
+	DeviceMemPtr rangeMem1, rangeMem2;
 
 	// Temporary arrays for holding the destation data. We cache these because
 	// cuMemAlloc is incredibly slow. The user can free them with 
@@ -114,7 +116,7 @@ struct selectEngine_d {
 	DeviceMemPtr tempA, tempB;
 
 	// One pair of ranges per warp.
-	std::vector<int2> ranges;
+	std::vector<int2> ranges1, ranges2;
 
 	// Cache for global scan.
 	std::vector<uint> globalScan;
@@ -147,6 +149,7 @@ selectStatus_t SELECTAPI selectCreateEngine(const char* kernelPath,
 	e->blocksPerSM = 6;
 	e->warpsPerSM = e->warpsPerBlock * e->blocksPerSM;
 	e->numWarps = e->warpsPerSM * e->context->Device()->NumSMs();
+	e->prevCount1 = 0;
 
 	// Reserve space for the local sort.
 	e->sortSpaceKeys.resize(CutoffSize);
@@ -179,9 +182,15 @@ selectStatus_t SELECTAPI selectCreateEngine(const char* kernelPath,
 
 
 	// Allocate a range pair for each warp that can be launched.
-	e->ranges.resize(e->numWarps);
-	result = e->context->MemAlloc<int2>(e->numWarps, &e->rangeMem);
+	e->ranges1.resize(e->numWarps);
+	e->ranges2.resize(e->numWarps);
+
+	result = e->context->MemAlloc<int2>(e->numWarps, &e->rangeMem1);
 	if(CUDA_SUCCESS != result) return SELECT_STATUS_DEVICE_ALLOC_FAILED;
+	
+	result = e->context->MemAlloc<int2>(e->numWarps, &e->rangeMem2);
+	if(CUDA_SUCCESS != result) return SELECT_STATUS_DEVICE_ALLOC_FAILED;
+
 
 	// Allocate 64 ints for counts for each warp.
 	result = e->context->MemAlloc<uint>(64 * e->numWarps, &e->countMem);
@@ -230,13 +239,16 @@ selectStatus_t SELECTAPI selectResetCache(selectEngine_t engine) {
 // Finds the ranges for each block to process. Note that each range must begin
 // a multiple of the block size.
 
-int SetBlockRanges(selectEngine_t engine, int count) {
-
+int SetBlockRanges(selectEngine_t engine, int count, bool first) {
 	int numWarps = engine->numWarps;
 	int numBricks = DivUp(count, engine->warpValues);
 	if(numBricks < numWarps) numWarps = numBricks;
 
-	std::fill(engine->ranges.begin(), engine->ranges.end(), make_int2(0, 0));
+	// Return if the ranges are already current.
+	if(first && (count == engine->prevCount1)) return numWarps;
+
+	std::vector<int2>& ranges = first ? engine->ranges1 : engine->ranges2;
+	std::fill(ranges.begin(), ranges.end(), make_int2(0, 0));
 
 	// Distribute the work evenly over all warps.
 	div_t brickDiv = div(numBricks, numWarps);
@@ -244,12 +256,16 @@ int SetBlockRanges(selectEngine_t engine, int count) {
 	// Distribute the work along complete bricks.
 	for(int i(0); i < numWarps; ++i) {
 		int2 range;
-		range.x = i ? engine->ranges[i - 1].y : 0;
+		range.x = i ? ranges[i - 1].y : 0;
 		int bricks = (i < brickDiv.rem) ? (brickDiv.quot + 1) : brickDiv.quot;
 		range.y = std::min(range.x + bricks * engine->warpValues, count);
-		engine->ranges[i] = range;
+		ranges[i] = range;
 	}
-	CUresult result = engine->rangeMem->FromHost(engine->ranges);
+
+	CuDeviceMem* rangeMem = first ? engine->rangeMem1 : engine->rangeMem2;
+	CUresult result = rangeMem->FromHost(ranges);
+
+	if(first) engine->prevCount1 = count;
 	
 	return numWarps;
 }
@@ -310,20 +326,23 @@ void LocalSort(selectEngine_t e, selectData_t data, int k, void* key,
 // selectValue
 
 selectStatus_t selectKeyPass(selectEngine_t e, selectData_t data, int k, 
-	int* count, int* offset, DeviceMemPtr& target, bool* shortCircuit) {
+	bool first, int* count, int* offset, DeviceMemPtr& target, 
+	bool* shortCircuit) {
 
 	*shortCircuit = false;
 
 	// Compute the number of warps to launch and set the ranges.
 	CUresult result;
-	int numWarps = SetBlockRanges(e, data.count);
+	int numWarps = SetBlockRanges(e, data.count, first);
 	int blockCount = DivUp(numWarps, e->warpsPerBlock);
+
+	CuDeviceMem* rangeMem = first ? e->rangeMem1 : e->rangeMem2;
 
 	// Run the count kernel to find the histogram within each warp.
 	uint mask = ((1<< data.numBits) - 1)<< data.bit;
 
 	CuCallStack callStack;
-	callStack.Push(data.keys, e->countMem, e->rangeMem, data.bit, data.numBits);
+	callStack.Push(data.keys, e->countMem, rangeMem, data.bit, data.numBits);
 	result = e->countFuncs[(int)data.type]->Launch(blockCount, 1, callStack);
 	if(CUDA_SUCCESS != result) return SELECT_STATUS_LAUNCH_ERROR;
 
@@ -349,15 +368,19 @@ selectStatus_t selectKeyPass(selectEngine_t e, selectData_t data, int k,
 	}
 
 	// Allocate space for the target copy.
-	if(!target.get() || target->Size() < 4 * *count) {
+	if(!target.get() || target->Size() < 4 * (uint)*count) {
 		target.reset();
-		CUresult result = e->context->MemAlloc<uint>(*count, &target);
+
+		// Allocate the required number of values plus 5% to avoid later 
+		// resizing.
+		int count2 = (int)(1.05 * *count);
+		CUresult result = e->context->MemAlloc<uint>(count2, &target);
 		if(CUDA_SUCCESS != result) return SELECT_STATUS_DEVICE_ALLOC_FAILED;
 	}
 
 	// Call the streaming function.
 	callStack.Reset();
-	callStack.Push(data.keys, e->rangeMem, e->scanWarpMem, target, mask, 
+	callStack.Push(data.keys, rangeMem, e->scanWarpMem, target, mask, 
 		b1<< data.bit, (CUdeviceptr)0);
 	result = e->streamFuncs[0][0][(int)data.type]->
 		Launch(blockCount, 1, callStack);
@@ -388,13 +411,12 @@ selectStatus_t SELECTAPI selectItem(selectEngine_t e, selectData_t data,
 	int sizeA = e->tempA ? e->tempA->Size() : 0;
 	int sizeB = e->tempB ? e->tempB->Size() : 0;
 	if(sizeB > sizeA) e->tempA.swap(e->tempB);
+	bool first = true;
 
 	// Loop until we've sorted all the requested bits.
 	while(data.bit > lsb) {
 		// Is the array small enough to break?
 		if(data.count < CutoffSize) break;		
-
-	//	printf("Selecting %d elements.\n", data.count);
 
 		// Find the bit range for the digit pass.
 		int bit = std::max(lsb, data.bit - 6);
@@ -403,8 +425,8 @@ selectStatus_t SELECTAPI selectItem(selectEngine_t e, selectData_t data,
 
 		int count, offset;
 		bool shortCircuit;
-		selectStatus_t status = selectKeyPass(e, data, k, &count, &offset, 
-			e->tempA, &shortCircuit);
+		selectStatus_t status = selectKeyPass(e, data, k, first, &count, 
+			&offset, e->tempA, &shortCircuit);
 		
 		if(SELECT_STATUS_SUCCESS != status) return status;
 
@@ -416,10 +438,8 @@ selectStatus_t SELECTAPI selectItem(selectEngine_t e, selectData_t data,
 		data.keys = e->tempA->Handle();
 		data.count = count;
 		e->tempA.swap(e->tempB);
+		first = false;
 	}
-
-
-	// return SELECT_STATUS_SUCCESS;
 
 	// There are two paths to this point:
 	// 1) We ran out of key bits, and can assume that all the keys remaining in
@@ -441,8 +461,6 @@ selectStatus_t SELECTAPI selectItem(selectEngine_t e, selectData_t data,
 			*(int*)key = k;
 	} else
 		LocalSort(e, data, k, key, value);
-
-//	printf("Select complete.\n", data.count);
 
 	return SELECT_STATUS_SUCCESS;
 }
