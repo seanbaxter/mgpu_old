@@ -14,6 +14,9 @@
 		/>
 	</Platforms>
 	<ToolFiles>
+		<DefaultToolFile
+			FileName="NvCudaRuntimeApi.v4.0.rules"
+		/>
 	</ToolFiles>
 	<Configurations>
 		<Configuration
@@ -28,6 +31,14 @@
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="Cudart Build Rule"
+				Arch1="20"
+				Arch2="0"
+				HostDebugInfo="true"
+				Optimization="0"
+				Runtime="3"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -101,6 +112,12 @@
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="Cudart Build Rule"
+				Arch1="20"
+				Arch2="0"
+				Runtime="2"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -177,8 +194,24 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\src\selecttest\mgpuselecttest.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\selecttest\mgpusorttest.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\..\src\selecttest\selecttest.cpp"
 				>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter
@@ -188,6 +221,10 @@
 			>
 			<File
 				RelativePath="..\..\..\util\cucpp.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\selecttest\selecttest.h"
 				>
 			</File>
 			<File
@@ -201,6 +238,10 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 		</Filter>
+		<File
+			RelativePath="..\..\src\selecttest\thrustsort.cu"
+			>
+		</File>
 	</Files>
 	<Globals>
 	</Globals>
