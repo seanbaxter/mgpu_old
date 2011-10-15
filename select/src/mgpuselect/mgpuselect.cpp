@@ -5,7 +5,7 @@
 
 // Stop with the GPU sort after the number of remaining elements falls below
 // this cutoff.
-const int CutoffSize = 512;
+const int CutoffSize = 8192;//512;
 
 const char* CountKernels[3] = { 
 	"SelectCountUint",
@@ -282,22 +282,19 @@ void LocalSort(selectEngine_t e, selectData_t data, int k, void* key,
 
 //	printf("Local sort on %d elements.\n", data.count);
 
-	// Grab the keys and perform a stable sort.
+	// Grab the keys and perform an nth_elmeetn call.
 	cuMemcpyDtoH(&e->sortSpaceKeys[0], data.keys, 4 * data.count);
 
 	// If we need to resolve an index or value, copy the array.
-	std::copy(&e->sortSpaceKeys[0], &e->sortSpaceKeys[0] + data.count,
-		&e->sortSpaceVals[0]);
+	uint* p = &e->sortSpaceKeys[0];
+	std::copy(p, p + data.count, &e->sortSpaceVals[0]);
 
 	if(SELECT_TYPE_UINT == data.type)
-		std::stable_sort(&e->sortSpaceKeys[0], 
-			&e->sortSpaceKeys[0] + data.count);
+		std::nth_element(p, p + k, p + data.count);
 	else if(SELECT_TYPE_INT == data.type)
-		std::stable_sort((int*)&e->sortSpaceKeys[0], 
-			(int*)&e->sortSpaceKeys[0] + data.count);
+		std::nth_element((int*)p, (int*)p + k, (int*)p + data.count);
 	else if(SELECT_TYPE_FLOAT == data.type)
-		std::stable_sort((float*)&e->sortSpaceKeys[0], 
-			(float*)&e->sortSpaceKeys[0] + data.count);
+		std::nth_element((float*)p, (float*)p + k, (float*)p + data.count);
 
 	// Set the k'th smallest key.
 	uint x = e->sortSpaceKeys[k];

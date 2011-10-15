@@ -71,7 +71,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="cuda.lib ../debug/mgpuselect.lib"
+				AdditionalDependencies="cuda.lib cudart.lib ../debug/mgpuselect.lib ../../../sort/vs9/debug/mgpusort.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -150,7 +150,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="cuda.lib ../release/mgpuselect.lib"
+				AdditionalDependencies="cuda.lib cudart.lib ../release/mgpuselect.lib ../../../sort/vs9/release/mgpusort.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -206,7 +206,6 @@
 				>
 				<FileConfiguration
 					Name="Release|Win32"
-					ExcludedFromBuild="true"
 					>
 					<Tool
 						Name="VCCLCompilerTool"

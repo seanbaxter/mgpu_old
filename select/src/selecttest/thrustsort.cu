@@ -16,8 +16,7 @@ CUresult ThrustBenchmark(int iterations, int count, int k, CuContext* context,
 	for(int i(0); i < iterations; ++i) {
 		// Copy the source data into sortData.
 		timer.Stop();
-		thrust::device_ptr<uint> devPtr((uint*)randomKeys->Handle());
-		thrust::copy(devPtr, devPtr + count, d_vec);
+		randomKeys->ToDevice(sortData);
 		timer.Start(false);
 
 		// Sort in place with thrust.

@@ -1,0 +1,14 @@
+  250000: Select:  1102.505 M/s   MGPU:   384.289 M/s   thrust:   176.835 M/s   cpp: 87.34645 M/s
+  500000: Select:  1749.079 M/s   MGPU:   549.161 M/s   thrust:   281.249 M/s   cpp: 79.25728 M/s
+ 1000000: Select:  2392.147 M/s   MGPU:   765.268 M/s   thrust:   437.410 M/s   cpp: 95.75198 M/s
+ 2000000: Select:  4176.796 M/s   MGPU:   929.165 M/s   thrust:   560.839 M/s   cpp: 80.58211 M/s
+ 5000000: Select:  7435.388 M/s   MGPU:  1125.589 M/s   thrust:   756.992 M/s   cpp: 88.39521 M/s
+10000000: Select: 10007.161 M/s   MGPU:  1214.577 M/s   thrust:   836.147 M/s   cpp: 87.29791 M/s
+15000000: Select: 11362.407 M/s   MGPU:  1252.979 M/s   thrust:   865.396 M/s   cpp: 69.69937 M/s
+20000000: Select: 12077.589 M/s   MGPU:  1271.504 M/s   thrust:   894.069 M/s   cpp: 78.20372 M/s
+25000000: Select: 12422.325 M/s   MGPU:  1283.942 M/s   thrust:   902.399 M/s   cpp: 80.82218 M/s
+30000000: Select: 13156.961 M/s   MGPU:  1291.202 M/s   thrust:   906.697 M/s   cpp: 65.01718 M/s
+35000000: Select: 12957.433 M/s   MGPU:  1296.759 M/s   thrust:   911.436 M/s   cpp: 84.57817 M/s
+40000000: Select: 13386.865 M/s   MGPU:  1301.781 M/s   thrust:   914.499 M/s   cpp: 77.85667 M/s
+45000000: Select: 13611.134 M/s   MGPU:  1304.703 M/s   thrust:   916.646 M/s   cpp: 88.77473 M/s
+50000000: Select: 13797.783 M/s   MGPU:  1307.868 M/s   thrust:   916.429 M/s   cpp: 72.54022 M/s

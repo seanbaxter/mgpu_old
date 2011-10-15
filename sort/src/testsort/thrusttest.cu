@@ -7,7 +7,6 @@
 void ThrustBenchmark(bool reset, int iterations, int count, CuContext* context,
 	CuDeviceMem* randomKeys, CuDeviceMem* sortedKeys, double* elapsed) {
 
-	DeviceMemPtr sortData;
 	thrust::device_vector<uint> d_vec(count);
 	
 	CuEventTimer timer; 
