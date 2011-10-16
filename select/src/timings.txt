@@ -1,3 +1,4 @@
+  125000: Select:   571.111 M/s   MGPU:   230.594 M/s   thrust:   104.556 M/s   cpp: 95.77275 M/s
   250000: Select:  1102.505 M/s   MGPU:   384.289 M/s   thrust:   176.835 M/s   cpp: 87.34645 M/s
   500000: Select:  1749.079 M/s   MGPU:   549.161 M/s   thrust:   281.249 M/s   cpp: 79.25728 M/s
  1000000: Select:  2392.147 M/s   MGPU:   765.268 M/s   thrust:   437.410 M/s   cpp: 95.75198 M/s

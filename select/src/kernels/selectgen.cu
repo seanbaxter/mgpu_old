@@ -5,10 +5,24 @@
 #define NUM_WARPS (NUM_THREADS / WARP_SIZE)
 #define BLOCKS_PER_SM 6
 
-DEVICE2 uint ConvertToUint(uint x) { return x; }
-DEVICE2 uint ConvertToUint(int x) { return (uint)x + 0x80000000; }
+DEVICE2 uint ConvertToUint(uint x) {
+	return x; 
+}
+DEVICE2 uint ConvertToUint(int x) { 
+	return (uint)x + 0x80000000; 
+}
 DEVICE2 uint ConvertToUint(float x) { 
 	return FloatToUint(x);
+}
+
+DEVICE2 uint ReinterpretToUint(uint x) {
+	return x;
+}
+DEVICE2 uint ReinterpretToUint(int x) {
+	return (uint)x;
+}
+DEVICE2 uint ReinterpretToUint(float x) {
+	return __float_as_int(x);
 }
 
 #include "selectcount.cu"

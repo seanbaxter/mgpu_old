@@ -128,8 +128,9 @@ DEVICE2 void SelectStreamAIt(const T* source_global, int& offset, int end,
 	uint val;
 	uint x = 0xffffffff;
 	if(!check || (offset < end)) {
-		val = source_global[offset];
-		x = digitMask & ConvertToUint(val);
+		T val2 = source_global[offset];
+		val = ReinterpretToUint(val2);
+		x = digitMask & ConvertToUint(val2);
 	}
 
 	// Push this iteration's keys.

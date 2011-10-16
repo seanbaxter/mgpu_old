@@ -2,7 +2,7 @@
 
 selectStatus_t SelectBenchmark(int iterations, int count, int k, 
 	CuContext* context, selectEngine_t engine, CuDeviceMem* randomKeys, 
-	double* elapsed, uint* element) {
+	selectType_t type, double* elapsed, uint* element) {
 
 	CuEventTimer timer;
 	timer.Start();
@@ -14,7 +14,7 @@ selectStatus_t SelectBenchmark(int iterations, int count, int k,
 		data.count = count;
 		data.bit = 0;
 		data.numBits = 32;
-		data.type = SELECT_TYPE_UINT;
+		data.type = type;
 		data.content = SELECT_CONTENT_KEYS;
 		selectStatus_t status = selectItem(engine, data, k, element, 0);
 
@@ -25,3 +25,4 @@ selectStatus_t SelectBenchmark(int iterations, int count, int k,
 
 	return SELECT_STATUS_SUCCESS;
 }
+

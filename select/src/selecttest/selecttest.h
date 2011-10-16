@@ -7,7 +7,7 @@
 // MGPU Select
 selectStatus_t SelectBenchmark(int iterations, int count, int k, 
 	CuContext* context, selectEngine_t engine, CuDeviceMem* randomKeys, 
-	double* elapsed, uint* element);
+	selectType_t type, double* elapsed, uint* element);
 
 // MGPU Sort
 sortStatus_t MgpuSortBenchmark(int iterations, int count, int k, 
@@ -16,5 +16,5 @@ sortStatus_t MgpuSortBenchmark(int iterations, int count, int k,
 
 // thrust::sort
 CUresult ThrustBenchmark(int iterations, int count, int k, CuContext* context,
-	CuDeviceMem* randomKeys, double* elapsed, uint* element);
+	CuDeviceMem* randomKeys, selectType_t type, double* elapsed, uint* element);
 

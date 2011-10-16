@@ -175,9 +175,11 @@ selectStatus_t SELECTAPI selectCreateEngine(const char* kernelPath,
 
 
 	// Load the stream kernels.
-	result = e->module->GetFunction("SelectStreamUintA", 
-		make_int3(128, 1, 1), &e->streamFuncs[0][0][0]);
-	if(CUDA_SUCCESS != result) return SELECT_STATUS_KERNEL_ERROR;
+	for(int i(0); i < 3; ++i) {
+		result = e->module->GetFunction(StreamKernels[0][0][i],
+			make_int3(128, 1, 1), &e->streamFuncs[0][0][i]);
+		if(CUDA_SUCCESS != result) return SELECT_STATUS_KERNEL_ERROR;
+	}
 
 
 
@@ -310,10 +312,10 @@ void LocalSort(selectEngine_t e, selectData_t data, int k, void* key,
 		while(unsorted[index] != x) ++index;
 	}
 
-	if(SELECT_CONTENT_INDICES == data.type)
+	if(SELECT_CONTENT_INDICES == data.content)
 		// Return the index. This is only used for very small arrays.
 		*((uint*)value) = index;
-	else if(SELECT_CONTENT_PAIRS == data.type)
+	else if(SELECT_CONTENT_PAIRS == data.content)
 		// Grab the value at index.
 		cuMemcpyDtoH(value, data.values + 4 * index, 4);
 }
@@ -396,6 +398,9 @@ selectStatus_t selectKeyPass(selectEngine_t e, selectData_t data, int k,
 // position within the original array that the value appears at.
 selectStatus_t SELECTAPI selectItem(selectEngine_t e, selectData_t data,
 	int k, void* key, void* value) {
+
+	if(SELECT_CONTENT_KEYS != data.content) 
+		return SELECT_STATUS_NOT_IMPLEMENTED;
 
 	// Start at the most significant bit and work down.
 	int lsb = data.bit;
