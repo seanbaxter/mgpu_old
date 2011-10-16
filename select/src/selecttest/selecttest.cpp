@@ -2,9 +2,13 @@
 #include "selecttest.h"
 #include <vector>
 #include <algorithm>
-#include <random>
 #include <cmath>
 
+#ifdef _MSC_VER
+#include <random>
+#else
+#include <tr1/random>
+#endif
 std::tr1::mt19937 mt19937;
 
 const int NumTests = 4;
@@ -26,35 +30,6 @@ const int Runs[][2] = {
 	{ 45000000, 30 },
 	{ 50000000, 25 }
 };
-
-
-inline uint FloatToUint(float f) {
-	int x = *(int*)(&f);
-	int bits = x>> 31;
-
-	int flipped = x ^ (0x7fffffff & bits);
-
-	int adjusted = 0x80000000 + flipped;
-
-	uint u = (uint)adjusted;
-	return u;
-}
-inline float UintToFloat(uint u) {
-	int adjusted = (int)u;
-	
-	// Negative now has high bit set, positive has high bit clear.
-	int flipped = adjusted - 0x80000000;
-	
-	// Fill the register with set bits if negative.	
-	int bits = flipped>> 31;
-
-	int x = flipped ^ (0x7fffffff & bits);
-
-	float f = *(float*)(&x);
-	return f;
-}
-
-
 
 
 double Throughput(double elapsed, int count, int iterations) {
@@ -237,7 +212,6 @@ float XCos() {
 }
 
 
-
 template<typename R>
 bool BenchmarkDistribution(R r, const char* str, CuContext* context, 
 	selectEngine_t selectEngine, int count, int iterations) {
@@ -309,8 +283,8 @@ int main(int argc, char** argv) {
 		return 0;
 	}
 
-//	BenchmarkSizes(context, selectEngine, sortEngine);
-	BenchmarkDistributions(context, selectEngine, 40e6, 30);
+	BenchmarkSizes(context, selectEngine, sortEngine);
+//	BenchmarkDistributions(context, selectEngine, 40e6, 30);
 
 
 }
