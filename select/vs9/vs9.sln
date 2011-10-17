@@ -13,6 +13,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simpleselect", "simpleselec
 		{FDC9C494-3AC2-493B-9CE5-FE34FAAD0E09} = {FDC9C494-3AC2-493B-9CE5-FE34FAAD0E09}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cpuradix", "cpuradix\cpuradix.vcproj", "{A6734CE1-7FE0-4982-AF4A-C326EE576202}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -31,6 +33,10 @@ Global
 		{00F5E4BF-D2F7-420D-818E-BE85EE652A84}.Debug|Win32.Build.0 = Debug|Win32
 		{00F5E4BF-D2F7-420D-818E-BE85EE652A84}.Release|Win32.ActiveCfg = Release|Win32
 		{00F5E4BF-D2F7-420D-818E-BE85EE652A84}.Release|Win32.Build.0 = Release|Win32
+		{A6734CE1-7FE0-4982-AF4A-C326EE576202}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A6734CE1-7FE0-4982-AF4A-C326EE576202}.Debug|Win32.Build.0 = Debug|Win32
+		{A6734CE1-7FE0-4982-AF4A-C326EE576202}.Release|Win32.ActiveCfg = Release|Win32
+		{A6734CE1-7FE0-4982-AF4A-C326EE576202}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -170,7 +170,6 @@ void SelectCountUint(const uint* source_global, uint* hist_global,
 	const int2* range_global, uint shift, uint bits) {
 
 	SelectCount(source_global, hist_global, range_global, shift, bits);
-
 }
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
