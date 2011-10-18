@@ -14,7 +14,7 @@ std::tr1::mt19937 mt19937;
 const int NumTests = 4;
 
 const int Runs[][2] = {
-	{ 125000, 1500 },
+/*	{ 125000, 1500 },
 	{ 250000, 1000 },
 	{ 500000, 700 },
 	{ 1000000, 500 },
@@ -28,7 +28,19 @@ const int Runs[][2] = {
 	{ 35000000, 45 },
 	{ 40000000, 40 },
 	{ 45000000, 30 },
-	{ 50000000, 25 }
+	{ 50000000, 25 },
+*/
+	// Don't run thrust or MGPU on these numbers.
+	{ 60000000, 20 },
+	{ 70000000, 20 },
+	{ 80000000, 20 },
+	{ 90000000, 20 },
+	{ 100000000, 15 },
+	{ 120000000, 15 },
+	{ 140000000, 15 },
+	{ 160000000, 15 },
+	{ 180000000, 15 },
+	{ 200000000, 10 }
 };
 
 
@@ -165,9 +177,10 @@ bool BenchmarkSizes(CuContext* context, selectEngine_t selectEngine,
 			keys[j] = r(mt19937);
 		
 		printf("%8d: ", Runs[i][0]);
+		bool runSort = Runs[i][0] < 60000000;
 		bool success = BenchmarkSuite(count, iterations, SELECT_TYPE_UINT, 
-			count / 2, &keys[0], context, selectEngine, sortEngine, true, true,
-			true, true);
+			count / 2, &keys[0], context, selectEngine, sortEngine, true,
+			runSort, runSort, runSort);
 		if(!success) return false;
 	}
 	return true;

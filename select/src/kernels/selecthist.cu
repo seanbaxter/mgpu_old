@@ -198,7 +198,6 @@ extern "C" __global__ __launch_bounds__(1024, 1)
 void SelectHistValue(const uint* counts_global, uint* scanTotal_global,
 	uint* scanWarps_global, int numWarps, uint k) {
 
-
 	SelectHist(counts_global, scanTotal_global, numWarps, k, 0, false,
 		scanWarps_global, 0, 0);
 }
