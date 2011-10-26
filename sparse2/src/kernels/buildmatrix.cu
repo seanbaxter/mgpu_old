@@ -34,18 +34,7 @@ const uint PARTIAL_STORE_BIT = 1<< 24;
 
 // 4) 	
 
-
-
-Store 
-
-
-
-
-
-/*
-
 // Each thread initializes pointers dynamically.
-template<int NUM_VALUES>
 struct ThreadContext {
 	// Reserve (WARP_SIZE + numValues) for the three data arrays. This allows us
 	// to absolutely minimize global loads. Reserve 64 values for reduction 
@@ -76,6 +65,109 @@ struct ThreadContext {
 	// Codes the thread inherits from its position within the block.
 	uint threadCode;
 };
+
+DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
+
+
+	__shared__ volatile int lastTid_shared;
+	__shared__ volatile int rowStart_shared[WARP_SIZE];
+	__shared__ volatile int firstRowInThread_shared[WARP_SIZE];
+
+	if(tid < WARP_SIZE) {
+		rowStart_shared[tid] = -1;
+
+
+
+	}
+
+
+	// NOTE: use an adjusted index for conflict-free access.
+	int firstRow = context.rowIndices[0];
+	int threadRow = context.rowIndices[tid];
+	int subsequentRow = context.rowIndices[tid + 1];
+
+	// endRow is one past the last row that can possibly be encountered in this
+	// block.
+	int endRow = firstRow + WARP_SIZE;
+
+	// These values are true if the thread's value is in the block.
+	int threadTest = (tid < context.available) && (threadRow < endRow);
+	int subsequentTest = (tid + 1 < available) && (subsequentRow < endRow);
+
+	// The last in-range thread writes to lastTid_shared.
+	if(threadTest != subsequentTest) lastTid_shared = tid;
+	__syncthreads();
+
+	// Retrieve the tid of the last element in the block and its row index.
+	uint lastTid = lastTid_shared;
+	int lastRow = context.rowIndices[lastTid];
+	if(tid > lastTid) threadRow = lastRow;
+	if(tid + 1 > lastTid) subsequentRow = lastRow;
+	if(tid == context.numValues - 1) subsequentRow = 0x7fffffff;
+	
+	int precedingRow = context.rowIndices[max(tid,  1) - 1];
+	if(tid > lastTid) precedingRow = lastRow;
+	if(!tid) precedingRow = -1;
+
+	// If this is the first value of this row in the block, store to
+	// rowStart_shared.
+	if(precedingRow != threadRow) rowStart_shared[rowDelta] = evalThread;
+
+
+
+	
+
+
+
+
+
+	
+
+
+}
+
+
+
+
+
+	int rowDelta = threadRow - firstRow;
+
+	int threadFlags = 0;
+	if(precedingRow < threadRow)
+		threadFlags |= LastThreadRow;
+	reductionCode |= 1<< 25;
+
+	// Prepare the segmented scan codes for this value.
+	uint threadFlags = context.threadCode;
+	
+	// If this value is in a different row from the preceding one, it STARTS a
+	// segment.
+	if(precedingRow < threadRow)
+		threadFlags |= FirstThreadRow;
+
+	// If this value is in a different row from the subsequent one, it ENDS a
+	// segment.
+	if(threadRow < subsequentRow) {
+		threadFlags |= LastThreadRow;
+
+		// Mark that a particular value has been encountered.
+		// NOTE: Is this necessary?
+		context.rowAvailability[rowDelta] = 1;
+	}
+
+	if(LastThreadRow & threadFlags) {
+		uint code = rowDelta | (context.evalThread<< 20) | (1<< 19);
+		context.lastThreadReduction[context.evalThread + rowDelta] = code;
+	}
+
+	__syncthreads();
+	return lastTid;
+}
+
+
+/*
+
+
 
 
 template<int NUM_VALUES> 
