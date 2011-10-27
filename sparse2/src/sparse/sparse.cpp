@@ -53,7 +53,7 @@ int IsConflict(int valuesPerThread, int stride) {
 		maxConflict = std::max(maxConflict, warpConflict);
 	}
 	return maxConflict;
-}
+} 
 
 
 

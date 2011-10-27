@@ -1,16 +1,31 @@
 #define WARP_SIZE 32
-#define LOG_WA RP_SIZE 5
-
-const int LAST_ROW_TID = 1;
+#define LOG_WARP_SIZE 5
 
 #define DEVICE extern "C" __device__ __forceinline__ 
 #define DEVICE2 __device__ __forceinline__ 
 
 typedef unsigned int uint;
 
-// Flags to begin a segmented scan and to commit the scan to shared mem.
-const uint PARTIAL_STORE_BIT = 1<< 24;
+// retrieve numBits bits from x starting at bit
+DEVICE uint bfe(uint x, uint bit, uint numBits) {
+	uint ret;
+	asm("bfe.u32 %0, %1, %2, %3;" : "=r"(ret) : "r"(x), "r"(bit), "r"(numBits));
+	return ret;
+}
 
+
+// insert the first numBits of y into x starting at bit
+DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
+	uint ret;
+	asm("bfi.b32 %0, %1, %2, %3, %4;" : 
+		"=r"(ret) : "r"(y), "r"(x), "r"(bit), "r"(numBits));
+	return ret;
+}
+
+
+
+// Flags to begin a segmented scan and to commit the scan to shared mem.
+const uint STORE_FLAG = 1<< 24;
 
 // ONE BIT FOR EACH VALUE:
 // PARTIAL_STORE_BIT = 1<< 24: Last occurence of a value of this row in the 
@@ -34,6 +49,7 @@ const uint PARTIAL_STORE_BIT = 1<< 24;
 
 // 4) 	
 
+
 // Each thread initializes pointers dynamically.
 struct ThreadContext {
 	// Reserve (WARP_SIZE + numValues) for the three data arrays. This allows us
@@ -51,6 +67,9 @@ struct ThreadContext {
 	uint lane;
 	uint warp;
 
+	uint numValues;
+	uint vt;
+
 	uint sharedScatter;
 	uint sharedGather;
 
@@ -64,21 +83,33 @@ struct ThreadContext {
 
 	// Codes the thread inherits from its position within the block.
 	uint threadCode;
+
+	
+	// Help in converting strided index to thread index. If valuesPerThread is
+	// odd, we can simply dereference into shared memory without any bank 
+	// conflicts. If valuesPerThread is a power of 2, we use a stride of 33 
+	// (add offset / WARP_SIZE). If valuesPerThread is even but not a power of
+	// two, we'll have to eat a two-way serialization penalty, but can use the
+	// native stride of 32.
+	bool stridedIndex;
+	int Index(int offset) const {
+		if(stridedIndex) offset += offset / WARP_SIZE;
+		return offset;
+	}
 };
 
 DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 
 
 	__shared__ volatile int lastTid_shared;
-	__shared__ volatile int rowStart_shared[WARP_SIZE];
-	__shared__ volatile int firstRowInThread_shared[WARP_SIZE];
+	__shared__ volatile int rowStartThread_shared[WARP_SIZE];
+	__shared__ volatile int rowEndThread_shared[WARP_SIZE];
 
-	if(tid < WARP_SIZE) {
-		rowStart_shared[tid] = -1;
-
-
-
-	}
+	// Clear the rowStartThread and rowEndThread arrays. Any index other than 
+	// -1 indicates that the row in question is in the block.
+	if(tid < 2 * WARP_SIZE)
+		rowStartThread_shared[tid] = -1;
+	__syncthreads();
 
 
 	// NOTE: use an adjusted index for conflict-free access.
@@ -105,13 +136,79 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 	if(tid + 1 > lastTid) subsequentRow = lastRow;
 	if(tid == context.numValues - 1) subsequentRow = 0x7fffffff;
 	
-	int precedingRow = context.rowIndices[max(tid,  1) - 1];
+	int precedingRow = context.rowIndices[tid - 1];
 	if(tid > lastTid) precedingRow = lastRow;
 	if(!tid) precedingRow = -1;
 
+	int nextRow = context.rowIndices[tid + 1];
+	if(tid + 1 >= lastTid) nextRow = -1;
+
 	// If this is the first value of this row in the block, store to
 	// rowStart_shared.
-	if(precedingRow != threadRow) rowStart_shared[rowDelta] = evalThread;
+	if(precedingRow != threadRow) 
+		rowStartThread_shared[rowDelta] = context.evalThread;
+	if(threadRow != nextRow)
+		rowEndThread_shared[rowDelta] = context.evalThread;
+
+	__syncthreads();
+
+	if(tid < WARP_SIZE) {
+		// Load the index of the first row encontered in this thread.
+		int offset1 = tid * context.vt;
+		int row1 = context.rowIndices[context.Index(offset1)];
+		if(offset1 > lastTid) row1 = lastRow;
+
+
+
+
+
+
+		int rowStart = rowStartThread_shared[tid];
+		int rowBits = __ballot(-1 != rowStart);
+
+		// Find the number of available rows preceding the tid'th row.
+		int mask = bfi(0, 0xffffffff, 0, tid);
+		
+		int rowCount = __popc(mask & allRows);
+
+		// Find the number of threads that this row spans.
+		int rowEnd = rowEndThread_shared[tid];
+
+		int rowSlotCount = rowEnd - rowStart + 1;
+		if(-1 == rowStart) rowSlotCount = 0;
+
+		// Run a scan to find the start slot for each available row.
+		rowStartThread_shared[tid] = 0;
+
+		volatile int* scan = rowStartThread_shared + 16;
+		scan[0] = rowSlotCount;
+
+		int x = rowSlotCount;
+		
+		#pragma unroll
+		for(int i = 0; i < LOG_WARP_SIZE; ++i) {
+			int offset = 1<< i;
+			int y = scan[-offset];
+			x += y;
+			if(i < LOG_WARP_SIZE - 1) scan[0] = x;
+			else scan[0] = x - rowSlotCount;
+		}
+
+		x -= rowSlotCount;
+
+		// store flag to [x].
+		// this is in range 0 - 63. each thread reads back tid and 32 + tid.
+		// run a pair of ballot scans (one 32bit, one 64bit) for distance.
+
+
+		// Find the 
+
+		int firstThreadSlot = offset2 - offset1 + rowCount
+
+
+
+
+	}
 
 
 
