@@ -99,11 +99,10 @@ struct ThreadContext {
 };
 
 DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
-
-
-	__shared__ volatile int lastTid_shared;
-	__shared__ volatile int rowStartThread_shared[WARP_SIZE];
-	__shared__ volatile int rowEndThread_shared[WARP_SIZE];
+	__shared__ volatile int tempSpace_shared[4 * WARP_SIZE];
+	volatile int* first_shared = tempSpace_shared;
+	volatile int* last_shared = tempSpace_shared + 32;
+	volatile int& lastTid_share = tempSpace_shared[64];
 
 	// Clear the rowStartThread and rowEndThread arrays. Any index other than 
 	// -1 indicates that the row in question is in the block.
@@ -145,10 +144,9 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 
 	// If this is the first value of this row in the block, store to
 	// rowStart_shared.
-	if(precedingRow != threadRow) 
-		rowStartThread_shared[rowDelta] = context.evalThread;
+	if(precedingRow != threadRow) first_shared[rowDelta] = context.evalThread;
 	if(threadRow != nextRow)
-		rowEndThread_shared[rowDelta] = context.evalThread;
+		last_shared[rowDelta] = context.evalThread;
 
 	__syncthreads();
 
@@ -157,6 +155,48 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 		int offset1 = tid * context.vt;
 		int row1 = context.rowIndices[context.Index(offset1)];
 		if(offset1 > lastTid) row1 = lastRow;
+
+		// Load the start thread for the first row encountered in this thread.
+		int startRowTid = rowStartThread_shared[row1];
+
+		// Load the thread ranges for the tid'th row (rowDelta, not available
+		// row). Find the number of store slots required for the tid'th row.
+		int rowTid1 = rowStartThread_shared[tid];
+		int rowTid2 = rowEndThread_shared[tid];
+		bool rowValid = -1 != rowTid1;
+		int rowCount = rowTid1 ? (rowTid2 - rowtid1 + 1) : 0;
+
+		// Scan the store slots for each row. The exclusive scan is stored in
+		// shared memory. The inclusive scan is retained in the register x.
+		rowStartThread_shared[tid] = 0;
+		volatile int* scan = rowStartThread_shared + 16;
+		scan[0] = rowSlotCount;
+		int x = rowSlotCount;
+		#pragma unroll
+		for(int i = 0; i < LOG_WARP_SIZE; ++i) {
+			int offset = 1<< i;
+			int y = scan[-offset];
+			x += y;
+			if(i < LOG_WARP_SIZE - 1) scan[0] = x;
+			else scan[0] = x - rowSlotCount;
+		}
+
+		// Pull the scan offset of the first row encountered in this eval
+		// thread. Offset by the distance between this eval thread and that
+		// row's starting thread (startRowTid).
+		int evalStoreOffset = rowStartThread_shared[16 + row1] + tid - 
+			startRowTid;
+
+		// Cannibalize the shared memory for 
+
+
+
+
+
+
+
+		
+
 
 
 
@@ -177,24 +217,6 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 		int rowSlotCount = rowEnd - rowStart + 1;
 		if(-1 == rowStart) rowSlotCount = 0;
 
-		// Run a scan to find the start slot for each available row.
-		rowStartThread_shared[tid] = 0;
-
-		volatile int* scan = rowStartThread_shared + 16;
-		scan[0] = rowSlotCount;
-
-		int x = rowSlotCount;
-		
-		#pragma unroll
-		for(int i = 0; i < LOG_WARP_SIZE; ++i) {
-			int offset = 1<< i;
-			int y = scan[-offset];
-			x += y;
-			if(i < LOG_WARP_SIZE - 1) scan[0] = x;
-			else scan[0] = x - rowSlotCount;
-		}
-
-		x -= rowSlotCount;
 
 		// store flag to [x].
 		// this is in range 0 - 63. each thread reads back tid and 32 + tid.
