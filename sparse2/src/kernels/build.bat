@@ -1,0 +1,1 @@
+nvcc --cubin -Xptxas=-v 

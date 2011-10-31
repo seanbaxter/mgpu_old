@@ -6,6 +6,19 @@
 
 typedef unsigned int uint;
 
+#define MAT_TYPE_FLOAT
+
+#ifdef MAT_TYPE_FLOAT
+	#define T uint
+#elif defined(MAT_TYPE_DOUBLE)
+	#define T uint2
+#elif defined(MAT_TYPE_CFLOAT)
+	#define T uint2
+#elif defined(MAT_TYPE_CDOUBLE)
+	#define T uint4
+#endif
+
+
 // retrieve numBits bits from x starting at bit
 DEVICE uint bfe(uint x, uint bit, uint numBits) {
 	uint ret;
@@ -22,47 +35,26 @@ DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
 	return ret;
 }
 
+DEVICE2 void Zero(uint& x) { x = 0; }
+DEVICE2 void Zero(uint2& x) { x = make_uint2(0, 0); }
+DEVICE2 void Zero(uint4& x) { x = make_uint4(0, 0, 0, 0); }
 
 
 // Flags to begin a segmented scan and to commit the scan to shared mem.
-const uint STORE_FLAG = 1<< 24;
-
-// ONE BIT FOR EACH VALUE:
-// PARTIAL_STORE_BIT = 1<< 24: Last occurence of a value of this row in the 
-//		thread. When this is encountered, store the partial dot product to 
-//		shared memory and zero the sum.
-
-// FOUR OFFSETS TO COMPUTE FOR EACH WARP:
-
-// 1) scan offset: This is the total number of PARTIAL_STORE_BIT flags 
-//		encountered before the current thread. On encountering a 
-//		PARTIAL_STORE_BIT, a thread stores to shared memory at the scan offset,
-//		increments the scan offset, and zeroes the dot product running sum.
-
-// 2) segscan distance x,
-// 3) segscan distance y: The distance from tid or 32 + tid to the start of
-//		the current segment. A segment is the contiguous set of partial dot
-//		product entries. When a row's data spans multiple threads, each thread
-//		will store the partial dot product for that row to shared memory. This 
-//		flag allows the 64-wide parallel segmented scan to be executed
-//		efficiently.
-
-// 4) 	
-
+const uint STORE_FLAG = 1<< 25;
 
 // Each thread initializes pointers dynamically.
 struct ThreadContext {
-	// Reserve (WARP_SIZE + numValues) for the three data arrays. This allows us
-	// to absolutely minimize global loads. Reserve 64 values for reduction 
-	// array. By templating over NUM_VALUES, all of these pointers should be
-	// treated as constant offsets by the compiler. They are for convenience
-	// and won't eat into the register counts.
+	// Shared memory arrays.
 	uint* rowIndices;
 	uint* colIndices;
 	T* values;
-	volatile uint* rowAvailability;			// WARP_SIZE
-	volatile uint* lastThreadReduction;		// 2 * WARP_SIZE
-	uint* lastTidRow;						// 1
+	uint* transposeBuffer;
+
+	// Global memory arrays.
+	uint* colIndices_global;
+	T* values_global;
+
 
 	uint lane;
 	uint warp;
@@ -98,11 +90,30 @@ struct ThreadContext {
 	}
 };
 
+
+uint TransposeLocal(uint x, ThreadContext context) {
+	context.transposeBuffer[context.sharedScatter] = x;
+	__syncthreads();
+	x = transposeBuffer[context.sharedGather];
+	__syncthreads();
+	return x;
+}
+
+
 DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
-	__shared__ volatile int tempSpace_shared[4 * WARP_SIZE];
+	volatile int* tempSpace_shared = (volatile int*)context.transposeBuffer;
+	
 	volatile int* first_shared = tempSpace_shared;
 	volatile int* last_shared = tempSpace_shared + 32;
-	volatile int& lastTid_share = tempSpace_shared[64];
+	volatile int* firstValueCache_shared = tempSpace_shared + 64;
+	volatile int& lastTid_share = tempSpace_shared[96];
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// LOAD ROW INDICES AND FIND RANGE OF ACTUAL VALUES TO CONSUME IN THIS
+	// BLOCK.
+	// Values from rows firstRow through firstRow + 32 (exclusive) are
+	// "available" and streamed to the encoded block. 
 
 	// Clear the rowStartThread and rowEndThread arrays. Any index other than 
 	// -1 indicates that the row in question is in the block.
@@ -110,11 +121,10 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 		rowStartThread_shared[tid] = -1;
 	__syncthreads();
 
-
-	// NOTE: use an adjusted index for conflict-free access.
+	// Get the first row, tid's row, and the row at tid + 1.
 	int firstRow = context.rowIndices[0];
 	int threadRow = context.rowIndices[tid];
-	int subsequentRow = context.rowIndices[tid + 1];
+	int nextRow = context.rowIndices[tid + 1];
 
 	// endRow is one past the last row that can possibly be encountered in this
 	// block.
@@ -122,33 +132,33 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 
 	// These values are true if the thread's value is in the block.
 	int threadTest = (tid < context.available) && (threadRow < endRow);
-	int subsequentTest = (tid + 1 < available) && (subsequentRow < endRow);
+	int nextTest = (tid + 1 < available) && (nextRow < endRow);
 
 	// The last in-range thread writes to lastTid_shared.
-	if(threadTest != subsequentTest) lastTid_shared = tid;
+	if(threadTest != nextTest) lastTid_shared = tid;
 	__syncthreads();
 
 	// Retrieve the tid of the last element in the block and its row index.
 	uint lastTid = lastTid_shared;
 	int lastRow = context.rowIndices[lastTid];
-	if(tid > lastTid) threadRow = lastRow;
-	if(tid + 1 > lastTid) subsequentRow = lastRow;
-	if(tid == context.numValues - 1) subsequentRow = 0x7fffffff;
-	
-	int precedingRow = context.rowIndices[tid - 1];
-	if(tid > lastTid) precedingRow = lastRow;
-	if(!tid) precedingRow = -1;
 
-	int nextRow = context.rowIndices[tid + 1];
-	if(tid + 1 >= lastTid) nextRow = -1;
+	// If threadRow or nextRow is out-of-bounds, set it to lastRow.
+	int prevRow = context.rowIndices[tid - 1];
+	prevRow = min(prevRow, lastRow);
+	threadRow = min(threadRow, lastRow);
+	nextRow = min(nextRow, lastRow);
+
+	int rowDelta = threadRow - firstRow;
 
 	// If this is the first value of this row in the block, store to
 	// rowStart_shared.
-	if(precedingRow != threadRow) first_shared[rowDelta] = context.evalThread;
-	if(threadRow != nextRow)
-		last_shared[rowDelta] = context.evalThread;
-
+	if(prev != threadRow) first_shared[rowDelta] = context.evalThread;
+	if(threadRow != nextRow) last_shared[rowDelta] = context.evalThread;
 	__syncthreads();
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// CALCULATE SPECIAL OFFSETS FOR FIRST FOUR VALUES OF EACH EVAL THREAD.
 
 	if(tid < WARP_SIZE) {
 		// Load the index of the first row encontered in this thread.
@@ -157,90 +167,108 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 		if(offset1 > lastTid) row1 = lastRow;
 
 		// Load the start thread for the first row encountered in this thread.
-		int startRowTid = rowStartThread_shared[row1];
+		int startRowTid = first_shared[row1];
 
 		// Load the thread ranges for the tid'th row (rowDelta, not available
 		// row). Find the number of store slots required for the tid'th row.
-		int rowTid1 = rowStartThread_shared[tid];
-		int rowTid2 = rowEndThread_shared[tid];
+		int rowTid1 = first_shared[tid];
+		int rowTid2 = last_shared[tid];
 		bool rowValid = -1 != rowTid1;
 		int rowCount = rowTid1 ? (rowTid2 - rowtid1 + 1) : 0;
 
 		// Scan the store slots for each row. The exclusive scan is stored in
 		// shared memory. The inclusive scan is retained in the register x.
 		rowStartThread_shared[tid] = 0;
-		volatile int* scan = rowStartThread_shared + 16;
+		volatile int* scan = tempSpace_shared + 16;
 		scan[0] = rowSlotCount;
-		int x = rowSlotCount;
+		int incScan = rowSlotCount;
+		int excScan;
 		#pragma unroll
 		for(int i = 0; i < LOG_WARP_SIZE; ++i) {
 			int offset = 1<< i;
 			int y = scan[-offset];
-			x += y;
-			if(i < LOG_WARP_SIZE - 1) scan[0] = x;
-			else scan[0] = x - rowSlotCount;
+			incScan += y;
+			if(i < LOG_WARP_SIZE - 1) scan[0] = incScan;
+			else {
+				excScan = incScan - rowSlotCount;
+				scan[0] = excScan;
+			}
 		}
 
+		// THREAD INDEX A: thread scan offset.
 		// Pull the scan offset of the first row encountered in this eval
 		// thread. Offset by the distance between this eval thread and that
 		// row's starting thread (startRowTid).
-		int evalStoreOffset = rowStartThread_shared[16 + row1] + tid - 
+		int evalStoreOffset = tempSpace_shared[16 + row1] + tid - 
 			startRowTid;
 
-		// Cannibalize the shared memory for 
+		// THREAD INDEX B, C: segmented scan distance.
+		// Store a bit at the start of each available row in the scan array.
+		// Read these back at tid and 32 + tid and use __ballot and __clz to
+		// find the start of the sgement (that is, the most-significant set bit
+		// at or before the current position).
+		tempSpace_shared[tid] = 0;
+		tempSpace_shared[32 + tid] = 0;
+		if(rowValid) tempSpace_shared[excScan] = 1;
 
+		uint scanStartX = __ballot(tempSpace_shared[tid]);
+		uint scanStartY = __ballot(tempSpace_shared[WARP_SIZE + tid]);
 
+		uint mask = 0xffffffff>> (31 - tid);
+		uint distanceX = 31 - tid - __clz(mask & scanStartX);
+		uint distanceY = scanStartY ? 
+			(31 - tid - __clz(mask & scanStartY)) : 
+			(63 - tid - __clz(scanStart));
 
+		// Count the total number of rows in the black.
+		uint rowBits = __ballot(rowValid);
+		uint precedingRows = __popc(bfi(0, 0xffffffff, 0, tid) & rowBits);
+		uint numRows = __popc(rowBits);
 
+		// THREAD INDEX D: last scan slot for each available row. 
+		// If this is a valid row, store the last index for it. Otherwise, store
+		// zero.
+		uint lastRowSlot = rowValid ? (incScan - 1) : 0;
+		uint target = rowValid ?
+			precedingRows :
+			(tid - precedingRows + numRows);
 
-
-
-		
-
-
-
-
-
-
-
-		int rowStart = rowStartThread_shared[tid];
-		int rowBits = __ballot(-1 != rowStart);
-
-		// Find the number of available rows preceding the tid'th row.
-		int mask = bfi(0, 0xffffffff, 0, tid);
-		
-		int rowCount = __popc(mask & allRows);
-
-		// Find the number of threads that this row spans.
-		int rowEnd = rowEndThread_shared[tid];
-
-		int rowSlotCount = rowEnd - rowStart + 1;
-		if(-1 == rowStart) rowSlotCount = 0;
-
-
-		// store flag to [x].
-		// this is in range 0 - 63. each thread reads back tid and 32 + tid.
-		// run a pair of ballot scans (one 32bit, one 64bit) for distance.
-
-
-		// Find the 
-
-		int firstThreadSlot = offset2 - offset1 + rowCount
-
-
-
-
+		// Store the four special terms.
+		tempSpace_shared[tid] = evalStoreOffset<< 26;
+		tempSpace_shared[32 + tid] = (distanceX<< 27) | ((tid < numRows)<< 26);
+		tempSpace_shared[64 + tid] = distanceY<< 26;
+		if(rowValid) tempSpace_shared[96 + precedingRows] = lastRowSlot<< 26;
 	}
+	__syncthreads();
 
+	int storeBit = (threadRow != nextRow) ? STORE_FLAG : 0;
 
+	////////////////////////////////////////////////////////////////////////////
+	// LOAD COL INDICES AND ATTACH SPECIAL OFFSETS AND STORE FLAGS.
+
+	uint colIndex = 0;
+	if(tid < lastTid) colIndex = context.rowIndices[tid];
+	if(threadRow != nextRow) colIndex |= STORE_FLAG;
+
+	// Transpose to put the decorated column index into strided order, suitable
+	// for storing to global memory.
+	colIndex = TransposeLocal(colIndex, context);
+
+	// Apply the special indices for the first four values for each eval thread.
+	if(tid < 4 * WARP_SIZE) colIndex |= tempSpace_shared[tid];
+
+	// Store the decorated column indices to global memory.
+	*context.colIndices_global = colIndex;
 
 	
-
-
-
-
-
+	////////////////////////////////////////////////////////////////////////////
+	// LOAD VALUES AND TRANSPOSE AND STORE.
 	
+	T value;
+	Zero(value);
+	if(tid < lastTid) value = context.values[context.sharedGather];
+
+	*context.values_global = value;
 
 
 }
