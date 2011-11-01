@@ -191,6 +191,18 @@
 			RelativePath="..\..\src\kernels\buildmatrix.cu"
 			>
 		</File>
+		<File
+			RelativePath="..\..\src\kernels\common.cu"
+			>
+		</File>
+		<File
+			RelativePath="..\..\src\kernels\matrixcount.cu"
+			>
+		</File>
+		<File
+			RelativePath="..\..\src\kernels\matrixencode.cu"
+			>
+		</File>
 	</Files>
 	<Globals>
 	</Globals>

@@ -1,10 +1,4 @@
-#define WARP_SIZE 32
-#define LOG_WARP_SIZE 5
-
-#define DEVICE extern "C" __device__ __forceinline__ 
-#define DEVICE2 __device__ __forceinline__ 
-
-typedef unsigned int uint;
+#include "common.cu"
 
 #define MAT_TYPE_FLOAT
 
@@ -19,21 +13,6 @@ typedef unsigned int uint;
 #endif
 
 
-// retrieve numBits bits from x starting at bit
-DEVICE uint bfe(uint x, uint bit, uint numBits) {
-	uint ret;
-	asm("bfe.u32 %0, %1, %2, %3;" : "=r"(ret) : "r"(x), "r"(bit), "r"(numBits));
-	return ret;
-}
-
-
-// insert the first numBits of y into x starting at bit
-DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
-	uint ret;
-	asm("bfi.b32 %0, %1, %2, %3, %4;" : 
-		"=r"(ret) : "r"(y), "r"(x), "r"(bit), "r"(numBits));
-	return ret;
-}
 
 DEVICE2 void Zero(uint& x) { x = 0; }
 DEVICE2 void Zero(uint2& x) { x = make_uint2(0, 0); }
@@ -45,7 +24,7 @@ const uint STORE_FLAG = 1<< 25;
 
 // Each thread initializes pointers dynamically.
 struct ThreadContext {
-	// Shared memory arrays.
+	// Shared memory arrays. rowIndices and colIndices hold at least 
 	uint* rowIndices;
 	uint* colIndices;
 	T* values;
@@ -54,10 +33,6 @@ struct ThreadContext {
 	// Global memory arrays.
 	uint* colIndices_global;
 	T* values_global;
-
-
-	uint lane;
-	uint warp;
 
 	uint numValues;
 	uint vt;
@@ -68,13 +43,9 @@ struct ThreadContext {
 	// tid handles the value associated with (evalThread, evalValue) in the 
 	// evaluation kernel.
 	uint evalThread;
-	uint evalValue;
 
 	// Number of values sitting in the buffer.
 	uint available;
-
-	// Codes the thread inherits from its position within the block.
-	uint threadCode;
 
 	
 	// Help in converting strided index to thread index. If valuesPerThread is
@@ -238,6 +209,11 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 		tempSpace_shared[32 + tid] = (distanceX<< 27) | ((tid < numRows)<< 26);
 		tempSpace_shared[64 + tid] = distanceY<< 26;
 		if(rowValid) tempSpace_shared[96 + precedingRows] = lastRowSlot<< 26;
+
+
+
+
+
 	}
 	__syncthreads();
 
