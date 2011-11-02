@@ -1,7 +1,11 @@
+#pragma once
+
+#include <sm_20_intrinsics.h>
+
+
 
 #define WARP_SIZE 32
 #define LOG_WARP_SIZE 5
-#pragma once
 
 #define DEVICE extern "C" __device__ __forceinline__
 #define DEVICE2 __device__ __forceinline__
