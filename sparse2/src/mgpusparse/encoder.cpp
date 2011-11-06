@@ -463,13 +463,12 @@ void EncodeMatrixCOO(int height, int width, int vt, int nz,
 	m->width = width;
 	m->valuesPerThread = vt;
 	m->nz = nz;
+	m->colIndices.reserve((int)(1.02 * nz));
+	m->sparseValues.reserve((int)(1.02 * nz));
+	m->rowIndices.resize(height + 1);
 
-	std::vector<int> cols;
-	std::vector<T> vals;
-	std::vector<int> rowIndices(height + 1);
-
-	cols.reserve((int)(1.02 * nz));
-	vals.reserve((int)(1.02 * nz));
+	std::vector<int> cols(count);
+	std::vector<T> vals(count);
 	
 	int count = WarpSize * vt;
 
@@ -478,60 +477,52 @@ void EncodeMatrixCOO(int height, int width, int vt, int nz,
 
 	int outputIndex = 0;
 
-	int prevRow = -1;
+	int lastStoredRow = 0;
+	int lastStoredCount = 0;
+
 	while(cur < nz) {
-
-		int laneCounts[32];
-		int laneRows[64];
-		int storeSlots = 0;
-
 
 		////////////////////////////////////////////////////////////////////////
 		// Read in the rows, cols, and values used in this block.
 
 		int end = std::min(nz - cur, count);
 		int firstRow = *rowIndicesIn;
-		int groupLastRow = -1;
+		int prevGroupRow = prevRow;
 
-		for(int lane(0), i(0); lane < WarpSize; ++lane)
-			for(int j(0); j < vt; ++j, ++i) {
+		for(int i(0); i < count; ++i) {
 				
-				int row = 0x7fffffff;
-				int col = 0;
-				T val = 0;
+			int row = 0x7fffffff;
+			int col = 0;
+			T val = 0;
 
-				if(i < end) row = rowIndicesIn[i];
-				if(row >= firstRow + WarpSize) end = i;
-				if(i < end) {
-					col = colIndicesIn[i];
-					val = valuesIn[i];
-					prevRow = row;
-				} else
-					row = prevRow;
+			if(i < end) row = rowIndicesIn[i];
+			if(row >= firstRow + WarpSize) end = i;
+			if(i < end) {
+				col = colIndicesIn[i];
+				val = valuesIn[i];
+				prevGroupRow = row;
+			} else
+				row = prevGroupRow;
+			
+			rows[i] = row;
+			cols[i] = col;
+			vals[i] = val;
+		}
 
-				// Fill the rowIndices.
-				for(int k(prevRow); k < row; ++k)
-					rowIndices[k] = outputIndex;
-					
-				rows[i] = row;
-				cols[i] = col;
-				vals[i] = val;
 
-				if(prevRow < row) ++outputIndex;
-
-				outputIndex
-			}
-
-		
 		////////////////////////////////////////////////////////////////////////
 		// Compute the head flags.
+		// laneRows holds the row index for each shared mem slot.
+		// laneStarts holds the first special index.
 
-		int laneCounts[32];
-		int laneRows[64];
+		int sharedRows[64];
+		int laneStarts[32];
 		int storeSlots = 0;
 
 		for(int lane(0); lane < WarpSize; ++lane) {
 			int* r = &rows[vt * lane];
+			int* c = &cols[vt * lane];
+			laneStarts[lane] = storeSlots;
 			
 			int laneCount = 0;
 			for(int j(0); j < vt; ++j) {
@@ -539,26 +530,70 @@ void EncodeMatrixCOO(int height, int width, int vt, int nz,
 				if(j < vt - 1) {
 					int nextRow = r[j + 1];
 					if(curRow < nextRow) {
-						r[j] |= STORE_FLAG;
-						laneRows[storeSlots + laneCount++] = curRow;
+						c[j] |= STORE_FLAG;
+						sharedRows[storeSlots + laneCount++] = curRow;
 					}
 				} else
-					laneRows[storeSlots + laneCount++] = curRow;
+					sharedRows[storeSlots + laneCount++] = curRow;
 			}
-			laneCounts[lane] = laneCount;
+			storeSlots += laneCount;
 		}
-
 
 		////////////////////////////////////////////////////////////////////////
 		// Compute the scan offsets. 
 
+		int rowStarts[32], rowLast[32];
+		std::fill(rowStarts, rowStarts + WarpSize, 0x7fffffff);
+		std::fill(rowLast, rowLast + WarpSize, -1);
 
+		// Find the first and last indices for each row within the shared
+		// array.
+		for(int i(0); i < storeSlots; ++i) {
+			int row = sharedRows[i] - firstRow;
+			rowStarts[row] = std::min(rowStarts[row], i);
+			rowLast[row] = std::max(rowLast[row], i);
+		}
 
+		// Compute the distanceX and distanceY terms for each thread.
+		int distances[64];
+		for(int i(0); i < 64; ++i) {
+			if(i < storeSlots) {
+				int row = sharedRows[i] - firstRow;
+				distances[i] = i - rowStarts[row];
+			} else
+				distances[i] = 0;
+		}
 
+		// Find the unique set of rows encountered in this group.
+		int* sharedEnd = std::unique(sharedRows, sharedRows + storeSlots);
+		int encountered = sharedEnd - sharedRows;
+
+		int rowSumOffsets[32];
+		for(int i(0); i < 32; ++i) {
+			if(i < encountered) {
+				int row = sharedRows[i] - firstRow;
+				rowSumOffsets[i] = rowLast[row];
+			} else
+				rowSumOffsets[i] = 0;
+		}
 
 
 		////////////////////////////////////////////////////////////////////////
-		// Transpose
+		// Bake the offsets into the column indices.
+
+		for(int lane(0); lane < 32; ++lane) {
+			int index = lane * vt;
+			cols[index + 0] |= laneStarts[lane]<< 26;
+			cols[index + 1] |= ((lane < encountered)<< 26) | 
+				(distances[lane]<< 27);
+			cols[index + 2] |= distances[32 + lane];
+			cols[index + 3] |= rowSumOffsets[lane]<< 26;
+		}
+
+		
+		///////////////////////////////////////////////////////////////////////
+		// Transpose the column indices and sparse values into 
+		// EncodedMatrixData.
 
 		m->colIndices.resize(curOut + WarpSize);
 		m->sparseValues.resize(curOut + WarpSize);
@@ -571,6 +606,26 @@ void EncodeMatrixCOO(int height, int width, int vt, int nz,
 				c[i2] = cols[i];
 				v[i2] = vals[i];
 			}
+
+
+		///////////////////////////////////////////////////////////////////////
+		// Prepare the output indices and row indices.
+
+		m->outputIndices.push_back(outputIndex);
+		outputIndex += encountered;
+
+		for(int i(0); i < encountered - 1; ++i) {
+			// store prevRow
+
+			int row = sharedRows[i];
+			if(row == prevRow) {
+				
+			}
+		}
+
+
+
+
 
 
 
