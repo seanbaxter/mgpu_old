@@ -41,7 +41,6 @@ DEVICE void RepopulateSharedRows(uint tid, int numValues, int& available,
 struct Advance {
 	int valuesConsumed;
 	int numRows;
-	int firstRow;
 	int lastTidRow;
 };
 
@@ -83,7 +82,6 @@ DEVICE Advance ScanRows(uint tid, int available, const int* rowIndices) {
 	Advance advance;
 	advance.valuesConsumed = lastTid + 1;
 	advance.numRows = 0;
-	advance.firstRow = firstRow;
 	advance.lastTidRow = lastTidRow;
 	if(tid < WARP_SIZE) advance.numRows = __popc(__ballot(shared[tid]));
 	

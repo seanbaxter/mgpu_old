@@ -3,6 +3,8 @@ Microsoft Visual Studio Solution File, Format Version 10.00
 # Visual Studio 2008
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sparse", "sparse\sparse.vcproj", "{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mgpusparse", "mgpusparse\mgpusparse.vcproj", "{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -10,9 +12,12 @@ Global
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}.Debug|Win32.ActiveCfg = Debug|Win32
-		{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}.Debug|Win32.Build.0 = Debug|Win32
 		{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}.Release|Win32.ActiveCfg = Release|Win32
 		{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}.Release|Win32.Build.0 = Release|Win32
+		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}.Debug|Win32.ActiveCfg = Debug|Win32
+		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}.Debug|Win32.Build.0 = Debug|Win32
+		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}.Release|Win32.ActiveCfg = Release|Win32
+		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

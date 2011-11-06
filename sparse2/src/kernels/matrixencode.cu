@@ -2,13 +2,13 @@
 
 
 #ifdef MAT_TYPE_FLOAT
-	#define T uint
+	typedef uint T;
 #elif defined(MAT_TYPE_DOUBLE)
-	#define T uint2
+	typedef uint2 T;
 #elif defined(MAT_TYPE_CFLOAT)
-	#define T uint2
+	typedef uint2 T;
 #elif defined(MAT_TYPE_CDOUBLE)
-	#define T uint4
+	typedef uint4 T;
 #endif
 
 
@@ -22,7 +22,7 @@ DEVICE2 void Zero(uint4& x) { x = make_uint4(0, 0, 0, 0); }
 #define STORE_FLAG (1<< 25)
 
 // Each thread initializes pointers dynamically.
-struct ThreadContext {
+struct Context {
 	// Shared memory arrays. rowIndices and colIndices hold at least 
 	int* rowIndices;
 	int* colIndices;
@@ -31,6 +31,7 @@ struct ThreadContext {
 
 	uint numValues;
 	uint vt;
+	int available;
 
 	uint sharedScatter;
 	uint sharedGather;
@@ -46,30 +47,32 @@ struct ThreadContext {
 	// two, we'll have to eat a two-way serialization penalty, but can use the
 	// native stride of 32.
 	bool stridedIndex;
-	int Index(int offset) const {
-		if(stridedIndex) offset += offset / WARP_SIZE;
-		return offset;
-	}
 };
 
-/*
+DEVICE int Index(const Context& context, int offset) {
+	if(context.stridedIndex) offset += offset / WARP_SIZE;
+	return offset;
+}
 
-uint TransposeLocal(uint x, ThreadContext context) {
+
+DEVICE int TransposeLocal(int x, Context& context) {
 	context.transposeBuffer[context.sharedScatter] = x;
 	__syncthreads();
-	x = transposeBuffer[context.sharedGather];
+	x = context.transposeBuffer[context.sharedGather];
 	__syncthreads();
 	return x;
 }
 
+// Returns the number of values consumed.
+DEVICE int ProcessRowIndices(uint tid, Context& context, 
+	int*& colIndices_global, T*& values_global, int*& outputIndices_global) {
 
-DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 	volatile int* tempSpace_shared = (volatile int*)context.transposeBuffer;
 	
 	volatile int* first_shared = tempSpace_shared;
 	volatile int* last_shared = tempSpace_shared + 32;
 	volatile int* firstValueCache_shared = tempSpace_shared + 64;
-	volatile int& lastTid_share = tempSpace_shared[96];
+	volatile int& lastTid_shared = tempSpace_shared[96];
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -81,7 +84,7 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 	// Clear the rowStartThread and rowEndThread arrays. Any index other than 
 	// -1 indicates that the row in question is in the block.
 	if(tid < 2 * WARP_SIZE)
-		rowStartThread_shared[tid] = -1;
+		first_shared[tid] = -1;
 	__syncthreads();
 
 	// Get the first row, tid's row, and the row at tid + 1.
@@ -95,7 +98,7 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 
 	// These values are true if the thread's value is in the block.
 	int threadTest = (tid < context.available) && (threadRow < endRow);
-	int nextTest = (tid + 1 < available) && (nextRow < endRow);
+	int nextTest = (tid + 1 < context.available) && (nextRow < endRow);
 
 	// The last in-range thread writes to lastTid_shared.
 	if(threadTest != nextTest) lastTid_shared = tid;
@@ -115,7 +118,7 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 
 	// If this is the first value of this row in the block, store to
 	// rowStart_shared.
-	if(prev != threadRow) first_shared[rowDelta] = context.evalThread;
+	if(prevRow != threadRow) first_shared[rowDelta] = context.evalThread;
 	if(threadRow != nextRow) last_shared[rowDelta] = context.evalThread;
 	__syncthreads();
 
@@ -126,7 +129,7 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 	if(tid < WARP_SIZE) {
 		// Load the index of the first row encontered in this thread.
 		int offset1 = tid * context.vt;
-		int row1 = context.rowIndices[context.Index(offset1)];
+		int row1 = context.rowIndices[Index(context, offset1)];
 		if(offset1 > lastTid) row1 = lastRow;
 
 		// Load the start thread for the first row encountered in this thread.
@@ -137,11 +140,11 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 		int rowTid1 = first_shared[tid];
 		int rowTid2 = last_shared[tid];
 		bool rowValid = -1 != rowTid1;
-		int rowCount = rowTid1 ? (rowTid2 - rowtid1 + 1) : 0;
+		int rowSlotCount = rowTid1 ? (rowTid2 - rowTid1 + 1) : 0;
 
 		// Scan the store slots for each row. The exclusive scan is stored in
 		// shared memory. The inclusive scan is retained in the register x.
-		rowStartThread_shared[tid] = 0;
+		tempSpace_shared[tid] = 0;
 		volatile int* scan = tempSpace_shared + 16;
 		scan[0] = rowSlotCount;
 		int incScan = rowSlotCount;
@@ -181,7 +184,7 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 		uint distanceX = 31 - tid - __clz(mask & scanStartX);
 		uint distanceY = scanStartY ? 
 			(31 - tid - __clz(mask & scanStartY)) : 
-			(63 - tid - __clz(scanStart));
+			(63 - tid - __clz(scanStartX));
 
 		// Count the total number of rows in the black.
 		uint rowBits = __ballot(rowValid);
@@ -200,12 +203,10 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 		tempSpace_shared[tid] = evalStoreOffset<< 26;
 		tempSpace_shared[32 + tid] = (distanceX<< 27) | ((tid < numRows)<< 26);
 		tempSpace_shared[64 + tid] = distanceY<< 26;
-		if(rowValid) tempSpace_shared[96 + precedingRows] = lastRowSlot<< 26;
+		tempSpace_shared[96 + target] = lastRowSlot<< 26;
 
 
-
-
-
+		// Store the global row indices.
 	}
 	__syncthreads();
 
@@ -226,7 +227,8 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 	if(tid < 4 * WARP_SIZE) colIndex |= tempSpace_shared[tid];
 
 	// Store the decorated column indices to global memory.
-	*context.colIndices_global = colIndex;
+	*colIndices_global = colIndex;
+	colIndices_global += context.numValues;
 
 	
 	////////////////////////////////////////////////////////////////////////////
@@ -236,60 +238,19 @@ DEVICE void ProcessRowIndices(uint tid, ThreadContext context) {
 	Zero(value);
 	if(tid < lastTid) value = context.values[context.sharedGather];
 
-	*context.values_global = value;
+	*values_global = value;
+	values_global += context.numValues;
 
-
+	return lastTid + 1;
 }
-
-
-
-
-
-	int rowDelta = threadRow - firstRow;
-
-	int threadFlags = 0;
-	if(precedingRow < threadRow)
-		threadFlags |= LastThreadRow;
-	reductionCode |= 1<< 25;
-
-	// Prepare the segmented scan codes for this value.
-	uint threadFlags = context.threadCode;
-	
-	// If this value is in a different row from the preceding one, it STARTS a
-	// segment.
-	if(precedingRow < threadRow)
-		threadFlags |= FirstThreadRow;
-
-	// If this value is in a different row from the subsequent one, it ENDS a
-	// segment.
-	if(threadRow < subsequentRow) {
-		threadFlags |= LastThreadRow;
-
-		// Mark that a particular value has been encountered.
-		// NOTE: Is this necessary?
-		context.rowAvailability[rowDelta] = 1;
-	}
-
-	if(LastThreadRow & threadFlags) {
-		uint code = rowDelta | (context.evalThread<< 20) | (1<< 19);
-		context.lastThreadReduction[context.evalThread + rowDelta] = code;
-	}
-
-	__syncthreads();
-	return lastTid;
-}
-
-
-
-*/
 
 
 DEVICE void MoveToFront(uint tid, int consumed, Context& context) {
 
-	int index1 = context.Index(tid);
-	int index2 = context.Index(context.numValues + tid);
+	int index1 = Index(context, tid);
+	int index2 = Index(context, context.numValues + tid);
 
-	if(consumed < available) {
+	if(consumed < context.available) {
 		// Move all the values left by consumed slots.
 		int tidRow1 = context.rowIndices[tid];
 		int tidCol1 = context.colIndices[index1];
@@ -306,44 +267,51 @@ DEVICE void MoveToFront(uint tid, int consumed, Context& context) {
 
 		if(tid < WARP_SIZE) {
 			int i = context.numValues + tid - consumed;
-			int index = context.Index(i);			
+			int index = Index(context, i);			
 			context.rowIndices[i] = tidRow2;
 			context.colIndices[index] = tidCol2;
 			context.values[index] = val2;
 		}
 		if(tid >= consumed) {
 			int i = tid - consumed;
-			int index = context.Index(i);
+			int index = Index(context, i);
 			context.rowIndices[i] = tidRow1;
 			context.colIndices[index] = tidCol1;
 			context.values[index] = val1;
 		}
 	}
-	available -= consumed;
+	context.available -= consumed;
 }
 
-DEVICE void RepopulateSharedRows(uint tid, int numValues, int& available, 
-	int& remaining, const int*& rowIndices_global, 
-	volatile int* rowIndices_shared) {
+DEVICE void RepopulateSharedRows(uint tid, int numValues, int& remaining,
+	const int*& rowIndices_global, const int*& colIndices_global,
+	const T*& values_global, Context& context) {
 
 	// Load up to numValues from rowIndices_global. Always load a multiple of
 	// 32 values for coalescing.
-	int remaining2 = ~(WARP_SIZE - 1) & available;
+	int remaining2 = ~(WARP_SIZE - 1) & context.available;
 	int count = min(numValues - remaining2, remaining);
 
-	if(tid < count)
-		rowIndices_shared[available + tid] = rowIndices_global[tid];
+	if(tid < count) {
+		int i = context.available + tid;
+		int index = Index(context, i);
+		context.rowIndices[i] = rowIndices_global[tid];
+		context.colIndices[index] = colIndices_global[tid];
+		context.values[index] = values_global[tid];
+	}
 	__syncthreads();
 	
 	rowIndices_global += count;
-	available += count;
+	colIndices_global += count;
+	values_global += count;
+	context.available += count;
 }
 
 template<int VT>
 DEVICE2 void MatrixEncode(
 	const int* rowIndices_global, const int* colIndices_global,
 	const T* sparseValues_global, const int2* rangePairs_global,
-	const int4* groupInfo_global, uint* colIndicesOut_global,
+	const int4* groupInfo_global, int* colIndicesOut_global,
 	T* sparseValuesOut_global, int* rowIndicesOut_global,
 	int* outputIndicesOut_global, int height) {
 
@@ -357,11 +325,15 @@ DEVICE2 void MatrixEncode(
 	// transpose from strided order to thread order.
 	__shared__ int colIndices_shared[Stride * (VT + 1)];
 	__shared__ T values_shared[Stride * (VT + 1)];
-	__shared__ uint transpose_shared[Stride * VT];
+	__shared__ int transpose_shared[Stride * VT];
 	
 	uint tid = threadIdx.x;	
+	uint block = blockIdx.x;
+	int2 rangePair = rangePairs_global[block];
+	int remaining = rangePair.y - rangePair.x;
 
-	ThreadContext context;
+	Context context;
+	context.available = 0;
 	context.rowIndices = rowIndices_shared;
 	context.colIndices = colIndices_shared;
 	context.values = values_shared;
@@ -375,11 +347,17 @@ DEVICE2 void MatrixEncode(
 
 
 
-	
+	while(remaining) {
+		RepopulateSharedRows(tid, Count, remaining, rowIndices_global, 
+			colIndices_global, sparseValues_global, context);
 
+		int consumed = ProcessRowIndices(tid, context, colIndicesOut_global,
+			sparseValuesOut_global, outputIndicesOut_global);
 
+		MoveToFront(tid, consumed, context);
+	}
 
-
+	// Cap out the last index.
 }
 
 
@@ -387,7 +365,7 @@ DEVICE2 void MatrixEncode(
 extern "C" __global__ void MatrixEncode_##count(							\
 	const int* rowIndices_global, const int* colIndices_global,				\
 	const T* sparseValues_global, const int2* rangePairs_global,			\
-	const int4* groupInfo_global, uint* colIndicesOut_global,				\
+	const int4* groupInfo_global, int* colIndicesOut_global,				\
 	T* sparseValuesOut_global, int* rowIndicesOut_global,					\
 	int* outputIndicesOut_global, int height) {								\
 																			\
