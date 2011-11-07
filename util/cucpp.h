@@ -648,8 +648,12 @@ public:
 	CuEventTimer() {
 		_running = false;
 		_elapsed = 0;
-		cuEventCreate(&_startEvent, CU_EVENT_BLOCKING_SYNC);
-		cuEventCreate(&_timerEvent, CU_EVENT_BLOCKING_SYNC);	
+
+		CUresult result = cuEventCreate(&_startEvent, CU_EVENT_BLOCKING_SYNC);
+		assert(CUDA_SUCCESS == result);
+
+		result = cuEventCreate(&_timerEvent, CU_EVENT_BLOCKING_SYNC);
+		assert(CUDA_SUCCESS == result);	
 		
 	}
 	~CuEventTimer() {
@@ -664,7 +668,8 @@ public:
 		bool success = !_running;
 		if(success) {
 			if(reset) _elapsed = 0;
-			cuEventRecord(_startEvent, 0);
+			CUresult result = cuEventRecord(_startEvent, 0);
+			assert(CUDA_SUCCESS == result);
 			_running = true;
 		}
 		return success;

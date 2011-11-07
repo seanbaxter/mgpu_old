@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="sparse"
-	ProjectGUID="{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}"
-	RootNamespace="sparse"
+	Name="sparsetest"
+	ProjectGUID="{F5635319-CCDD-4404-B67C-3B61B10CF8C6}"
+	RootNamespace="sparsetest"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
@@ -47,7 +47,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -66,7 +66,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="cuda.lib cudart.lib"
+				AdditionalDependencies="cuda.lib cudart.lib ../debug/mgpusparse.lib cusparse.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -124,7 +124,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
 				UsePrecompiledHeader="0"
@@ -142,6 +142,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="cuda.lib cudart.lib cusparse.lib ../release/mgpusparse.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -189,7 +190,40 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\src\sparsetest\cusparsetest.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\sparsetest\cusptest.cu"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="Cudart Build Rule"
+						Arch1="20"
+						Arch2="0"
+						Optimization="0"
+						Runtime="3"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="Cudart Build Rule"
+						Arch1="20"
+						Arch2="0"
+						Runtime="2"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath="..\..\src\support\matrix.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\sparsetest\mgputest.cpp"
 				>
 			</File>
 			<File
@@ -197,17 +231,8 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\sparse\sparse.cu"
+				RelativePath="..\..\src\sparsetest\sparsetest.cpp"
 				>
-				<FileConfiguration
-					Name="Debug|Win32"
-					>
-					<Tool
-						Name="Cudart Build Rule"
-						Optimization="0"
-						Runtime="3"
-					/>
-				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter
@@ -216,15 +241,11 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath="..\..\src\sparsetest\benchmark.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\..\util\cucpp.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\support\mmio.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\support\sparse.h"
 				>
 			</File>
 			<File

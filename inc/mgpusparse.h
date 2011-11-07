@@ -45,10 +45,8 @@ const char* SPARSEAPI sparseStatusString(sparseStatus_t status);
 
 typedef enum {
 	SPARSE_PREC_REAL4 = 0,
-	SPARSE_PREC_REAL_MIXED,
 	SPARSE_PREC_REAL8,
 	SPARSE_PREC_COMPLEX4,
-	SPARSE_PREC_COMPLEX_MIXED,
 	SPARSE_PREC_COMPLEX8
 } sparsePrec_t;
 
@@ -162,14 +160,6 @@ typedef struct {
 
 #endif		// defined(__cplusplus)
 
-typedef int (SPARSEAPI*sparseStreamReal4_fp)(int request, float* values,
-	int* row, int* col, void* cookie);
-typedef int (SPARSEAPI*sparseStreamReal8_fp)(int request, double* values,
-	int* row, int* col, void* cookie);
-typedef int (SPARSEAPI*sparseStreamComplex4_fp)(int request, 
-	sparseComplex4_t* values, int* row, int* col, void* cookie);
-typedef int (SPARSEAPI*sparseStreamComplex8_fp)(int request, 
-	sparseComplex8_t* values, int* row, int* col, void* cookie);
 	
 struct sparseEngine_d;
 typedef sparseEngine_d* sparseEngine_t;
@@ -218,20 +208,17 @@ sparseStatus_t SPARSEAPI sparseQuerySupport(sparseEngine_t engine,
 ///////////////////////////////////////////////////////////////////////////////
 // sparseMatrix creation
 
-// Sparse value, column, and row data are deinterleaved.
+// Pass in -1 for valuesPerThread to start building sections at the mean and
+// work down until 
+
+// Sparse value, column, and row data are deinterleaved. Passed in COO 
+// (preferred) or CSR.
 sparseStatus_t SPARSEAPI sparseMatCreate(sparseEngine_t engine, 
 	int height, int width, sparsePrec_t prec, int valuesPerThread, 
 	sparseInput_t input, int numElements, const void* sparse,
 	const int* row, const int* col, sparseMat_t* matrix);
 
-// Sparse value, column, and row data are interleaved. For CSR, a row array
-// is still passed in. For COO, pass null for row.
-sparseStatus_t SPARSEAPI sparseMatCreateInterleave(
-	sparseEngine_t engine, int height, int width, sparsePrec_t prec, 
-	int valuesPerThread, sparseInput_t input, int numElements, 
-	const void* sparse, const int* row, sparseMat_t* matrix);
-
-// Data must be passed in as row-sorted COO
+// Data must be passed in as row-sorted COO.
 sparseStatus_t SPARSEAPI sparseMatCreateGPU(sparseEngine_t engine,
 	int height, int width, sparsePrec_t prec, int valuesPerThread, 
 	int numElements, CUdeviceptr row, CUdeviceptr col, CUdeviceptr val,

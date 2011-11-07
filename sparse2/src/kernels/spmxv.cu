@@ -14,9 +14,13 @@
 
 #ifdef MAT_TYPE_FLOAT
 	typedef float T;
-	texture<float, 1, cudaReadModeElementType> xVec_texture;
-	DEVICE float ReadXVec(int i) {
-		return tex1Dfetch(xVec_texture, i); 
+	typedef texture<float, 1, cudaReadModeElementType> VecType;
+	VecType xVec_texture;
+	DEVICE float ReadVec(VecType& vec, int i) {
+		return tex1Dfetch(vec, i); 
+	}
+	DEVICE float Mul(float a, float b) {
+		return a * b; 
 	}
 	DEVICE float Add(float a, float b) { 
 		return a + b;
@@ -28,10 +32,14 @@
 	#define NUM_BLOCKS 4
 #elif defined(MAT_TYPE_DOUBLE)
 	typedef double T;
-	texture<uint2, 1, cudaReadModeElementType> xVec_texture;
-	DEVICE double ReadXVec(int i) { 
-		uint2 t = tex1Dfetch(xVec_texture, i);
+	typedef texture<uint2, 1, cudaReadModeElementType> VecType;
+	VecType xVec_texture;
+	DEVICE double ReadVec(VecType& vec, int i) { 
+		uint2 t = tex1Dfetch(vec, i);
 		return __hiloint2double(t.y, t.x);
+	}
+	DEVICE double Mul(double a, double b) {
+		return a * b; 
 	}
 	DEVICE double Add(double a, double b) {
 		return a + b;
@@ -43,9 +51,14 @@
 	#define NUM_BLOCKS 3
 #elif defined(MAT_TYPE_CFLOAT)
 	typedef float2 T;
-	texture<float2, 1, cudaReadModeElementType> xVec_texture;
-	DEVICE float2 ReadXVec(int i) { 
-		return tex1Dfetch(xVec_texture, i); 
+	typedef texture<float2, 1, cudaReadModeElementType> VecType;
+	VecType xVec_texture;
+	DEVICE float2 ReadVec(VecType& vec, int i) { 
+		return tex1Dfetch(vec, i); 
+	}
+	DEVICE float Mul(float2 a, float2 b) {
+		return make_float2(a.x * b.x - a.y * b.y, 
+			a.y * b.x + a.x * b.y);
 	}
 	DEVICE float2 Add(float2 a, float2 b) {
 		return make_float2(a.x + b.x, a.y + b.y);
@@ -59,12 +72,17 @@
 	#define NUM_BLOCKS 3
 #elif defined(MAT_TYPE_CDOUBLE)
 	typedef double2 T;
-	texture<uint4, 1, cudaReadModeElementType> xVec_texture;
-	DEVICE double2 ReadXVec(int i) {
-		uint4 t = tex1Dfetch(xVec_texture, i);
+	typedef texture<uint4, 1, cudaReadModeElementType> VecType;
+	VecType xVec_texture;
+	DEVICE double2 ReadVec(VecType& vec, int i) {
+		uint4 t = tex1Dfetch(vec, i);
 		return make_double2(
 			__hiloint2double(t.y, t.x), 
 			__hiloint2double(t.w, t.z));
+	}
+	DEVICE float Mul(double2 a, double2 b) {
+		return make_double2(a.x * b.x - a.y * b.y, 
+			a.y * b.x + a.x * b.y);
 	}
 	DEVICE double2 Add(double2 a, double2 b) {
 		return make_double2(a.x + b.x, a.y + b.y);
@@ -77,6 +95,8 @@
 	#define Zero make_double2(0.0, 0.0)
 	#define NUM_BLOCKS 3
 #endif
+
+#include "finalize.cu"
 
 // Flags to begin a segmented scan and to commit the scan to shared mem.
 #define STORE_FLAG (1<< 25)
@@ -93,9 +113,11 @@ DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
 	uint warp = tid / WARP_SIZE;
 	uint block = blockIdx.x;
 
-	uint gid = block / WARPS_PER_BLOCK + warp;
+//	if(block) return;
 
-	if(tid < WARPS_PER_BLOCK)
+	uint gid = block * WARPS_PER_BLOCK + warp;
+
+	if(tid < min(WARPS_PER_BLOCK, numWarps - gid))
 		outputIndices_shared[tid] = rowIndices_global[gid + tid];
 	__syncthreads();
 
@@ -135,8 +157,8 @@ DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
 		else colIndex = colIndices_global[offset0 + i * WARP_SIZE];
 
 		T sparseValue = sparseValues_global[offset0 + i * WARP_SIZE];
-		T xValue = ReadXVec(0x007fffff & colIndex);
-
+		T xValue = ReadVec(xVec_texture, 0x01ffffff & colIndex);
+	
 		sum = MulAndAdd(sparseValue, xValue, sum);
 		int store = (i == (VT - 1)) || (STORE_FLAG & colIndex);
 
@@ -150,7 +172,7 @@ DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
 	////////////////////////////////////////////////////////////////////////////
 	// Intra-warp parallel scan.
 
-	volatile T* data = sharedSlots_shared + sharedOffset;
+	volatile T* data = sharedSlots_shared + sharedOffset + lane;
 
 	T valueX = data[0];
 	T valueY = data[WARP_SIZE];
@@ -162,11 +184,16 @@ DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
 		bool predX = offset <= deltaPairX;
 		bool predY = offset <= deltaPairY;
 
-		T leftX = data[-offset];
-		T leftY = data[WARP_SIZE - offset];
-
-		if(predX) valueX = Add(valueX, leftX);
-		if(predY) valueY = Add(valueY, leftY);
+		// We predicate both loads and stores because we don't want to do an
+		// out-of-bounds load. 
+		if(predX) {
+			T leftX = data[-offset];
+			valueX = Add(valueX, leftX);
+		}
+		if(predY) {
+			T leftY = data[WARP_SIZE - offset];
+			valueY = Add(valueY, leftY);
+		}
 
 		data[0] = valueX;
 		data[WARP_SIZE] = valueY;
@@ -179,10 +206,15 @@ DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
 
 	////////////////////////////////////////////////////////////////////////////
 	// Store the temp dot products to tempOutput_global.
-	
+
 	if(storeToGlobal)
 		tempOutput_global[warpOutputIndex + lane] = 
-			sharedSlots_shared[sharedOffset + rowSumIndex];
+			sharedSlots_shared[rowSumIndex];
+
+/*	
+	tempOutput_global[64 * warp + lane] = sharedSlots_shared[64 * warp + lane];
+	tempOutput_global[64 * warp + 32 + lane] = sharedSlots_shared[64 * warp + 32 + lane];
+*/
 }
 
 
@@ -204,3 +236,6 @@ GEN_SPMXV(10)
 GEN_SPMXV(12)
 GEN_SPMXV(16)
 GEN_SPMXV(20)
+
+
+
