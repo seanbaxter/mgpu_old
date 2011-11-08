@@ -1,129 +1,241 @@
-// Each thread will output no more than one row to tempOutput_global. However
-// each row may span multiple shared memory segments (due to spanning 
-// multiple threads). Therefore we need to store in sharedmem at least two
-// values per thread. These will be reduced down to one value per thread on 
-// output.
-extern "C" __global__ __launch_bounds__(NUM_THREADS, BLOCKS_PER_SM)
-void SPMXV_NAME(const uint* rowIndices_global, const uint* colIndices_global,
-	 const MemType* sparseValues_global, uint numGroups,
-	 ComputeType* tempOutput_global) {
-	
+#include "common.cu"
+
+
+// NOTE: complex types currently do not compile thanks to bug in float2/double2
+// definitions in CUDA:
+// error: no operator "=" matches these operands
+//		operand types are: volatile T = T
+
+// Must define a shared mem type copy ctor with volatile const rhs.
+
+
+#define WARPS_PER_BLOCK 8
+#define BLOCK_SIZE (WARPS_PER_BLOCK * WARP_SIZE)
+
+#ifdef MAT_TYPE_FLOAT
+	typedef float T;
+	typedef texture<float, 1, cudaReadModeElementType> VecType;
+	VecType xVec_texture;
+	DEVICE float ReadVec(VecType& vec, int i) {
+		return tex1Dfetch(vec, i); 
+	}
+	DEVICE float Mul(float a, float b) {
+		return a * b; 
+	}
+	DEVICE float Add(float a, float b) { 
+		return a + b;
+	}
+	DEVICE float MulAndAdd(float a, float b, float c) {
+		return a * b + c;
+	}		
+	#define Zero 0.0f
+	#define NUM_BLOCKS 4
+#elif defined(MAT_TYPE_DOUBLE)
+	typedef double T;
+	typedef texture<uint2, 1, cudaReadModeElementType> VecType;
+	VecType xVec_texture;
+	DEVICE double ReadVec(VecType& vec, int i) { 
+		uint2 t = tex1Dfetch(vec, i);
+		return __hiloint2double(t.y, t.x);
+	}
+	DEVICE double Mul(double a, double b) {
+		return a * b; 
+	}
+	DEVICE double Add(double a, double b) {
+		return a + b;
+	}
+	DEVICE double MulAndAdd(double a, double b, double c) {
+		return a * b + c;
+	}
+	#define Zero 0.0
+	#define NUM_BLOCKS 3
+#elif defined(MAT_TYPE_CFLOAT)
+	typedef float2 T;
+	typedef texture<float2, 1, cudaReadModeElementType> VecType;
+	VecType xVec_texture;
+	DEVICE float2 ReadVec(VecType& vec, int i) { 
+		return tex1Dfetch(vec, i); 
+	}
+	DEVICE float Mul(float2 a, float2 b) {
+		return make_float2(a.x * b.x - a.y * b.y, 
+			a.y * b.x + a.x * b.y);
+	}
+	DEVICE float2 Add(float2 a, float2 b) {
+		return make_float2(a.x + b.x, a.y + b.y);
+	}
+	DEVICE float2 MulAndAdd(float2 a, float2 b, float2 c) {
+		float2 product = make_float2(
+			a.x * b.x - a.y * b.y, a.y * b.x + a.x * b.y);
+		return make_float2(product.x + c.x, product.y + c.y);
+	}
+	#define Zero make_float2(0.0f, 0.0f)
+	#define NUM_BLOCKS 3
+#elif defined(MAT_TYPE_CDOUBLE)
+	typedef double2 T;
+	typedef texture<uint4, 1, cudaReadModeElementType> VecType;
+	VecType xVec_texture;
+	DEVICE double2 ReadVec(VecType& vec, int i) {
+		uint4 t = tex1Dfetch(vec, i);
+		return make_double2(
+			__hiloint2double(t.y, t.x), 
+			__hiloint2double(t.w, t.z));
+	}
+	DEVICE float Mul(double2 a, double2 b) {
+		return make_double2(a.x * b.x - a.y * b.y, 
+			a.y * b.x + a.x * b.y);
+	}
+	DEVICE double2 Add(double2 a, double2 b) {
+		return make_double2(a.x + b.x, a.y + b.y);
+	}
+	DEVICE double2 MulAndAdd(double2 a, double2 b, double2 c) {
+		double2 product = make_double2(
+			a.x * b.x - a.y * b.y, a.y * b.x + a.x * b.y);
+		return make_double2(product.x + c.x, product.y + c.y);
+	}
+	#define Zero make_double2(0.0, 0.0)
+	#define NUM_BLOCKS 3
+#endif
+
+#include "finalize.cu"
+
+// Flags to begin a segmented scan and to commit the scan to shared mem.
+#define STORE_FLAG (1<< 25)
+
+template<int VT>
+DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
+	const T* sparseValues_global, T* tempOutput_global, uint numWarps) {
+
+	__shared__ volatile T sharedSlots_shared[2 * BLOCK_SIZE];
+	__shared__ volatile int outputIndices_shared[WARPS_PER_BLOCK];
+
 	uint tid = threadIdx.x;
 	uint lane = (WARP_SIZE - 1) & tid;
 	uint warp = tid / WARP_SIZE;
 	uint block = blockIdx.x;
-	uint gid0 = NUM_WARPS * block;		// gid is the group ID. same as global
-	uint gid = gid0 + warp;				// warp ID.
 
-	// Shared memory index. Each threads needs two slots (64 per warp). For 
-	// complex precision types, four slots are needed.
-#ifdef USE_COMPLEX
-	uint sharedOffset = 4 * WARP_SIZE * warp;
-#else
-	uint sharedOffset = 2 * WARP_SIZE * warp;
-#endif
-	uint sharedX = sharedOffset + lane;
-	uint sharedY = sharedX + WARP_SIZE;
+//	if(block) return;
 
-	// Load the row indices for each warp.
-	if(tid < NUM_WARPS)
-		sharedArray[tid] = rowIndices_global[min(numGroups - 1, gid0 + tid)];
+	uint gid = block * WARPS_PER_BLOCK + warp;
+
+	if(tid < min(WARPS_PER_BLOCK, numWarps - gid))
+		outputIndices_shared[tid] = rowIndices_global[gid + tid];
 	__syncthreads();
-	
-	uint rowIndex = sharedArray[warp];
-	__syncthreads();
-	
-	// Break out of the kernel if the group is out of range
-	if(gid >= numGroups) return;
+
+	int warpOutputIndex = outputIndices_shared[warp];
+
+	// Break out of the kernel if the warp is out of range.
+	if(gid >= numWarps) return;
+
 
 	// offset0 is the offset of the first value of the current thread in 
-	// colIndices/sparseValues. Add WARP_SIZE for each subsequent value in the 
+	// colIndices/sparseValues add WARP_SIZE for each subsequent value in the
 	// thread.
-	uint offset0 = WARP_SIZE * VALUES_PER_THREAD * gid + lane;
-	
-	// Load the column indices and sparse matrix values from global memory.
-	// These are packed into the first four column indices for each thread.	
+	uint offset0 = WARP_SIZE * VT * gid + lane;
+
 	uint colIndices[4];
-	colIndices[0] = colIndices_global[offset0];
-	colIndices[1] = colIndices_global[offset0 + WARP_SIZE];
+	colIndices[0] = colIndices_global[offset0 + 0 * WARP_SIZE];
+	colIndices[1] = colIndices_global[offset0 + 1 * WARP_SIZE];
 	colIndices[2] = colIndices_global[offset0 + 2 * WARP_SIZE];
 	colIndices[3] = colIndices_global[offset0 + 3 * WARP_SIZE];
-				
-	// Extract the offsets to execute the segmented scan.		
-	uint scanOffset = (colIndices[0]>> 25) + sharedOffset;
-	uint deltaPairX = colIndices[1]>> 26;
-	uint deltaPairY = colIndices[2]>> 25;
-	uint rowSumIndex = (colIndices[3]>> 25) + sharedOffset;
-	
-	// Although products may be up to 20 elements, it is not treated like an
-	// actual array, taking that much space. The register usage of this kernel
-	// should be low because, depending on how nvcc re-orders instructions to
-	// increase ILP, only the last few members of products need be accessed.
-	ComputeType products[VALUES_PER_THREAD];
-	#pragma unroll
-	for(int i = 0; i < VALUES_PER_THREAD; ++i) {
 
-		// Load the column index for this thread value. The first four have
-		// already been loaded.
-		uint offset = offset0 + WARP_SIZE * i;
+	uint sharedOffset = 2 * WARP_SIZE * warp;
+	uint scanOffset = (colIndices[0]>> 26) + sharedOffset;
+	uint deltaPairX = colIndices[1]>> 27;
+	uint deltaPairY = colIndices[2]>> 26;
+	uint rowSumIndex = (colIndices[3]>> 26) + sharedOffset;
+	uint storeToGlobal = (1<< 26) & colIndices[1];
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// Run the sequential part of the sparse matrix * vector.
+
+	T sum = Zero;
+	#pragma unroll
+	for(int i = 0; i < VT; ++i) {
 		uint colIndex;
 		if(i < 4) colIndex = colIndices[i];
-		else colIndex = colIndices_global[offset];
-		
-		// Load the matrix value and up-convert into matrixValue.
-		ComputeType matrixValue = ConvertUp(sparseValues_global[offset]);
-		
-		// Fetch the texture and up-convert into vectorValue.
-		ComputeType vectorValue = FromTexture(
-			tex1Dfetch(xVec_texture, 0x003fffff & colIndex));
-		
-		products[i] = Mul(matrixValue, vectorValue);
-		
-		if(i) {
-			uint startFlag = FirstThreadRow & colIndex;
-			if(!startFlag) products[i] = Add(products[i], products[i - 1]);
-		}
+		else colIndex = colIndices_global[offset0 + i * WARP_SIZE];
 
-		uint endFlag = LastThreadRow & colIndex;
+		T sparseValue = sparseValues_global[offset0 + i * WARP_SIZE];
+		T xValue = ReadVec(xVec_texture, 0x01ffffff & colIndex);
+	
+		sum = MulAndAdd(sparseValue, xValue, sum);
+		int store = (i == (VT - 1)) || (STORE_FLAG & colIndex);
 
-		SetShared(scanOffset, products[i]);
-		scanOffset += 0 != endFlag;
+		// Write the 
+		if(store) sharedSlots_shared[scanOffset] = sum;
+		if(store) ++scanOffset;
+		if(store) sum = Zero;
 	}
-	
-	// Perform the segmented scan. Because this scan processes 64 values and
-	// our warp is only 32 threads, each thread processes two slots separated by
-	// 32 slots.
-	ComputeType valueX = GetShared(sharedX);
-	ComputeType valueY = GetShared(sharedY);
-	
-	// For all offsets < WARP_SIZE, we can handle the left and right halves of
-	// sharedArray simultaneously, without intervening __syncthreads().
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// Intra-warp parallel scan.
+
+	volatile T* data = sharedSlots_shared + sharedOffset + lane;
+
+	T valueX = data[0];
+	T valueY = data[WARP_SIZE];
+
 	#pragma unroll
 	for(int i = 0; i < LOG_WARP_SIZE; ++i) {
 		uint offset = 1<< i;
-		
+
 		bool predX = offset <= deltaPairX;
 		bool predY = offset <= deltaPairY;
 
-		// Avoid putting multiple statements in a branch, because nvcc will
-		// generate a BRA.U instruction rather than simple predication.
-		if(predX) valueX = Add(valueX, GetShared(sharedX - offset));
-		if(predY) valueY = Add(valueY, GetShared(sharedY - offset));
+		// We predicate both loads and stores because we don't want to do an
+		// out-of-bounds load. 
+		if(predX) {
+			T leftX = data[-offset];
+			valueX = Add(valueX, leftX);
+		}
+		if(predY) {
+			T leftY = data[WARP_SIZE - offset];
+			valueY = Add(valueY, leftY);
+		}
 
-		SetShared(sharedX, valueX);
-		SetShared(sharedY, valueY);
+		data[0] = valueX;
+		data[WARP_SIZE] = valueY;
 	}
-	
-	// For offset = WARP_SIZE, only handle the right half.
-	bool predY = WARP_SIZE <= deltaPairY;
-	if(predY) valueY = Add(valueY, GetShared(sharedY - WARP_SIZE));	
-	SetShared(sharedY, valueY);
 
-	// Write the final row sums to tempOutput_gloabl	
-	if(SerializeFlag & colIndices[1])
-		// fetch the row sum from sharedArray
-		tempOutput_global[rowIndex + lane] = GetShared(rowSumIndex);
+	if(WARP_SIZE <= deltaPairY)
+		valueY = Add(valueY, valueX);
+	data[WARP_SIZE] = valueY;
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// Store the temp dot products to tempOutput_global.
+
+	if(storeToGlobal)
+		tempOutput_global[warpOutputIndex + lane] = 
+			sharedSlots_shared[rowSumIndex];
+
+/*	
+	tempOutput_global[64 * warp + lane] = sharedSlots_shared[64 * warp + lane];
+	tempOutput_global[64 * warp + 32 + lane] = sharedSlots_shared[64 * warp + 32 + lane];
+*/
 }
 
-#undef SPMXV_NAME
-#undef VALUES_PER_THREAD
+
+#define GEN_SPMXV(count)													\
+extern "C" __global__ __launch_bounds__(BLOCK_SIZE, NUM_BLOCKS)				\
+void SpMxV_##count(															\
+	const uint* rowIndices_global, const uint* colIndices_global,			\
+	const T* sparseValues_global, T* tempOutput_global, uint numWarps) {	\
+																			\
+	SpMxV<count>(rowIndices_global, colIndices_global, sparseValues_global,	\
+		tempOutput_global, numWarps);										\
+}
+
+
+GEN_SPMXV(4)
+GEN_SPMXV(6)
+GEN_SPMXV(8)
+GEN_SPMXV(10)
+GEN_SPMXV(12)
+GEN_SPMXV(16)
+GEN_SPMXV(20)
+
+
+

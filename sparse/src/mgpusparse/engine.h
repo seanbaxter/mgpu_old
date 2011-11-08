@@ -4,8 +4,16 @@
 #include "../../../util/cucpp.h"
 #include <string>
 
-const int NumThreads = 128;
-const int WarpsPerBlock = NumThreads / WarpSize;
+const int WarpsPerBlock = 8;
+const int BlockSize = WarpSize * WarpsPerBlock;
+
+const int NumVT = 7;
+const int ValuesPerThread[NumVT] = {
+	4, 6, 8, 10, 12, 16, 20
+};
+
+int IndexFromVT(int vt);
+
 
 struct RowOutOfOrder { };
 
@@ -15,7 +23,7 @@ typedef std::complex<double> cdouble;
 
 // Copy these directly into CUdeviceptrs.
 template<typename T>
-struct EncodedMatrixData {
+struct EncodedMatrix {
 	int height, width, valuesPerThread, nz, nz2, numGroups, 
 		outputSize, packedSizeShift;
 	std::vector<T> sparseValues;
@@ -34,6 +42,12 @@ struct COOElement {
 	int row, col;
 };
 
+struct PrecTerm {
+	int vecSize;
+	CUarray_format vecFormat;
+	int vecChannels;
+};
+extern const PrecTerm PrecTerms[4];
 
 struct sparseMatrix;
 struct sparseEngine_d : public CuBase {
@@ -41,13 +55,13 @@ struct sparseEngine_d : public CuBase {
 	struct Kernel {
 		ModulePtr module;
 
-		// Multiple function defined over 5 valuesPerThread sizes 
-		// (4, 8, 12, 16, 20).
-		FunctionPtr func[5];
+		// Multiple function defined over 7 valuesPerThread sizes 
+		// (4, 6, 8, 10, 12, 16, 20).
+		FunctionPtr func[NumVT];
 
 		// Single finalize function that supports both standard and BLAS-style
 		// reduction.
-		FunctionPtr finalize, finalizeNoShift;
+		FunctionPtr finalize;
 
 		// Texture reference for x-vector.
 		CUtexref xVec_texture;
@@ -75,23 +89,23 @@ struct sparseEngine_d : public CuBase {
 	sparseStatus_t Multiply(sparseMat_t mat, T alpha, T beta, CUdeviceptr xVec, 
 		CUdeviceptr yVec);
 
-	sparseStatus_t Encode(int height, int width, sparsePrec_t prec, int valuesPerThread,
+	sparseStatus_t Encode(int height, int width, sparsePrec_t prec, int vt,
 		int nz, CUdeviceptr row, CUdeviceptr col, CUdeviceptr val, 
 		std::auto_ptr<sparseMatrix>* ppMatrix);
 
 	ContextPtr context;
 	int numSMs;
 	
-	// Multiply kernel defined over 6 precisions.
-	std::auto_ptr<Kernel> multiply[6];
+	// Multiply kernel defined over 4 precisions.
+	std::auto_ptr<Kernel> multiply[4];
 
 	// Build kernel defined over three element sizes (4, 8, 16) and 5 
 	// valuesPerThread sizes.
-	std::auto_ptr<Build> build[3][5];
+//	std::auto_ptr<Build> build[3][5];
 
 
 	// a single count kernel serves all encoders. Set block shape before calling.
-	std::auto_ptr<Count> count;
+//	std::auto_ptr<Count> count;
 
 	// a single rebuild kernel packs row element counts into the high bits of
 	// rowIndices.
@@ -112,26 +126,3 @@ struct sparseMatrix : sparseMat_d {
 
 	EnginePtr engine;
 };
-
-template<typename T>
-sparseStatus_t CreateSparseMatrix(sparseEngine_t engine, const EncodedMatrixData<T>& data,
-	sparsePrec_t prec, std::auto_ptr<sparseMatrix>* ppMatrix);
-
-
-// Unify all four encoding precisions (real4, real8, complex4, complex8) behind these
-// templates
-template<typename T>
-void EncodeMatrixDeinterleaved(int height, int width, int valuesPerThread,
-	sparseInput_t input, int nz, const T* sparse, const int* col, const int* row,
-	std::auto_ptr<EncodedMatrixData<T> >* ppMatrix);
-
-template<typename T>
-void EncodeMatrixInterleaved(int height, int width, int valuesPerThread, 
-	sparseInput_t input, int nz, const void* sparse, const int* row,
-	std::auto_ptr<EncodedMatrixData<T> >* ppMatrix);
-
-template<typename T>
-void EncodeMatrixStream(int height, int width, int valuesPerThread,
-	int sizeHint, int(SPARSEAPI*fp)(int, T*, int*, int*, void*), void* cookie,
-	std::auto_ptr<EncodedMatrixData<T> >* ppMatrix);
-

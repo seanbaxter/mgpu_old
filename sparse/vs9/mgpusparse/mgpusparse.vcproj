@@ -3,7 +3,7 @@
 	ProjectType="Visual C++"
 	Version="9.00"
 	Name="mgpusparse"
-	ProjectGUID="{9DDD2525-95CF-444F-AEE1-3E814FCF87DC}"
+	ProjectGUID="{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}"
 	RootNamespace="mgpusparse"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;MGPUSPARSE_EXPORTS"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -62,7 +62,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="cuda.lib"
 				LinkIncremental="2"
-				ModuleDefinitionFile="../../src/mgpusparse/mgpusparse.def"
+				ModuleDefinitionFile="mgpusparse.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				TargetMachine="1"
@@ -116,11 +116,11 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;MGPUSPARSE_EXPORTS"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
 				UsePrecompiledHeader="0"
-				WarningLevel="4"
+				WarningLevel="3"
 				DebugInformationFormat="3"
 			/>
 			<Tool
@@ -136,7 +136,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="cuda.lib"
 				LinkIncremental="1"
-				ModuleDefinitionFile="../../src/mgpusparse/mgpusparse.def"
+				ModuleDefinitionFile="mgpusparse.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
@@ -222,6 +222,30 @@
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
+		</Filter>
+		<Filter
+			Name="kernels"
+			>
+			<File
+				RelativePath="..\..\src\kernels\common.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\kernels\finalize.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\kernels\matrixcount.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\kernels\matrixencode.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\kernels\spmxv.cu"
+				>
+			</File>
 		</Filter>
 	</Files>
 	<Globals>

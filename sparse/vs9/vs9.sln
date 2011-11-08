@@ -1,18 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 10.00
 # Visual Studio 2008
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mgpusparse", "mgpusparse\mgpusparse.vcproj", "{9DDD2525-95CF-444F-AEE1-3E814FCF87DC}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sparse", "sparse\sparse.vcproj", "{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kernels", "kernels", "{C42A0060-322C-4E65-B898-88FCFA95552D}"
-	ProjectSection(SolutionItems) = preProject
-		..\src\kernels\finalize.cu = ..\src\kernels\finalize.cu
-		..\src\kernels\spmxv.cu = ..\src\kernels\spmxv.cu
-		..\src\kernels\spmxvgen.cu = ..\src\kernels\spmxvgen.cu
-	EndProjectSection
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mgpusparse", "mgpusparse\mgpusparse.vcproj", "{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sparsetest", "sparsetest\sparsetest.vcproj", "{F12B9F0E-530D-48B7-9AF7-2732803493A5}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sparsetest", "sparsetest\sparsetest.vcproj", "{F5635319-CCDD-4404-B67C-3B61B10CF8C6}"
 	ProjectSection(ProjectDependencies) = postProject
-		{9DDD2525-95CF-444F-AEE1-3E814FCF87DC} = {9DDD2525-95CF-444F-AEE1-3E814FCF87DC}
+		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235} = {30A5D7EB-2B78-4C87-BC89-6D22F05BF235}
 	EndProjectSection
 EndProject
 Global
@@ -21,14 +16,17 @@ Global
 		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{9DDD2525-95CF-444F-AEE1-3E814FCF87DC}.Debug|Win32.ActiveCfg = Debug|Win32
-		{9DDD2525-95CF-444F-AEE1-3E814FCF87DC}.Debug|Win32.Build.0 = Debug|Win32
-		{9DDD2525-95CF-444F-AEE1-3E814FCF87DC}.Release|Win32.ActiveCfg = Release|Win32
-		{9DDD2525-95CF-444F-AEE1-3E814FCF87DC}.Release|Win32.Build.0 = Release|Win32
-		{F12B9F0E-530D-48B7-9AF7-2732803493A5}.Debug|Win32.ActiveCfg = Debug|Win32
-		{F12B9F0E-530D-48B7-9AF7-2732803493A5}.Debug|Win32.Build.0 = Debug|Win32
-		{F12B9F0E-530D-48B7-9AF7-2732803493A5}.Release|Win32.ActiveCfg = Release|Win32
-		{F12B9F0E-530D-48B7-9AF7-2732803493A5}.Release|Win32.Build.0 = Release|Win32
+		{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}.Debug|Win32.Build.0 = Debug|Win32
+		{9AC3364F-1224-4A5B-9F5E-1FDEEED5768C}.Release|Win32.ActiveCfg = Release|Win32
+		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}.Debug|Win32.ActiveCfg = Debug|Win32
+		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}.Debug|Win32.Build.0 = Debug|Win32
+		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}.Release|Win32.ActiveCfg = Release|Win32
+		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235}.Release|Win32.Build.0 = Release|Win32
+		{F5635319-CCDD-4404-B67C-3B61B10CF8C6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{F5635319-CCDD-4404-B67C-3B61B10CF8C6}.Debug|Win32.Build.0 = Debug|Win32
+		{F5635319-CCDD-4404-B67C-3B61B10CF8C6}.Release|Win32.ActiveCfg = Release|Win32
+		{F5635319-CCDD-4404-B67C-3B61B10CF8C6}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

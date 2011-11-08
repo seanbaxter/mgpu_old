@@ -1,60 +1,39 @@
-// Packs partial row counts into high bits of outputIndices_global.
-// y = alpha * matrix * x + beta * y
-extern "C" __global__ void __launch_bounds__(128, 8)
-Finalize(const ComputeType* tempOutput_global,
-	const uint* outputIndices_global, uint numRows, ComputeType* yVec_global,
-	ComputeType alpha, ComputeType beta, uint packedSizeShift) {
-	
-	// We have no reduction requirements so don't bother with warp calculations.
-	uint row = 128 * blockIdx.x + threadIdx.x;
-	
-	if(row >= numRows) return;
-		
-	uint index = outputIndices_global[row];
-	
-	uint count = index>> packedSizeShift;
-	uint offset = ((1<< packedSizeShift) - 1) & index;
-	ComputeType sum = Zero;
-	
-	for(int i = 0; i < (int)count; ++i) {
-		ComputeType val = tempOutput_global[offset + i];
-		sum = Add(sum, val);
-	}
-
-	sum = Mul(alpha, sum);
-	if(yVec_global) {
-		ComputeType y = yVec_global[row];
-		sum = Add(Mul(beta, y), sum);		
-	}
-	yVec_global[row] = sum;
-}
 
 // Like Finalize but does not pack temp counts.
-extern "C" __global__ void __launch_bounds__(128, 8)
-FinalizeNoShift(const ComputeType* tempOutput_global,
-	const uint* outputIndices_global, uint numRows, ComputeType* yVec_global,
-	ComputeType alpha, ComputeType beta) {
+extern "C" __global__ void Finalize(const T* tempOutput_global,
+	const uint* rowIndices_global, uint numRows, T* yVec_global,
+	T alpha, T beta, int useBeta) {
+
+	__shared__ int volatile shared[BLOCK_SIZE + 1];
 	
 	// We have no reduction requirements so don't bother with warp calculations.
-	uint row = 128 * blockIdx.x + threadIdx.x;
+	uint tid = threadIdx.x;
+	uint block = blockIdx.x;
+	uint row = BLOCK_SIZE * block + tid;
+
+	if(row <= numRows) 
+		shared[tid] = rowIndices_global[row];
+	if((BLOCK_SIZE * (block + 1) <= numRows) && !tid)
+		shared[BLOCK_SIZE] = rowIndices_global[row + BLOCK_SIZE];
+	__syncthreads();
 	
 	if(row >= numRows) return;
 		
-	uint offset = outputIndices_global[row];
-	uint next = outputIndices_global[row + 1];
+	uint offset = shared[tid];
+	uint next = shared[tid + 1];
 	uint count = next - offset;
 
-	ComputeType sum = Zero;
+	T sum = Zero;
 	
 	for(int i = 0; i < (int)count; ++i) {
-		ComputeType val = tempOutput_global[offset + i];
+		T val = tempOutput_global[offset + i];
 		sum = Add(sum, val);
 	}
 
 	sum = Mul(alpha, sum);
-	if(yVec_global) {
-		ComputeType y = yVec_global[row];
-		sum = Add(Mul(beta, y), sum);		
+	if(useBeta) {
+		T y = yVec_global[row];
+		sum = MulAndAdd(beta, y, sum);
 	}
 	yVec_global[row] = sum;
 }
