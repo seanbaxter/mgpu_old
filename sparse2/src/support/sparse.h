@@ -104,7 +104,7 @@ template<typename T>
 bool VerifySparseProduct(const SparseMatrix<T>& matrix, 
 	const std::vector<T>& xVec, const std::vector<T>& yVec);
 
-double RowDensityStddev(const SparseMatrix<double>& matrix);
+double RowDensityStddev(const SparseMatrix<double>& matrix, int* maxLen);
 
 
 template<typename T>

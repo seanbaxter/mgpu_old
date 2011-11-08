@@ -1,6 +1,7 @@
 #include "benchmark.h"
 #include <cusp/csr_matrix.h>
 #include <cusp/ell_matrix.h>
+#include <cusp/hyb_matrix.h>
 #include <cusp/multiply.h>
 #include <cusp/convert.h>
 
@@ -34,6 +35,8 @@ CUresult BenchmarkCusp2(const SparseMatrix<T>& m, Encoding encoding,
 	// Create the CUSP CSR matrix and copy the values from host memory.
 	typedef cusp::csr_matrix<int, T, cusp::device_memory> Csr;
 	typedef cusp::ell_matrix<int, T, cusp::device_memory> Ell;
+	typedef cusp::hyb_matrix<int, T, cusp::device_memory> Hyb;
+
 	Csr csr(m.height, m.width, m.elements.size());
 	thrust::copy(csrHost->rowIndices.begin(), csrHost->rowIndices.end(),
 		csr.row_offsets.begin());
@@ -58,6 +61,17 @@ CUresult BenchmarkCusp2(const SparseMatrix<T>& m, Encoding encoding,
 			return CUDA_ERROR_OUT_OF_MEMORY;
 		}
 		BenchmarkCusp3(ell, m, xArray, yArray, prec, iterations, numRuns, 
+			benchmark);
+	} else if(EncodingHyb == encoding) {
+
+		Hyb hyb;
+		try {
+			cusp::detail::device::convert(csr, hyb, Csr::format(), 
+				Hyb::format());
+		} catch(...) {
+			return CUDA_ERROR_OUT_OF_MEMORY;
+		}
+		BenchmarkCusp3(hyb, m, xArray, yArray, prec, iterations, numRuns, 
 			benchmark);
 	} else if(EncodingCsr == encoding)
 		BenchmarkCusp3(csr, m, xArray, yArray, prec, iterations, numRuns, 

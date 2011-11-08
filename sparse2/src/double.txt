@@ -1,0 +1,578 @@
+Running 3 tests with 1200 iterations.
+
+Loading matrix scircuit.mtx (Circuit)
+h = 170998, w = 170998, nz =   958936, mean =   5.608, rowStddev =   4.392, maxLen =   353
+MGPU value size: 4:
+         86.617 GB/s
+        107.436 GB/s
+        107.378 GB/s
+MGPU value size: 6:
+         93.997 GB/s
+         93.985 GB/s
+         93.912 GB/s
+MGPU value size: 8:
+         84.900 GB/s
+         84.924 GB/s
+         84.901 GB/s
+MGPU value size: 10:
+         73.620 GB/s
+         73.583 GB/s
+         73.612 GB/s
+MGPU value size: 12:
+         65.827 GB/s
+         65.809 GB/s
+         65.802 GB/s
+MGPU value size: 16:
+         52.490 GB/s
+         52.478 GB/s
+         52.483 GB/s
+MGPU value size: 20:
+         43.397 GB/s
+         44.268 GB/s
+         44.315 GB/s
+CUSPARSE:
+         46.551 GB/s
+         46.276 GB/s
+         46.020 GB/s
+CUSP CSR:
+         48.476 GB/s
+         48.392 GB/s
+         47.238 GB/s
+CUSP ELLPACK:
+          7.694 GB/s
+          7.750 GB/s
+          7.748 GB/s
+CUSP HYBRID:
+         17.110 GB/s
+         17.127 GB/s
+         17.132 GB/s
+
+Loading matrix mac_econ_fwd500.mtx (Economics)
+h = 206500, w = 206500, nz =  1273389, mean =   6.167, rowStddev =   4.436, maxLen =    44
+MGPU value size: 4:
+        123.097 GB/s
+        123.081 GB/s
+        122.968 GB/s
+MGPU value size: 6:
+        124.706 GB/s
+        124.603 GB/s
+        124.667 GB/s
+MGPU value size: 8:
+        107.042 GB/s
+        107.008 GB/s
+        106.985 GB/s
+MGPU value size: 10:
+         94.086 GB/s
+         94.090 GB/s
+         94.047 GB/s
+MGPU value size: 12:
+         82.634 GB/s
+         82.614 GB/s
+         82.599 GB/s
+MGPU value size: 16:
+         65.143 GB/s
+         65.154 GB/s
+         65.178 GB/s
+MGPU value size: 20:
+         54.884 GB/s
+         54.871 GB/s
+         54.889 GB/s
+CUSPARSE:
+         50.929 GB/s
+         50.591 GB/s
+         51.262 GB/s
+CUSP CSR:
+         42.939 GB/s
+         43.035 GB/s
+         43.153 GB/s
+CUSP ELLPACK:
+         35.950 GB/s
+         35.953 GB/s
+         35.939 GB/s
+CUSP HYBRID:
+         19.407 GB/s
+         19.580 GB/s
+         19.559 GB/s
+
+Loading matrix mc2depi.mtx (Epidemiology)
+h = 525825, w = 525825, nz =  2100225, mean =   3.994, rowStddev =   0.076, maxLen =     4
+MGPU value size: 4:
+        117.003 GB/s
+        116.977 GB/s
+        117.004 GB/s
+MGPU value size: 6:
+         90.438 GB/s
+         90.426 GB/s
+         90.423 GB/s
+MGPU value size: 8:
+         74.508 GB/s
+         74.506 GB/s
+         74.521 GB/s
+MGPU value size: 10:
+         63.332 GB/s
+         63.319 GB/s
+         63.302 GB/s
+MGPU value size: 12:
+         54.967 GB/s
+         54.971 GB/s
+         54.994 GB/s
+MGPU value size: 16:
+         43.034 GB/s
+         43.036 GB/s
+         43.038 GB/s
+MGPU value size: 20:
+         35.828 GB/s
+         35.823 GB/s
+         35.817 GB/s
+CUSPARSE:
+         75.889 GB/s
+         75.898 GB/s
+         75.830 GB/s
+CUSP CSR:
+         86.909 GB/s
+         85.521 GB/s
+         85.716 GB/s
+CUSP ELLPACK:
+        126.029 GB/s
+        126.929 GB/s
+        126.829 GB/s
+CUSP HYBRID:
+        127.545 GB/s
+        127.041 GB/s
+        127.037 GB/s
+
+Loading matrix cop20k_A.mtx (FEM/Accelerator)
+h = 121192, w = 121192, nz =  2624331, mean =  21.654, rowStddev =  13.793, maxLen =    81
+MGPU value size: 4:
+        123.670 GB/s
+        123.596 GB/s
+        123.592 GB/s
+MGPU value size: 6:
+        112.083 GB/s
+        111.765 GB/s
+        112.085 GB/s
+MGPU value size: 8:
+        117.783 GB/s
+        117.771 GB/s
+        117.772 GB/s
+MGPU value size: 10:
+        108.725 GB/s
+        108.689 GB/s
+        108.703 GB/s
+MGPU value size: 12:
+        110.288 GB/s
+        110.123 GB/s
+        110.410 GB/s
+MGPU value size: 16:
+        101.242 GB/s
+        101.251 GB/s
+        101.244 GB/s
+MGPU value size: 20:
+         95.884 GB/s
+         95.855 GB/s
+         95.886 GB/s
+CUSPARSE:
+         51.831 GB/s
+         51.728 GB/s
+         51.785 GB/s
+CUSP CSR:
+         43.270 GB/s
+         43.331 GB/s
+         43.133 GB/s
+CUSP ELLPACK:
+         45.746 GB/s
+         45.728 GB/s
+         45.811 GB/s
+CUSP HYBRID:
+         31.794 GB/s
+         31.684 GB/s
+         31.575 GB/s
+
+Loading matrix cant.mtx (FEM/Cantilever)
+h =  62451, w =  62451, nz =  4007383, mean =  64.168, rowStddev =  14.054, maxLen =    78
+MGPU value size: 4:
+        159.511 GB/s
+        159.380 GB/s
+        159.484 GB/s
+MGPU value size: 6:
+        179.680 GB/s
+        179.697 GB/s
+        179.678 GB/s
+MGPU value size: 8:
+        183.507 GB/s
+        183.568 GB/s
+        183.594 GB/s
+MGPU value size: 10:
+        187.405 GB/s
+        187.527 GB/s
+        187.080 GB/s
+MGPU value size: 12:
+        191.337 GB/s
+        191.403 GB/s
+        191.444 GB/s
+MGPU value size: 16:
+        190.472 GB/s
+        190.591 GB/s
+        190.537 GB/s
+MGPU value size: 20:
+        193.452 GB/s
+        193.518 GB/s
+        193.533 GB/s
+CUSPARSE:
+        110.316 GB/s
+        109.880 GB/s
+        110.030 GB/s
+CUSP CSR:
+        100.064 GB/s
+        101.012 GB/s
+        100.357 GB/s
+CUSP ELLPACK:
+        137.803 GB/s
+        138.123 GB/s
+        137.929 GB/s
+CUSP HYBRID:
+         77.893 GB/s
+         77.490 GB/s
+         77.636 GB/s
+
+Loading matrix rma10.mtx (FEM/Harbor)
+h =  46835, w =  46835, nz =  2374001, mean =  50.689, rowStddev =  27.780, maxLen =   145
+MGPU value size: 4:
+        155.778 GB/s
+        155.846 GB/s
+        155.804 GB/s
+MGPU value size: 6:
+        173.310 GB/s
+        172.697 GB/s
+        173.373 GB/s
+MGPU value size: 8:
+        177.106 GB/s
+        176.944 GB/s
+        177.195 GB/s
+MGPU value size: 10:
+        180.650 GB/s
+        180.712 GB/s
+        180.820 GB/s
+MGPU value size: 12:
+        184.780 GB/s
+        184.685 GB/s
+        184.821 GB/s
+MGPU value size: 16:
+        183.369 GB/s
+        183.343 GB/s
+        183.416 GB/s
+MGPU value size: 20:
+        184.671 GB/s
+        184.940 GB/s
+        185.284 GB/s
+CUSPARSE:
+         89.927 GB/s
+         90.013 GB/s
+         90.431 GB/s
+CUSP CSR:
+         95.594 GB/s
+         95.890 GB/s
+         96.193 GB/s
+CUSP ELLPACK:
+         79.361 GB/s
+         79.389 GB/s
+         79.313 GB/s
+CUSP HYBRID:
+         37.847 GB/s
+         37.955 GB/s
+         37.690 GB/s
+
+Loading matrix shipsec1.mtx (FEM/Ship)
+h = 140874, w = 140874, nz =  7813404, mean =  55.464, rowStddev =  11.075, maxLen =   102
+MGPU value size: 4:
+        161.362 GB/s
+        161.402 GB/s
+        161.343 GB/s
+MGPU value size: 6:
+        181.341 GB/s
+        181.334 GB/s
+        181.345 GB/s
+MGPU value size: 8:
+        182.675 GB/s
+        182.688 GB/s
+        182.686 GB/s
+MGPU value size: 10:
+        185.933 GB/s
+        185.958 GB/s
+        185.967 GB/s
+MGPU value size: 12:
+        191.043 GB/s
+        190.962 GB/s
+        191.021 GB/s
+MGPU value size: 16:
+        188.548 GB/s
+        188.520 GB/s
+        188.541 GB/s
+MGPU value size: 20:
+        187.914 GB/s
+        187.997 GB/s
+        187.987 GB/s
+CUSPARSE:
+        106.573 GB/s
+        106.747 GB/s
+        106.298 GB/s
+CUSP CSR:
+         92.726 GB/s
+         93.432 GB/s
+         93.249 GB/s
+CUSP ELLPACK:
+        121.820 GB/s
+        121.912 GB/s
+        121.881 GB/s
+CUSP HYBRID:
+         78.284 GB/s
+         78.532 GB/s
+         78.145 GB/s
+
+Loading matrix consph.mtx (FEM/Spheres)
+h =  83334, w =  83334, nz =  6010480, mean =  72.125, rowStddev =  19.080, maxLen =    81
+MGPU value size: 4:
+        159.818 GB/s
+        159.905 GB/s
+        159.911 GB/s
+MGPU value size: 6:
+        180.547 GB/s
+        180.381 GB/s
+        180.293 GB/s
+MGPU value size: 8:
+        184.272 GB/s
+        183.916 GB/s
+        184.012 GB/s
+MGPU value size: 10:
+        187.838 GB/s
+        187.850 GB/s
+        187.796 GB/s
+MGPU value size: 12:
+        192.147 GB/s
+        191.856 GB/s
+        192.105 GB/s
+MGPU value size: 16:
+        191.400 GB/s
+        191.373 GB/s
+        191.491 GB/s
+MGPU value size: 20:
+        194.479 GB/s
+        193.935 GB/s
+        194.482 GB/s
+CUSPARSE:
+        116.230 GB/s
+        116.650 GB/s
+        116.344 GB/s
+CUSP CSR:
+        104.623 GB/s
+        104.886 GB/s
+        104.648 GB/s
+CUSP ELLPACK:
+        147.897 GB/s
+        147.876 GB/s
+        147.950 GB/s
+CUSP HYBRID:
+        148.110 GB/s
+        148.008 GB/s
+        147.968 GB/s
+
+Loading matrix pdb1HYS.mtx (Protein)
+h =  36417, w =  36417, nz =  4344765, mean = 119.306, rowStddev =  31.860, maxLen =   204
+MGPU value size: 4:
+        162.309 GB/s
+        162.237 GB/s
+        162.248 GB/s
+MGPU value size: 6:
+        182.172 GB/s
+        182.173 GB/s
+        182.172 GB/s
+MGPU value size: 8:
+        186.258 GB/s
+        186.245 GB/s
+        185.943 GB/s
+MGPU value size: 10:
+        189.474 GB/s
+        189.796 GB/s
+        190.012 GB/s
+MGPU value size: 12:
+        194.477 GB/s
+        194.512 GB/s
+        194.707 GB/s
+MGPU value size: 16:
+        192.124 GB/s
+        192.574 GB/s
+        192.528 GB/s
+MGPU value size: 20:
+        196.734 GB/s
+        196.593 GB/s
+        196.723 GB/s
+CUSPARSE:
+        137.424 GB/s
+        137.486 GB/s
+        136.291 GB/s
+CUSP CSR:
+        140.469 GB/s
+        139.526 GB/s
+        140.720 GB/s
+CUSP ELLPACK:
+        109.365 GB/s
+        108.500 GB/s
+        108.650 GB/s
+CUSP HYBRID:
+         56.078 GB/s
+         56.345 GB/s
+         56.341 GB/s
+
+Loading matrix qcd5_4.mtx (QCD)
+h =  49152, w =  49152, nz =  1916928, mean =  39.000, rowStddev =   0.000, maxLen =    39
+MGPU value size: 4:
+        150.861 GB/s
+        150.687 GB/s
+        150.720 GB/s
+MGPU value size: 6:
+        168.312 GB/s
+        168.145 GB/s
+        168.278 GB/s
+MGPU value size: 8:
+        168.951 GB/s
+        168.879 GB/s
+        168.916 GB/s
+MGPU value size: 10:
+        172.858 GB/s
+        173.017 GB/s
+        172.206 GB/s
+MGPU value size: 12:
+        176.225 GB/s
+        176.615 GB/s
+        177.051 GB/s
+MGPU value size: 16:
+        169.424 GB/s
+        169.299 GB/s
+        169.431 GB/s
+MGPU value size: 20:
+        176.109 GB/s
+        175.856 GB/s
+        175.709 GB/s
+CUSPARSE:
+         74.177 GB/s
+         74.475 GB/s
+         74.514 GB/s
+CUSP CSR:
+         66.204 GB/s
+         65.968 GB/s
+         65.828 GB/s
+CUSP ELLPACK:
+        160.916 GB/s
+        161.027 GB/s
+        161.228 GB/s
+CUSP HYBRID:
+        161.146 GB/s
+        160.378 GB/s
+        159.943 GB/s
+
+Loading matrix webbase-1M.mtx (Webbase)
+h = 1000005, w = 1000005, nz =  3105536, mean =   3.106, rowStddev =  25.345, maxLen =  4700
+MGPU value size: 4:
+         75.980 GB/s
+         75.971 GB/s
+         75.983 GB/s
+MGPU value size: 6:
+         62.719 GB/s
+         62.588 GB/s
+         62.605 GB/s
+MGPU value size: 8:
+         52.880 GB/s
+         52.914 GB/s
+         52.878 GB/s
+MGPU value size: 10:
+         45.670 GB/s
+         45.665 GB/s
+         45.714 GB/s
+MGPU value size: 12:
+         40.481 GB/s
+         40.482 GB/s
+         40.385 GB/s
+MGPU value size: 16:
+         32.230 GB/s
+         32.231 GB/s
+         32.233 GB/s
+MGPU value size: 20:
+         27.015 GB/s
+         27.012 GB/s
+         27.014 GB/s
+CUSPARSE:
+         49.898 GB/s
+         49.735 GB/s
+         49.862 GB/s
+CUSP CSR:
+         34.581 GB/s
+         34.573 GB/s
+         34.561 GB/s
+ELLPACK is OUT OF MEMORY.
+CUSP HYBRID:
+         37.190 GB/s
+         37.160 GB/s
+         36.961 GB/s
+
+Loading matrix pwtk.mtx (Wind Tunnel)
+h = 217918, w = 217918, nz = 11634424, mean =  53.389, rowStddev =   4.736, maxLen =   180
+MGPU value size: 4:
+        161.940 GB/s
+        162.026 GB/s
+        161.867 GB/s
+MGPU value size: 6:
+        182.504 GB/s
+        182.496 GB/s
+        182.523 GB/s
+MGPU value size: 8:
+        186.140 GB/s
+        186.435 GB/s
+        186.577 GB/s
+MGPU value size: 10:
+        190.097 GB/s
+        190.051 GB/s
+        190.109 GB/s
+MGPU value size: 12:
+        193.713 GB/s
+        193.701 GB/s
+        193.576 GB/s
+MGPU value size: 16:
+        192.990 GB/s
+        192.995 GB/s
+        193.008 GB/s
+MGPU value size: 20:
+        195.351 GB/s
+        195.362 GB/s
+        195.360 GB/s
+CUSPARSE:
+        107.576 GB/s
+        107.789 GB/s
+        107.662 GB/s
+CUSP CSR:
+         93.801 GB/s
+         94.228 GB/s
+         93.489 GB/s
+CUSP ELLPACK:
+        104.515 GB/s
+        104.517 GB/s
+        104.528 GB/s
+CUSP HYBRID:
+        104.819 GB/s
+        104.920 GB/s
+        104.423 GB/s
+
+
+
+         MATRIX NAME             MGPU         CUSPARSE      CUSP-CSR       CUSP-ELL       CUSP-HYB
+             Circuit     107.436 GB/s      46.551 GB/s   48.476 GB/s     7.750 GB/s    17.132 GB/s
+           Economics     124.706 GB/s      51.262 GB/s   43.153 GB/s    35.953 GB/s    19.580 GB/s
+        Epidemiology     117.004 GB/s      75.898 GB/s   86.909 GB/s   126.929 GB/s   127.545 GB/s
+     FEM/Accelerator     123.670 GB/s      51.831 GB/s   43.331 GB/s    45.811 GB/s    31.794 GB/s
+      FEM/Cantilever     193.533 GB/s     110.316 GB/s  101.012 GB/s   138.123 GB/s    77.893 GB/s
+          FEM/Harbor     185.284 GB/s      90.431 GB/s   96.193 GB/s    79.389 GB/s    37.955 GB/s
+            FEM/Ship     191.043 GB/s     106.747 GB/s   93.432 GB/s   121.912 GB/s    78.532 GB/s
+         FEM/Spheres     194.482 GB/s     116.650 GB/s  104.886 GB/s   147.950 GB/s   148.110 GB/s
+             Protein     196.734 GB/s     137.486 GB/s  140.720 GB/s   109.365 GB/s    56.345 GB/s
+                 QCD     177.051 GB/s      74.514 GB/s   66.204 GB/s   161.228 GB/s   161.146 GB/s
+             Webbase      75.983 GB/s      49.898 GB/s   34.581 GB/s     0.000 GB/s    37.190 GB/s
+         Wind Tunnel     195.362 GB/s     107.789 GB/s   94.228 GB/s   104.528 GB/s   104.920 GB/s

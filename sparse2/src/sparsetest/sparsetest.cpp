@@ -32,12 +32,14 @@ const int MgpuSizes[NumMgpuSizes] = {
 ;
 struct Result {
 	const char* matrixName;
-	Benchmark mgpu[5];
+	Benchmark mgpu[NumMgpuSizes];
 	Benchmark mgpuPreferred;
 
 	Benchmark cusparse;
+
 	Benchmark cuspCsr;
 	Benchmark cuspEll;
+	Benchmark cuspHyb;
 };
 
 
@@ -64,7 +66,7 @@ bool VerifyMultiplication(const SparseMatrix<double>& matrix, CuDeviceMem* xVec,
 
 bool RunBenchmark(CuContext* context, sparseEngine_t mgpu, 
 	cusparseHandle_t cusparse, const char* matrixPath, int numRuns,
-	int numIterations, int numValueSets, sparsePrec_t prec, bool verify,
+	int numIterations, sparsePrec_t prec, bool verify,
 	std::vector<Result>& results) {
 
 	printf("Running %d tests with %d iterations.\n\n", numRuns,
@@ -97,9 +99,12 @@ bool RunBenchmark(CuContext* context, sparseEngine_t mgpu,
 			return false;
 		}
 
-		double rowStddev = RowDensityStddev(*m);
-		printf("h = %6d, w = %6d, nz = %8d, rowStddev = %7.3lf\n", m->height,
-			m->width, m->elements.size(), rowStddev);
+		int maxLen;
+		double rowStddev = RowDensityStddev(*m, &maxLen);
+		double mean = (double)m->elements.size() / m->height;
+		printf("h = %6d, w = %6d, nz = %8d, mean = %7.3lf, "
+			"rowStddev = %7.3lf, maxLen = %5d\n", m->height, m->width, 
+			m->elements.size(), mean, rowStddev, maxLen);
 
 		// Allocate the input and output vectors
 		DeviceMemPtr xVecDevice, yVecDevice;
@@ -118,16 +123,16 @@ bool RunBenchmark(CuContext* context, sparseEngine_t mgpu,
 		}
 
 
-		std::vector<std::vector<Benchmark> > mgpuBenchmarks(numValueSets);
-		for(int j(0); j < numValueSets; ++j) mgpuBenchmarks[j].resize(numRuns);
+		std::vector<std::vector<Benchmark> > mgpuBenchmarks(NumMgpuSizes);
+		for(int j(0); j < NumMgpuSizes; ++j) mgpuBenchmarks[j].resize(numRuns);
 
 		std::vector<Benchmark> cusparseBenchmarks(numRuns);
 
 		std::vector<Benchmark> cuspCsrBenchmarks(numRuns);
-
 		std::vector<Benchmark> cuspEllBenchmarks(numRuns);
+		std::vector<Benchmark> cuspHybBenchmarks(numRuns);
 
-		std::vector<int> mgpuFastest(numValueSets);
+		std::vector<int> mgpuFastest(NumMgpuSizes);
 
 
 		////////////////////////////////////////////////////////////////////////
@@ -135,9 +140,9 @@ bool RunBenchmark(CuContext* context, sparseEngine_t mgpu,
 
 		results[i].matrixName = Matrices[i][1];
 
-		for(int val(0); val < numValueSets; ++val) {
+		for(int val(0); val < NumMgpuSizes; ++val) {
 			double inflation;
-			int valsPerThread = 4 * (val + 1);
+			int valsPerThread = MgpuSizes[val];
 			BenchmarkMGPUSparse(*m, mgpu, prec, valsPerThread, xVecDevice, 
 				yVecDevice, numIterations, numRuns, &inflation, 
 				&mgpuBenchmarks[val][0]);
@@ -209,26 +214,55 @@ bool RunBenchmark(CuContext* context, sparseEngine_t mgpu,
 
 		result = BenchmarkCusp(*m, EncodingEll, prec, xVecDevice, yVecDevice, 
 			numIterations, numRuns, &cuspEllBenchmarks[0]);
-		if(CUDA_ERROR_OUT_OF_MEMORY == result) {
+		if(CUDA_ERROR_OUT_OF_MEMORY == result) 
 			printf("ELLPACK is OUT OF MEMORY.\n");
-			continue;
-		}
+		else {
 
-		if(verify) {
-			bool match = VerifyMultiplication(*m, xVecDevice, yVecDevice, prec);
-			if(!match) {
-				printf("Multiplication verification FAILED\n\n");
-				return false;
+			if(verify) {
+				bool match = VerifyMultiplication(*m, xVecDevice, yVecDevice,
+					prec);
+				if(!match) {
+					printf("Multiplication verification FAILED\n\n");
+					return false;
+				}
+			}
+			printf("CUSP ELLPACK:\n");
+			for(int run(0); run < numRuns; ++run) {
+				printf("\t%7.3lf GB/s\n", cuspEllBenchmarks[run].bandwidth);
+				results[i].cuspEll.Max(cuspEllBenchmarks[run]);
 			}
 		}
-		printf("CUSP ELLPACK:\n");
-		for(int run(0); run < numRuns; ++run) {
-			printf("\t%7.3lf GB/s\n", cuspEllBenchmarks[run].bandwidth);
-			results[i].cuspEll.Max(cuspEllBenchmarks[run]);
+
+
+		////////////////////////////////////////////////////////////////////////
+		// Benchmark CUSP HYBRID
+
+		result = BenchmarkCusp(*m, EncodingHyb, prec, xVecDevice, yVecDevice, 
+			numIterations, numRuns, &cuspHybBenchmarks[0]);
+		if(CUDA_ERROR_OUT_OF_MEMORY == result)
+			printf("HYBRID is OUT OF MEMORY.\n");
+		else {
+			if(verify) {
+				bool match = VerifyMultiplication(*m, xVecDevice, yVecDevice, 
+					prec);
+				if(!match) {
+					printf("Multiplication verification FAILED\n\n");
+					return false;
+				}
+			}
+			printf("CUSP HYBRID:\n");
+			for(int run(0); run < numRuns; ++run) {
+				printf("\t%7.3lf GB/s\n", cuspHybBenchmarks[run].bandwidth);
+				results[i].cuspHyb.Max(cuspHybBenchmarks[run]);
+			}
 		}
+		
+		
+		printf("\n");
 	}
 
 	cusparseDestroyMatDescr(cusparseMat);
+
 
 	return true;
 }
@@ -242,7 +276,6 @@ int main(int argc, char** argv) {
 
 	ContextPtr context;
 	CreateCuContext(device, 0, &context);
-//	CUresult result = AttachCuContext(&context);
 
 	sparseEngine_t mgpu;
 	sparseStatus_t status = sparseCreate("../../src/cubin/", &mgpu);
@@ -262,15 +295,16 @@ int main(int argc, char** argv) {
 
 	std::vector<Result> results;
 
-	RunBenchmark(context, mgpu, cusparse, "../../../sparse/matrices/", 3, 400, 
-		5, SPARSE_PREC_REAL4, true, results);
+	RunBenchmark(context, mgpu, cusparse, "../../../sparse/matrices/", 3, 1200, 
+		SPARSE_PREC_REAL8, true, results);
 
 	printf("\n\n");
-	printf("         MATRIX NAME             MGPU         CUSPARSE      CUSP-CSR       CUSP-ELL\n");
+	printf("         MATRIX NAME             MGPU         CUSPARSE      CUSP-CSR       CUSP-ELL       CUSP-HYB\n");
 	for(size_t i(0); i < results.size(); ++i) {
-		printf("%20s     %7.3lf GB/s     %7.3lf GB/s  %7.3lf GB/s   %7.3lf GB/s\n",
-			results[i].matrixName, results[i].mgpuPreferred.bandwidth, results[i].cusparse.bandwidth,
-			results[i].cuspCsr.bandwidth, results[i].cuspEll.bandwidth);
+		printf("%20s     %7.3lf GB/s     %7.3lf GB/s  %7.3lf GB/s   %7.3lf GB/s   %7.3lf GB/s\n",
+			results[i].matrixName, results[i].mgpuPreferred.bandwidth, 
+			results[i].cusparse.bandwidth, results[i].cuspCsr.bandwidth, 
+			results[i].cuspEll.bandwidth, results[i].cuspHyb.bandwidth);
 	}
 
 	cusparseDestroy(cusparse);

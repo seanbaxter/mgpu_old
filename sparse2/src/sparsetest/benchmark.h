@@ -44,7 +44,8 @@ struct Benchmark {
 enum Encoding {
 	EncodingCoo,
 	EncodingCsr, 
-	EncodingEll
+	EncodingEll,
+	EncodingHyb
 };
 
 sparseStatus_t BenchmarkMGPUSparse(const SparseMatrix<double>& m, 

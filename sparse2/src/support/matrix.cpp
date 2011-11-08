@@ -217,9 +217,11 @@ template bool VerifySparseProduct(const SparseMatrix<double>& matrix,
 ////////////////////////////////////////////////////////////////////////////////
 // RowDensityStddev
 
-double RowDensityStddev(const SparseMatrix<double>& matrix) {
+double RowDensityStddev(const SparseMatrix<double>& matrix, int* maxLen) {
 	double meanNzPerRow = (double)matrix.elements.size() / matrix.height;
 	double squaredSum = 0;
+
+	if(maxLen) *maxLen = 0;
 
 	int nz = matrix.elements.size();
 	int prevRow = 0;
@@ -232,6 +234,7 @@ double RowDensityStddev(const SparseMatrix<double>& matrix) {
 		} else {
 			squaredSum += (curRowCount - meanNzPerRow) * 
 				(curRowCount - meanNzPerRow);
+			if(maxLen) *maxLen = std::max(*maxLen, curRowCount);
 			curRowCount = 0;
 			++prevRow;
 		}
