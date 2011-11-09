@@ -188,8 +188,6 @@ typedef struct {
 }  sparseMat_d;
 typedef sparseMat_d* sparseMat_t;
 
-
-
 // Create the engine and attach to the current context.
 sparseStatus_t SPARSEAPI sparseCreate(const char* kernelPath,
 	sparseEngine_t* engine);
@@ -229,7 +227,6 @@ sparseStatus_t SPARSEAPI sparseMatDestroy(sparseMat_t matrix);
 // Retrieves the engine that created the matrix and incs its ref count
 sparseStatus_t SPARSEAPI sparseMatEngine(sparseMat_t matrix,
 	sparseEngine_t* engine);
-
 
 // y = alpha * matrix * x + beta * y
 // If beta is 0 and alpha is 1, an optimized version is used.

@@ -10,6 +10,13 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sparsetest", "sparsetest\sp
 		{30A5D7EB-2B78-4C87-BC89-6D22F05BF235} = {30A5D7EB-2B78-4C87-BC89-6D22F05BF235}
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{50DEE165-C880-417D-9655-306E7E4745A4}"
+	ProjectSection(SolutionItems) = preProject
+		TextFile1.txt = TextFile1.txt
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sparsefigures", "sparsefigures\sparsefigures.vcproj", "{AF6F4C53-1324-4B43-BE6F-8D006E031028}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -27,6 +34,10 @@ Global
 		{F5635319-CCDD-4404-B67C-3B61B10CF8C6}.Debug|Win32.Build.0 = Debug|Win32
 		{F5635319-CCDD-4404-B67C-3B61B10CF8C6}.Release|Win32.ActiveCfg = Release|Win32
 		{F5635319-CCDD-4404-B67C-3B61B10CF8C6}.Release|Win32.Build.0 = Release|Win32
+		{AF6F4C53-1324-4B43-BE6F-8D006E031028}.Debug|Win32.ActiveCfg = Debug|Win32
+		{AF6F4C53-1324-4B43-BE6F-8D006E031028}.Debug|Win32.Build.0 = Debug|Win32
+		{AF6F4C53-1324-4B43-BE6F-8D006E031028}.Release|Win32.ActiveCfg = Release|Win32
+		{AF6F4C53-1324-4B43-BE6F-8D006E031028}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

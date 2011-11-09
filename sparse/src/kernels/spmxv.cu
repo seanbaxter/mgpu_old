@@ -6,7 +6,7 @@
 // error: no operator "=" matches these operands
 //		operand types are: volatile T = T
 
-// Must define a shared mem type copy ctor with volatile const rhs.
+// TODO  Must define a shared mem type copy ctor with volatile const rhs.
 
 
 #define WARPS_PER_BLOCK 8
@@ -96,7 +96,6 @@
 	#define NUM_BLOCKS 3
 #endif
 
-#include "finalize.cu"
 
 // Flags to begin a segmented scan and to commit the scan to shared mem.
 #define STORE_FLAG (1<< 25)
@@ -112,8 +111,6 @@ DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
 	uint lane = (WARP_SIZE - 1) & tid;
 	uint warp = tid / WARP_SIZE;
 	uint block = blockIdx.x;
-
-//	if(block) return;
 
 	uint gid = block * WARPS_PER_BLOCK + warp;
 
@@ -158,7 +155,7 @@ DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
 
 		T sparseValue = sparseValues_global[offset0 + i * WARP_SIZE];
 		T xValue = ReadVec(xVec_texture, 0x01ffffff & colIndex);
-	
+
 		sum = MulAndAdd(sparseValue, xValue, sum);
 		int store = (i == (VT - 1)) || (STORE_FLAG & colIndex);
 
@@ -210,11 +207,6 @@ DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
 	if(storeToGlobal)
 		tempOutput_global[warpOutputIndex + lane] = 
 			sharedSlots_shared[rowSumIndex];
-
-/*	
-	tempOutput_global[64 * warp + lane] = sharedSlots_shared[64 * warp + lane];
-	tempOutput_global[64 * warp + 32 + lane] = sharedSlots_shared[64 * warp + 32 + lane];
-*/
 }
 
 
@@ -237,5 +229,4 @@ GEN_SPMXV(12)
 GEN_SPMXV(16)
 GEN_SPMXV(20)
 
-
-
+#include "finalize.cu"
