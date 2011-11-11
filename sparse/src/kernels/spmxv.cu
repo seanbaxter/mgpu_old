@@ -163,6 +163,7 @@ DEVICE2 void SpMxV(const uint* rowIndices_global, const uint* colIndices_global,
 		if(store) sharedSlots_shared[scanOffset] = sum;
 		if(store) ++scanOffset;
 		if(store) sum = Zero;
+
 	}
 
 
@@ -228,5 +229,7 @@ GEN_SPMXV(10)
 GEN_SPMXV(12)
 GEN_SPMXV(16)
 GEN_SPMXV(20)
+GEN_SPMXV(28)
+GEN_SPMXV(36)
 
 #include "finalize.cu"
