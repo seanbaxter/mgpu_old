@@ -219,11 +219,23 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\src\kernels\histcommon.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\kernels\sampleselect.cu"
+				>
+			</File>
+			<File
 				RelativePath="..\..\src\kernels\selectcount.cu"
 				>
 			</File>
 			<File
 				RelativePath="..\..\src\kernels\selectgen.cu"
+				>
+			</File>
+			<File
+				RelativePath="..\kernels\selecthist.cu"
 				>
 			</File>
 			<File
