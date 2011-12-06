@@ -177,6 +177,11 @@ public:
 	}
 
 	template<typename T>
+	CUresult MemAlloc(const T* data, size_t count, DeviceMemPtr* ppMem) {
+		return ByteAlloc(sizeof(T) * count, &data[0], ppMem);
+	}
+
+	template<typename T>
 	CUresult MemAlloc(size_t count, DeviceMemPtr* ppMem) {
 		return ByteAlloc(sizeof(T) * count, ppMem);
 	}
@@ -468,6 +473,9 @@ public:
 	bool PushV(double2 d2) { return PushV(&d2, 16, 16); }	
 	
 	bool PushV(CuDeviceMem* mem);
+
+	template<typename T>
+	void PushStruct(const T& t, size_t align) { PushV(&t, sizeof(T), align); }
 	
 	// On 64bit builds, CUdeviceptr is defined as long long unsigned int.
 #if defined(__x86_64) || defined(AMD64) || defined(_M_AMD64)
