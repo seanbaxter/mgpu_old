@@ -2,13 +2,16 @@ const int SearchTypeLower = 0;
 const int SearchTypeUpper = 1;
 const int SearchTypeRange = 2;
 
+#define MAX_LEVELS 8
+
 template<typename T>
 struct BTree {
-	const T* nodes[6];
-	uint roundDown[6];
+	const T* nodes[MAX_LEVELS];
+	uint roundDown[MAX_LEVELS];
 	uint numLevels;
 	uint baseCount;
 };
+
 
 
 template<typename T> DEVICE2
@@ -91,14 +94,20 @@ uint RecurseTree(T key, T rootNode, int type, uint mask, int SegLanes,
 	if(5 < Loop) 
 		offset = DescendTree(offset, o2, laneNode, key, segLane, 5, type,
 			mask, tree, Loop);
+	if(6 < Loop)
+		offset = DescendTree(offset, o2, laneNode, key, segLane, 6, type,
+			mask, tree, Loop);
+	if(7 < Loop)
+		offset = DescendTree(offset, o2, laneNode, key, segLane, 7, type,
+			mask, tree, Loop);
 
 	return offset;
 }
 
 
 template<int Loop, typename T> __forceinline__ __device__
-void SearchTree(const T* keys_global, const int2 taskPairs[16], int type,
-	BTree<T> tree, T* rootNode_shared, T* level1_shared, T* request_shared,
+void SearchTree(const T* keys_global, int2 task, int type, BTree<T> tree, 
+	T* rootNode_shared, T* level1_shared, T* request_shared,
 	uint* indices_shared, uint* indices_global) {
 	
 
@@ -109,7 +118,6 @@ void SearchTree(const T* keys_global, const int2 taskPairs[16], int type,
 	const int SegsPerBlock = 1024 / SegLanes;
 
 	uint tid = threadIdx.x;
-	uint block = blockIdx.x;
 	uint segLane = (SegLanes - 1) & tid;
 	uint warpLane = (WARP_SIZE - 1) & tid;
 	uint node = tid / SegLanes;
@@ -132,12 +140,13 @@ void SearchTree(const T* keys_global, const int2 taskPairs[16], int type,
 	// Load all the requests into shared memory and store the indices to 
 	// shared memory.
 
-	int2 task = taskPairs[block];
 	while(task.x < task.y) {
 		int remaining = task.y - task.x;
+		remaining = min(1024, remaining);
 		if(tid < remaining) 
 			request_shared[tid] = keys_global[task.x + tid];
 		__syncthreads();
+
 
 		// Process all the requests from shared memory over each warp or 
 		// half-warp.
@@ -160,8 +169,8 @@ void SearchTree(const T* keys_global, const int2 taskPairs[16], int type,
 }
 
 template<typename T> DEVICE2
-void SearchTreeSwitch(const T* keys, const int2 taskPairs[16], int type,
-	BTree<T>& tree, uint* indices_global) {
+void SearchTreeSwitch(const T* keys, int2 task, int type, BTree<T> tree, 
+	uint* indices_global) {
 
 	const int SegLanes = SEG_SIZE / sizeof(T);
 	__shared__ T rootNode_shared[SegLanes];
@@ -170,25 +179,44 @@ void SearchTreeSwitch(const T* keys, const int2 taskPairs[16], int type,
 	__shared__ uint indices_shared[1024];
 
 	if(2 == tree.numLevels)
-		SearchTree<2>(keys, taskPairs, type, tree, rootNode_shared, 
-		level1_shared, request_shared, indices_shared, indices_global);
+		SearchTree<2>(keys, task, type, tree, rootNode_shared, level1_shared, 
+			request_shared, indices_shared, indices_global);
 	if(3 == tree.numLevels)
-		SearchTree<3>(keys, taskPairs, type, tree, rootNode_shared, 
-		level1_shared, request_shared, indices_shared, indices_global);
+		SearchTree<3>(keys, task, type, tree, rootNode_shared, level1_shared,
+			request_shared, indices_shared, indices_global);
 	if(4 == tree.numLevels)
-		SearchTree<4>(keys, taskPairs, type, tree, rootNode_shared, 
-		level1_shared, request_shared, indices_shared, indices_global);
+		SearchTree<4>(keys, task, type, tree, rootNode_shared, level1_shared, 
+			request_shared, indices_shared, indices_global);
 	if(5 == tree.numLevels)
-		SearchTree<5>(keys, taskPairs, type, tree, rootNode_shared, 
-		level1_shared, request_shared, indices_shared, indices_global);
+		SearchTree<5>(keys, task, type, tree, rootNode_shared, level1_shared,
+			request_shared, indices_shared, indices_global);
+	if(6 == tree.numLevels)
+		SearchTree<6>(keys, task, type, tree, rootNode_shared, level1_shared,
+			request_shared, indices_shared, indices_global);
+	if((8 == sizeof(T)) && (7 == tree.numLevels))
+		SearchTree<7>(keys, task, type, tree, rootNode_shared, level1_shared,
+			request_shared, indices_shared, indices_global);
+}
+
+
+// The input taskPair is a div() quot/remainder pair. We want to combine with
+// blockIdx.x to get the first query and end query for the block.
+DEVICE int2 ComputeTaskPair(int taskQuot, int taskRem) {
+	int block = blockIdx.x;
+	int2 pair;
+	pair.x = taskQuot * block;
+	pair.x += min(block, taskRem);
+	pair.y = pair.x + taskQuot + (block < taskRem);
+	return pair;
 }
 
 #define GEN_SEARCH(name, T, type)											\
-	extern "C" __global__ __launch_bounds__(1024, 1)						\
-	void name(const T* keys, const int2 taskPairs[16], BTree<T> tree,		\
-		uint* indices_global) {												\
+extern "C" __global__ __launch_bounds__(1024, 1)							\
+void name(const T* keys, int taskQuot, int taskRem, BTree<T> tree,			\
+	uint* indices_global) {													\
 																			\
-	SearchTreeSwitch(keys, taskPairs, type, tree, indices_global);			\
+	int2 task = ComputeTaskPair(taskQuot, taskRem);							\
+	SearchTreeSwitch(keys, task, type, tree, indices_global);				\
 }
 
 GEN_SEARCH(SearchTreeIntLower, int, SearchTypeLower)

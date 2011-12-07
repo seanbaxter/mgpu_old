@@ -1,6 +1,8 @@
 #include "../../../util/cucpp.h"
 #include "../../../inc/mgpusearch.h"
 
+const int SegSize = 128;
+
 
 const char* SearchStatusStrings[] = {
 	"SEARCH_STATUS_SUCCESS",
@@ -34,7 +36,7 @@ const int TypeSizes[6] = { 4, 4, 4, 8, 8, 8 };
 // Returns the number of active levels and their sizes.
 int DeriveLevelSizes(int count, searchType_t type, int* sizes) {
 	int size = TypeSizes[type];
-	int SegLanes = 128 / size;
+	int SegLanes = SegSize / size;
 	
 	int level = 1;
 	sizes[0] = RoundUp(count, SegLanes);
@@ -114,8 +116,10 @@ searchStatus_t SEARCHAPI searchDestroy(searchEngine_t engine) {
 ////////////////////////////////////////////////////////////////////////////////
 // Build the search b-tree.
 
+const int MaxLevels = 8;
+
 int SEARCHAPI searchTreeSize(int count, searchType_t type) {
-	int sizes[6];
+	int sizes[MaxLevels];
 	int levels = DeriveLevelSizes(count, type, sizes);
 	int total = 0;
 	for(int i(0); i < levels - 1; ++i)
@@ -129,11 +133,11 @@ searchStatus_t SEARCHAPI searchBuildTree(searchEngine_t engine, int count,
 	searchType_t type, CUdeviceptr data, CUdeviceptr tree) {
 
 	// Build the tree from the bottom up.
-	int sizes[6];
+	int sizes[MaxLevels];
 	int levels = DeriveLevelSizes(count, type, sizes);
 	int size = TypeSizes[type];
 
-	CUdeviceptr levelStarts[6];
+	CUdeviceptr levelStarts[MaxLevels];
 	for(int i(0); i < levels - 1; ++i) {
 		levelStarts[i] = tree;
 		tree += size * sizes[i];
@@ -159,8 +163,8 @@ searchStatus_t SEARCHAPI searchBuildTree(searchEngine_t engine, int count,
 
 template<typename T>
 struct BTree {
-	CUdeviceptr nodes[6];
-	uint roundDown[6];
+	CUdeviceptr nodes[MaxLevels];
+	uint roundDown[MaxLevels];
 	uint numLevels;
 	uint baseCount;
 };
@@ -170,12 +174,12 @@ searchStatus_t SEARCHAPI searchKeys(searchEngine_t engine, int count,
 	int numQueries, CUdeviceptr tree, CUdeviceptr results) {
 
 	BTree<int> btree;
-	int levelCounts[6];
+	int levelCounts[MaxLevels];
 	btree.numLevels = DeriveLevelSizes(count, type, levelCounts);
 	int offset = 0;
 	int size = TypeSizes[type];
 
-	int SegLanes = 128 / size;
+	int SegLanes = SegSize / size;
 	const int SegsPerBlock = 1024 / SegLanes;
 
 	for(uint i(0); i < btree.numLevels - 1; ++i) {
@@ -186,23 +190,19 @@ searchStatus_t SEARCHAPI searchKeys(searchEngine_t engine, int count,
 	btree.baseCount = count;
 	btree.nodes[btree.numLevels - 1] = data;
 
-	int2 taskPairs[16];
-
-
-	CuCallStack callStack;
-	callStack.Push(keys, numQueries);
-	callStack.PushStruct(btree, sizeof(CUdeviceptr));
-	callStack.Push(results);
-
 	int numBlocks = DivUp(numQueries, SegsPerBlock);
 	numBlocks = std::min(numBlocks, engine->context->Device()->NumSMs());
+
+	div_t d = div(numQueries, numBlocks);
+
+	CuCallStack callStack;
+	callStack.Push(keys, d.quot, d.rem);
+	callStack.PushStruct(btree, sizeof(CUdeviceptr));
+	callStack.Push(results);
 
 	CuFunction* func = engine->search[(int)type][(int)algo].get();
 	CUresult result = func->Launch(numBlocks, 1, callStack);
 	
 	return SEARCH_STATUS_SUCCESS;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////
 

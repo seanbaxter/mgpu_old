@@ -14,6 +14,9 @@
 		/>
 	</Platforms>
 	<ToolFiles>
+		<DefaultToolFile
+			FileName="NvCudaRuntimeApi.v4.0.rules"
+		/>
 	</ToolFiles>
 	<Configurations>
 		<Configuration
@@ -28,6 +31,9 @@
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="Cudart Build Rule"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -103,6 +109,9 @@
 				Name="VCCustomBuildTool"
 			/>
 			<Tool
+				Name="Cudart Build Rule"
+			/>
+			<Tool
 				Name="VCXMLDataGeneratorTool"
 			/>
 			<Tool
@@ -133,7 +142,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="../release/mgpusearch.lib cuda.lib"
+				AdditionalDependencies="../release/mgpusearch.lib cuda.lib cudart.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -179,6 +188,27 @@
 			<File
 				RelativePath="..\..\src\searchtest\searchtest.cpp"
 				>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\..\src\searchtest\thrusttest.cu"
+				>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="Cudart Build Rule"
+						Arch1="20"
+						Arch2="0"
+						Runtime="2"
+					/>
+				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter
@@ -188,6 +218,10 @@
 			>
 			<File
 				RelativePath="..\..\..\util\cucpp.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\searchtest\searchtest.h"
 				>
 			</File>
 			<File
