@@ -22,8 +22,6 @@ void FillVec(std::vector<T>& vec, int count) {
 	}
 }
 
-
-
 int main(int argc, char** argv) {
 
 	typedef int64 T;
@@ -52,12 +50,6 @@ int main(int argc, char** argv) {
 
 	status = searchBuildTree(engine, NumElements, SEARCH_TYPE_INT64, 
 		deviceData->Handle(), deviceTree->Handle());
-
-//	std::vector<int> hostTree;
-//	deviceTree->ToHost(hostTree);
-
-//	std::auto_ptr<BTreeCPU> btreeCPU;
-//	CreateBTreeCPU(values, NumElements, &btreeCPU);
 
 	T last = values.back();
 

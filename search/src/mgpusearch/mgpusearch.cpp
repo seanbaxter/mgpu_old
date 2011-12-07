@@ -157,11 +157,9 @@ searchStatus_t SEARCHAPI searchBuildTree(searchEngine_t engine, int count,
 ////////////////////////////////////////////////////////////////////////////////
 // Search the b-tree.
 
-
 template<typename T>
 struct BTree {
 	CUdeviceptr nodes[6];
-	int levelCounts[6];
 	uint roundDown[6];
 	uint numLevels;
 	uint baseCount;
@@ -172,27 +170,31 @@ searchStatus_t SEARCHAPI searchKeys(searchEngine_t engine, int count,
 	int numQueries, CUdeviceptr tree, CUdeviceptr results) {
 
 	BTree<int> btree;
-	btree.numLevels = DeriveLevelSizes(count, type, btree.levelCounts);
+	int levelCounts[6];
+	btree.numLevels = DeriveLevelSizes(count, type, levelCounts);
 	int offset = 0;
 	int size = TypeSizes[type];
-	int segLanes = 128 / size;
+
+	int SegLanes = 128 / size;
+	const int SegsPerBlock = 1024 / SegLanes;
 
 	for(uint i(0); i < btree.numLevels - 1; ++i) {
 		btree.nodes[i] = tree;
-		btree.roundDown[i] = btree.levelCounts[i + 1] - segLanes;
-		tree += btree.levelCounts[i] * size;
+		btree.roundDown[i] = levelCounts[i + 1] - SegLanes;
+		tree += levelCounts[i] * size;
 	}
 	btree.baseCount = count;
 	btree.nodes[btree.numLevels - 1] = data;
-	btree.levelCounts[btree.numLevels - 1] = count;
+
+	int2 taskPairs[16];
+
 
 	CuCallStack callStack;
 	callStack.Push(keys, numQueries);
 	callStack.PushStruct(btree, sizeof(CUdeviceptr));
-	callStack.Push(results, (CUdeviceptr)0);
+	callStack.Push(results);
 
-	const int segsPerBlock = 1024 / (128 / size);
-	int numBlocks = DivUp(numQueries, segsPerBlock);
+	int numBlocks = DivUp(numQueries, SegsPerBlock);
 	numBlocks = std::min(numBlocks, engine->context->Device()->NumSMs());
 
 	CuFunction* func = engine->search[(int)type][(int)algo].get();
