@@ -8,6 +8,8 @@
 #define SEG_SIZE 128
 
 typedef unsigned int uint;
+typedef __int64 int64;
+typedef unsigned __int64 uint64;
 
 #include <device_functions.h>
 #include <vector_functions.h>

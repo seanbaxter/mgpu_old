@@ -1,17 +1,27 @@
 #include "../../../util/cucpp.h"
 #include "../../../inc/mgpusearch.h"
-#include <vector>
-#include <algorithm>
-#include <random>
 
-template<typename T>
-struct BTree {
-	CUdeviceptr nodes[6];
-	int levelCounts[6];
-	uint roundDown[6];
-	uint numLevels;
-	uint baseCount;
+
+const char* SearchStatusStrings[] = {
+	"SEARCH_STATUS_SUCCESS",
+	"SEARCH_STATUS_NOT_INITIALIZED",
+	"SEARCH_STATUS_DEVICE_ALLOC_FAILED", 
+	"SEARCH_STATUS_HOST_ALLOC_FAILED",
+	"SEARCH_STATUS_CONFIG_NOT_SUPORTED",
+	"SEARCH_STATUS_INVALID_CONTEXT",
+	"SEARCH_STATUS_KERNEL_NOT_FOUND",
+	"SEARCH_STATUS_KERNEL_ERROR",
+	"SEARCH_STATUS_LAUNCH_ERROR",
+	"SEARCH_STATUS_INVALID_VALUE",
+	"SEARCH_STATUS_DEVICE_ERROR",
+	"SEARCH_STATUS_INTERNAL_ERROR",
+	"SCAN_STATUS_UNSUPPORTED_DEVICE"
 };
+
+const char* SEARCHAPI searchStatusString(searchStatus_t status) {
+	if(status > sizeof(SearchStatusStrings) / sizeof(char*)) return 0;
+	return SearchStatusStrings[status];
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -68,13 +78,28 @@ searchStatus_t SEARCHAPI searchCreate(const char* kernelPath,
 
 	// Load the functions.
 
+	const char* Types[6] = {
+		"Int", "Uint", "Float", "Int64", "Uint64", "Double" 
+	};
+	const char* Algos[4] = {
+		"Lower", "Upper", "Match", "Range"
+	};
+
 	result = e->module->GetFunction("BuildTree4", make_int3(256, 1, 1), 
 		&e->build[0]);
+	if(CUDA_SUCCESS != result) return SEARCH_STATUS_KERNEL_NOT_FOUND;
+	
 	result = e->module->GetFunction("BuildTree8", make_int3(256, 1, 1), 
 		&e->build[1]);
+	if(CUDA_SUCCESS != result) return SEARCH_STATUS_KERNEL_NOT_FOUND;
 
-	result = e->module->GetFunction("SearchTreeIntLower", make_int3(1024, 1, 1),
-		&e->search[0][0]);
+	for(int i(0); i < 6; ++i)
+		for(int j(0); j < 4; ++j) {
+			char kernelName[64];
+			sprintf(kernelName, "SearchTree%s%s", Types[i], Algos[j]);
+			result = e->module->GetFunction(kernelName, make_int3(1024, 1, 1),
+				&e->search[i][j]);
+		}
 
 	*engine = e.release();
 	return SEARCH_STATUS_SUCCESS;
@@ -132,6 +157,16 @@ searchStatus_t SEARCHAPI searchBuildTree(searchEngine_t engine, int count,
 ////////////////////////////////////////////////////////////////////////////////
 // Search the b-tree.
 
+
+template<typename T>
+struct BTree {
+	CUdeviceptr nodes[6];
+	int levelCounts[6];
+	uint roundDown[6];
+	uint numLevels;
+	uint baseCount;
+};
+
 searchStatus_t SEARCHAPI searchKeys(searchEngine_t engine, int count,
 	searchType_t type, CUdeviceptr data, searchAlgo_t algo, CUdeviceptr keys, 
 	int numQueries, CUdeviceptr tree, CUdeviceptr results) {
@@ -159,7 +194,9 @@ searchStatus_t SEARCHAPI searchKeys(searchEngine_t engine, int count,
 	const int segsPerBlock = 1024 / (128 / size);
 	int numBlocks = DivUp(numQueries, segsPerBlock);
 	numBlocks = std::min(numBlocks, engine->context->Device()->NumSMs());
-	CUresult result = engine->search[0][0]->Launch(numBlocks, 1, callStack);
+
+	CuFunction* func = engine->search[(int)type][(int)algo].get();
+	CUresult result = func->Launch(numBlocks, 1, callStack);
 	
 	return SEARCH_STATUS_SUCCESS;
 }
@@ -167,226 +204,3 @@ searchStatus_t SEARCHAPI searchKeys(searchEngine_t engine, int count,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-
-struct BTreeCPU {
-	int count;
-	std::vector<int> data;	
-
-	// Support up to 6 btree levels.
-	int numLevels;
-	int levelCounts[6];
-	std::vector<int> levelData[6];
-};
-
-void CreateBTreeCPU(std::vector<int>& data, int count,
-	std::auto_ptr<BTreeCPU>* ppTree) {
-
-	std::auto_ptr<BTreeCPU> tree(new BTreeCPU);
-	tree->numLevels = 0;
-	tree->count = count;
-	tree->data.swap(data);
-
-	const int SEG_SIZE = 32;
-
-	int level = 0;
-	while(count > SEG_SIZE) {
-		// Divide by 32 to get the size of the next btree level.
-		int count2 = (count + SEG_SIZE - 1) / SEG_SIZE;
-
-		// Round up to a multiple of 32 to make indexing simpler.
-		int newCount = ~(SEG_SIZE - 1) & (count2 + SEG_SIZE - 1);
-		tree->levelData[level].resize(newCount);
-
-		// Prepare the subsampling.
-		const int* source = level ? &tree->levelData[level - 1][0] :
-			&tree->data[0];
-
-		for(int i(0); i < newCount; ++i) {
-			int j = std::min(SEG_SIZE * i + SEG_SIZE - 1, count - 1);
-			tree->levelData[level][i] = source[j];
-		}
-
-		// Store the level count.
-		tree->levelCounts[level++] = newCount;
-		count = newCount;
-	}
-	tree->numLevels = level;
-
-	// Swap the levels to put them in order.
-	for(int i(0); i < level / 2; ++i) {
-		tree->levelData[i].swap(tree->levelData[level - 1 - i]);
-		std::swap(tree->levelCounts[i], tree->levelCounts[level - 1 - i]);
-	}
-
-	*ppTree = tree;
-}
-
-
-int main(int argc, char** argv) {
-
-	
-	std::tr1::mt19937 mt19937;
-
-	cuInit(0);
-
-	DevicePtr device;
-	CreateCuDevice(0, &device);
-
-	ContextPtr context;
-	CreateCuContext(device, 0, &context);
-
-	searchEngine_t engine = 0;
-	searchStatus_t status = searchCreate("../../src/cubin/search.cubin",
-		&engine);
-
-	const int NumElements = 20;
-	std::vector<int> values(NumElements);
-
-	std::tr1::uniform_int<int> r(0, 99);
-	for(int i(0); i < NumElements; ++i)
-		values[i] = r(mt19937);
-	std::sort(values.begin(), values.end());
-
-	DeviceMemPtr deviceData, deviceTree, deviceResults;
-	context->MemAlloc(values, &deviceData);
-
-	int treeSize = searchTreeSize(NumElements, SEARCH_TYPE_INT32);
-
-	context->ByteAlloc(treeSize, &deviceTree);
-
-	status = searchBuildTree(engine, NumElements, SEARCH_TYPE_INT32, 
-		deviceData->Handle(), deviceTree->Handle());
-
-	std::vector<int> hostTree;
-	deviceTree->ToHost(hostTree);
-
-	std::auto_ptr<BTreeCPU> btreeCPU;
-	CreateBTreeCPU(values, NumElements, &btreeCPU);
-
-
-	// SEARCH
-	const int NumQueries = 10;
-	int SearchKeys[NumQueries] = { 5, 15, 25, 35, 45, 55, 65, 75, 85, 95 };
-	DeviceMemPtr keysDevice, indicesDevice;
-	context->MemAlloc(SearchKeys, 10, &keysDevice);
-	context->MemAlloc<uint>(10, &indicesDevice);
-	status = searchKeys(engine, NumElements, SEARCH_TYPE_INT32, 
-		deviceData->Handle(), SEARCH_ALGO_LOWER_BOUND, keysDevice->Handle(),
-		NumQueries, deviceTree->Handle(), indicesDevice->Handle());
-
-	std::vector<int> indicesHost;
-	indicesDevice->ToHost(indicesHost);
-
-	searchDestroy(engine);
-}
-
-
-/*
-searchStatus_t SEARCHAPI searchKeys(searchEngine_t engine, int count,
-	searchType_t type, CUdeviceptr data, searchAlgo_t algo, CUdeviceptr keys, 
-	int numQueries, CUdeviceptr tree, CUdeviceptr results) {
-*/
-/*
-#include <cstdio>
-#include <vector>
-#include <memory>
-#include <algorithm>
-#include <random>
-
-std::tr1::mt19937 mt19937;
-
-// Build 
-
-const int SEG_SIZE = 32;
-
-struct BTree {
-	int count;
-	std::vector<int> data;	
-
-	// Support up to 6 btree levels.
-	int numLevels;
-	int levelCounts[6];
-	std::vector<int> levelData[6];
-};
-
-void CreateBTree(std::vector<int>& data, int count,
-	std::auto_ptr<BTree>* ppTree) {
-
-	std::auto_ptr<BTree> tree(new BTree);
-	tree->numLevels = 0;
-	tree->count = count;
-	tree->data.swap(data);
-
-	int level = 0;
-	while(count > SEG_SIZE) {
-		// Divide by 32 to get the size of the next btree level.
-		int count2 = (count + SEG_SIZE - 1) / SEG_SIZE;
-
-		// Round up to a multiple of 32 to make indexing simpler.
-		int newCount = ~(SEG_SIZE - 1) & (count2 + SEG_SIZE - 1);
-		tree->levelData[level].resize(newCount);
-
-		// Prepare the subsampling.
-		const int* source = level ? &tree->levelData[level - 1][0] :
-			&tree->data[0];
-
-		for(int i(0); i < newCount; ++i) {
-			int j = std::min(SEG_SIZE * i + SEG_SIZE - 1, count - 1);
-			tree->levelData[level][i] = source[j];
-		}
-
-		// Store the level count.
-		tree->levelCounts[level++] = newCount;
-		count = newCount;
-	}
-	tree->numLevels = level;
-
-	// Swap the levels to put them in order.
-	for(int i(0); i < level / 2; ++i) {
-		tree->levelData[i].swap(tree->levelData[level - 1 - i]);
-		std::swap(tree->levelCounts[i], tree->levelCounts[level - 1 - i]);
-	}
-
-	*ppTree = tree;
-}
-
-int GetOffset(int key, const int* node) {
-	for(int i(0); i < SEG_SIZE; ++i)
-		if(node[i] >= key) return i;
-	return SEG_SIZE;
-}
-int GetOffset2(int key, const int* node, int offset, int count) {
-	int end = std::min(offset + SEG_SIZE, count);
-	for(int i(offset); i < end; ++i)
-		if(node[i] >= key) return i;
-	return end;
-}
-
-int lower_bound(const BTree& tree, int key) {
-	int numLevels = tree.numLevels;
-	int offset = 0;
-	for(int level(0); level < numLevels; ++level) {
-		int o2 = GetOffset(key, &tree.levelData[level][offset]);
-		offset = SEG_SIZE * (offset + o2);
-	}
-	offset = GetOffset2(key, &tree.data[0], offset, tree.count);
-	return offset;	
-}
-
-int main(int argc, char** argv) {
-	const int NumElements = 20000;
-	std::tr1::uniform_int<int> r(0, 32767);
-
-	std::vector<int> data(NumElements);
-	for(int i(0); i < NumElements; ++i)
-		data[i] = r(mt19937);
-	std::sort(data.begin(), data.end());
-
-	std::auto_ptr<BTree> tree;
-	CreateBTree(data, NumElements, &tree);
-
-	int offset = lower_bound(*tree, 32700);
-
-	return 0;
-}
-*/

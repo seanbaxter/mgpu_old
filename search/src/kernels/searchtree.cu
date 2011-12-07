@@ -39,10 +39,10 @@ uint DescendTree(uint offset, uint& o2, T& laneNode, T key, uint segLane,
 		offset = min(offset, tree.roundDown[level]);
 	} else {
 		// We're on the base level of data.
-		if(offset + 32 > tree.baseCount) {
+		if(offset + SegLanes > tree.baseCount) {
 			// Change the mask if we're at the end of the data.
 			uint setBits = tree.baseCount - offset;
-			mask = bfi(0, 0xffffffff, 0, setBits);		
+			mask = mask & (0xffffffff>> (SegLanes - setBits));
 		}
 		o2 = GetOffset(key, laneNode, type, mask);
 		offset += o2;
@@ -129,21 +129,48 @@ void SearchTree(const T* keys_global, uint numQueries, int type, BTree<T> tree,
 	}
 }
 
-
-extern "C" __global__ __launch_bounds__(1024, 1)
-void SearchTreeIntLower(const int* keys, uint numQueries, BTree<int> tree,
-	uint* indices_global, int* retrieved_global) {
+template<typename T> DEVICE2
+void SearchTreeSwitch(const T* keys, uint numQueries, int type, BTree<T>& tree,
+	uint* indices_global, T* retrieved_global) {
 
 	if(2 == tree.numLevels)
-		SearchTree<2>(keys, numQueries, SearchTypeLower, tree, indices_global,
+		SearchTree<2>(keys, numQueries, type, tree, indices_global,
 			retrieved_global);
 	if(3 == tree.numLevels)
-		SearchTree<3>(keys, numQueries, SearchTypeLower, tree, indices_global,
+		SearchTree<3>(keys, numQueries, type, tree, indices_global,
 			retrieved_global);
 	if(4 == tree.numLevels)
-		SearchTree<4>(keys, numQueries, SearchTypeLower, tree, indices_global,
+		SearchTree<4>(keys, numQueries, type, tree, indices_global,
 			retrieved_global);
 	if(5 == tree.numLevels)
-		SearchTree<5>(keys, numQueries, SearchTypeLower, tree, indices_global,
+		SearchTree<5>(keys, numQueries, type, tree, indices_global,
 			retrieved_global);
 }
+
+#define GEN_SEARCH(name, T, type)											\
+	extern "C" __global__ __launch_bounds__(1024, 1)						\
+	void name(const T* keys, uint numQueries, BTree<T> tree,				\
+		uint* indices_global, T* retrieved_global) {						\
+																			\
+	SearchTreeSwitch(keys, numQueries, type, tree, indices_global,			\
+		retrieved_global);													\
+}
+
+GEN_SEARCH(SearchTreeIntLower, int, SearchTypeLower)
+GEN_SEARCH(SearchTreeIntUpper, int, SearchTypeUpper)
+
+GEN_SEARCH(SearchTreeUintLower, uint, SearchTypeLower)
+GEN_SEARCH(SearchTreeUintUpper, uint, SearchTypeUpper)
+
+GEN_SEARCH(SearchTreeFloatLower, float, SearchTypeLower)
+GEN_SEARCH(SearchTreeFloatUpper, float, SearchTypeUpper)
+
+
+GEN_SEARCH(SearchTreeInt64Lower, int64, SearchTypeLower)
+GEN_SEARCH(SearchTreeInt64Upper, int64, SearchTypeUpper)
+
+GEN_SEARCH(SearchTreeUint64Lower, uint64, SearchTypeLower)
+GEN_SEARCH(SearchTreeUint64Upper, uint64, SearchTypeUpper)
+
+GEN_SEARCH(SearchTreeDoubleLower, double, SearchTypeLower)
+GEN_SEARCH(SearchTreeDoubleUpper, double, SearchTypeUpper)
