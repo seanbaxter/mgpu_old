@@ -7,6 +7,19 @@
 // Size of a memory segment
 #define SEG_SIZE 128
 
+#define SearchTypeLower 0
+#define SearchTypeUpper 1
+#define SearchTypeRange 2
+
+// NOTE: SEG_LANES_32_BIT may be set to 32 bits for better performance if the
+// alu:mem ratio can be brought down. SEG_LANES_64_BIT should not however be
+// increased.
+#define SEG_LANES_32_BIT 16
+#define SEG_LANES_64_BIT 16
+
+#define MAX_LEVELS 8
+
+
 typedef unsigned int uint;
 typedef __int64 int64;
 typedef unsigned __int64 uint64;
@@ -21,6 +34,7 @@ DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
 		"=r"(ret) : "r"(y), "r"(x), "r"(bit), "r"(numBits));
 	return ret;
 }
+
 
 #include "buildtree.cu"
 

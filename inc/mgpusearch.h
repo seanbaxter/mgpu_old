@@ -52,11 +52,10 @@ typedef enum {
 	SEARCH_TYPE_DOUBLE
 } searchType_t;
 
-// 
 typedef enum {
 	SEARCH_ALGO_LOWER_BOUND = 0,
 	SEARCH_ALGO_UPPER_BOUND,
-	SEARCH_ALGO_MATCH
+	SEARCH_ALGO_BINARY_SEARCH
 } searchAlgo_t;
 
 int SEARCHAPI searchTreeSize(int count, searchType_t type);
@@ -72,10 +71,15 @@ searchStatus_t SEARCHAPI searchDestroy(searchEngine_t engine);
 searchStatus_t SEARCHAPI searchBuildTree(searchEngine_t engine, int count, 
 	searchType_t type, CUdeviceptr data, CUdeviceptr tree);
 
+// Runs a lower_bound, upper_bound, or binary_search.
 searchStatus_t SEARCHAPI searchKeys(searchEngine_t engine, int count,
 	searchType_t type, CUdeviceptr data, searchAlgo_t algo, CUdeviceptr keys, 
 	int numQueries, CUdeviceptr tree, CUdeviceptr results);
 
+// Runs an equal_range and returns the ranges as int2 pairs to results.
+searchStatus_t SEARCHAPI searchRanges(searchEngine_t engine, int count,
+	searchType_t type, CUdeviceptr data, CUdeviceptr keys, int numQueries,
+	CUdeviceptr tree, CUdeviceptr results);
 
 #ifdef __cplusplus
 }

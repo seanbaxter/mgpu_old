@@ -2,7 +2,8 @@
 #include "../../../inc/mgpusearch.h"
 
 const int SegSize = 128;
-
+const int SegLanes32Bit = 16;
+const int SegLanes64Bit = 16;
 
 const char* SearchStatusStrings[] = {
 	"SEARCH_STATUS_SUCCESS",
@@ -32,11 +33,10 @@ const char* SEARCHAPI searchStatusString(searchStatus_t status) {
 // Returns the size of each type.
 const int TypeSizes[6] = { 4, 4, 4, 8, 8, 8 };
 
-
 // Returns the number of active levels and their sizes.
 int DeriveLevelSizes(int count, searchType_t type, int* sizes) {
 	int size = TypeSizes[type];
-	int SegLanes = SegSize / size;
+	int SegLanes = (8 == size) ? SegLanes64Bit : SegLanes32Bit;
 	
 	int level = 1;
 	sizes[0] = RoundUp(count, SegLanes);
@@ -178,9 +178,8 @@ searchStatus_t SEARCHAPI searchKeys(searchEngine_t engine, int count,
 	btree.numLevels = DeriveLevelSizes(count, type, levelCounts);
 	int offset = 0;
 	int size = TypeSizes[type];
-
-	int SegLanes = SegSize / size;
-	const int SegsPerBlock = 1024 / SegLanes;
+	int SegLanes = (8 == size) ? SegLanes64Bit : SegLanes32Bit;
+	int SegsPerBlock = 1024 / SegLanes;
 
 	for(uint i(0); i < btree.numLevels - 1; ++i) {
 		btree.nodes[i] = tree;

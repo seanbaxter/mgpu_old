@@ -1,8 +1,3 @@
-const int SearchTypeLower = 0;
-const int SearchTypeUpper = 1;
-const int SearchTypeRange = 2;
-
-#define MAX_LEVELS 8
 
 template<typename T>
 struct BTree {
@@ -11,7 +6,6 @@ struct BTree {
 	uint numLevels;
 	uint baseCount;
 };
-
 
 
 template<typename T> DEVICE2
@@ -26,11 +20,9 @@ uint GetOffset(T key, T node, int type, uint mask) {
 	return offset;
 }
 
-template<typename T> DEVICE2
+template<int SegLanes, typename T> DEVICE2
 uint DescendTree(uint offset, uint& o2, T& laneNode, T key, uint segLane,
 	uint level, int type, uint mask, BTree<T> tree, int numLevels) {
-
-	const int SegLanes = SEG_SIZE / sizeof(T);
 
 	laneNode = tree.nodes[level][offset + segLane];
 
@@ -52,9 +44,9 @@ uint DescendTree(uint offset, uint& o2, T& laneNode, T key, uint segLane,
 	return offset;
 }
 
-template<int Loop, typename T> DEVICE2
-uint RecurseTree(T key, T rootNode, int type, uint mask, int SegLanes, 
-	const T* level1_shared, BTree<T> tree, uint segLane) {
+template<int SegLanes, int Loop, typename T> DEVICE2
+uint RecurseTree(T key, T rootNode, int type, uint mask, const T* level1_shared,
+	BTree<T> tree, uint segLane) {
 
 	// Find the offset within the 16-way or 32-way tree node.
 	uint offset = GetOffset(key, rootNode, type, mask);
@@ -68,8 +60,8 @@ uint RecurseTree(T key, T rootNode, int type, uint mask, int SegLanes,
 	T laneNode = level1_shared[offset + segLane];
 	uint o2 = 0;
 
-	offset = DescendTree(offset, o2, laneNode, key, segLane, 1, type, mask,
-		tree, Loop);
+	offset = DescendTree<SegLanes>(offset, o2, laneNode, key, segLane, 1, type,
+		mask, tree, Loop);
 
 	// Advisory: Loop was not unrolled, unexpected call OPs.
 	// Manually unroll the loop because nvcc is a POS.
@@ -83,29 +75,29 @@ uint RecurseTree(T key, T rootNode, int type, uint mask, int SegLanes,
 	*/
 
 	if(2 < Loop) 
-		offset = DescendTree(offset, o2, laneNode, key, segLane, 2, type,
-			mask, tree, Loop);
+		offset = DescendTree<SegLanes>(offset, o2, laneNode, key, segLane, 2, 
+			type, mask, tree, Loop);
 	if(3 < Loop) 
-		offset = DescendTree(offset, o2, laneNode, key, segLane, 3, type,
-			mask, tree, Loop);
+		offset = DescendTree<SegLanes>(offset, o2, laneNode, key, segLane, 3, 
+			type, mask, tree, Loop);
 	if(4 < Loop) 
-		offset = DescendTree(offset, o2, laneNode, key, segLane, 4, type,
-			mask, tree, Loop);
+		offset = DescendTree<SegLanes>(offset, o2, laneNode, key, segLane, 4, 
+			type, mask, tree, Loop);
 	if(5 < Loop) 
-		offset = DescendTree(offset, o2, laneNode, key, segLane, 5, type,
-			mask, tree, Loop);
-	if(6 < Loop)
-		offset = DescendTree(offset, o2, laneNode, key, segLane, 6, type,
-			mask, tree, Loop);
-	if(7 < Loop)
-		offset = DescendTree(offset, o2, laneNode, key, segLane, 7, type,
-			mask, tree, Loop);
+		offset = DescendTree<SegLanes>(offset, o2, laneNode, key, segLane, 5, 
+			type, mask, tree, Loop);
+	if(6 < Loop) 
+		offset = DescendTree<SegLanes>(offset, o2, laneNode, key, segLane, 6, 
+			type, mask, tree, Loop);
+	if(7 < Loop) 
+		offset = DescendTree<SegLanes>(offset, o2, laneNode, key, segLane, 7, 
+			type, mask, tree, Loop);
 
 	return offset;
 }
 
 
-template<int Loop, typename T> __forceinline__ __device__
+template<int SegLanes, int Loop, typename T> DEVICE2
 void SearchTree(const T* keys_global, int2 task, int type, BTree<T> tree, 
 	T* rootNode_shared, T* level1_shared, T* request_shared,
 	uint* indices_shared, uint* indices_global) {
@@ -114,20 +106,21 @@ void SearchTree(const T* keys_global, int2 task, int type, BTree<T> tree,
 	////////////////////////////////////////////////////////////////////////////
 	// Initialize
 
-	const int SegLanes = SEG_SIZE / sizeof(T);
 	const int SegsPerBlock = 1024 / SegLanes;
 
 	uint tid = threadIdx.x;
 	uint segLane = (SegLanes - 1) & tid;
 	uint warpLane = (WARP_SIZE - 1) & tid;
 	uint node = tid / SegLanes;
-	
-	uint mask = (4 == sizeof(T)) ? 0xffffffff :
-		((warpLane >= SegLanes) ? 0xffff0000 : 0x0000ffff);
-	
+
+	uint mask;
+	if(WARP_SIZE == SegLanes) mask = 0xffffffff;
+	else {
+		uint warpSegStart = ~(SegLanes - 1) & warpLane;
+		mask = ((1<< SegLanes) - 1)<< warpSegStart;
+	}
+
 	// Load the root node and the first level of nodes.
-
-
 	if(tid < SegLanes) rootNode_shared[tid] = tree.nodes[0][tid];
 	if(tid < SegLanes * SegLanes) level1_shared[tid] = tree.nodes[1][tid];
 	__syncthreads();
@@ -154,7 +147,7 @@ void SearchTree(const T* keys_global, int2 task, int type, BTree<T> tree,
 
 			T key = request_shared[query];
 
-			uint offset = RecurseTree<Loop>(key, rootNode, type, mask, SegLanes,
+			uint offset = RecurseTree<SegLanes, Loop>(key, rootNode, type, mask,
 				level1_shared, tree, segLane);
 
 			if(!segLane) indices_shared[query] = offset;
@@ -172,30 +165,31 @@ template<typename T> DEVICE2
 void SearchTreeSwitch(const T* keys, int2 task, int type, BTree<T> tree, 
 	uint* indices_global) {
 
-	const int SegLanes = SEG_SIZE / sizeof(T);
+	const int SegLanes = (8 == sizeof(T)) ? SEG_LANES_64_BIT : SEG_LANES_32_BIT;
+
 	__shared__ T rootNode_shared[SegLanes];
 	__shared__ T level1_shared[SegLanes * SegLanes];
 	__shared__ T request_shared[1024];
 	__shared__ uint indices_shared[1024];
 
 	if(2 == tree.numLevels)
-		SearchTree<2>(keys, task, type, tree, rootNode_shared, level1_shared, 
-			request_shared, indices_shared, indices_global);
+		SearchTree<SegLanes, 2>(keys, task, type, tree, rootNode_shared, 
+			level1_shared, request_shared, indices_shared, indices_global);
 	if(3 == tree.numLevels)
-		SearchTree<3>(keys, task, type, tree, rootNode_shared, level1_shared,
-			request_shared, indices_shared, indices_global);
+		SearchTree<SegLanes, 3>(keys, task, type, tree, rootNode_shared, 
+			level1_shared, request_shared, indices_shared, indices_global);
 	if(4 == tree.numLevels)
-		SearchTree<4>(keys, task, type, tree, rootNode_shared, level1_shared, 
-			request_shared, indices_shared, indices_global);
+		SearchTree<SegLanes, 4>(keys, task, type, tree, rootNode_shared, 
+			level1_shared, request_shared, indices_shared, indices_global);
 	if(5 == tree.numLevels)
-		SearchTree<5>(keys, task, type, tree, rootNode_shared, level1_shared,
-			request_shared, indices_shared, indices_global);
+		SearchTree<SegLanes, 5>(keys, task, type, tree, rootNode_shared, 
+			level1_shared, request_shared, indices_shared, indices_global);
 	if(6 == tree.numLevels)
-		SearchTree<6>(keys, task, type, tree, rootNode_shared, level1_shared,
-			request_shared, indices_shared, indices_global);
-	if((8 == sizeof(T)) && (7 == tree.numLevels))
-		SearchTree<7>(keys, task, type, tree, rootNode_shared, level1_shared,
-			request_shared, indices_shared, indices_global);
+		SearchTree<SegLanes, 6>(keys, task, type, tree, rootNode_shared, 
+			level1_shared, request_shared, indices_shared, indices_global);
+	if((16 == SegLanes) && (7 == tree.numLevels))
+		SearchTree<SegLanes, 7>(keys, task, type, tree, rootNode_shared, 
+			level1_shared, request_shared, indices_shared, indices_global);
 }
 
 

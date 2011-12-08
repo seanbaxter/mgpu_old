@@ -4,7 +4,8 @@
 template<typename T> __forceinline__ __device__  
 void BuildTree(const T* data, uint count, T* tree) {
 
-	const int SegLanes = SEG_SIZE / sizeof(T);
+	const int SegLanes = (8 == sizeof(T)) ? SEG_LANES_64_BIT : 
+		SEG_LANES_32_BIT;
 
 	// Divide (rounding up) by SegLanes for the number of dest lanes.
 	uint validDest = (count + SegLanes - 1) / SegLanes;

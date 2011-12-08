@@ -12,7 +12,7 @@
 
 const int NumArraySizes = 10;
 const int ArraySizes[NumArraySizes][2] = {
-	{ 50000, 3000 },		
+	{ 50000, 1500 },		
 	{ 100000, 1000 },	// 100 K
 	{ 500000, 750 },
 	{ 1000000, 500 },	// 1M
@@ -26,9 +26,9 @@ const int ArraySizes[NumArraySizes][2] = {
 
 const int NumQuerySizes = 3;
 const int QuerySizes[3][2] = {
-	{ 1000, 10 },
-	{ 10000, 3 },
-	{ 100000, 1 },
+	{ 1000, 20 },
+	{ 10000, 10 },
+	{ 100000, 2 },
 };
 
 const int NumTests = 4;

@@ -66,7 +66,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="../debug/mgpusearch.lib cuda.lib"
+				AdditionalDependencies="../debug/mgpusearch.lib cuda.lib cudart.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -188,17 +188,21 @@
 			<File
 				RelativePath="..\..\src\searchtest\searchtest.cpp"
 				>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-					/>
-				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="..\..\src\searchtest\thrusttest.cu"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="Cudart Build Rule"
+						Arch1="20"
+						Arch2="0"
+						Optimization="0"
+						Runtime="3"
+					/>
+				</FileConfiguration>
 				<FileConfiguration
 					Name="Release|Win32"
 					>
