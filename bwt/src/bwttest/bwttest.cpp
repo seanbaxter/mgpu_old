@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
 
 	std::vector<int> indices(count);
 	std::vector<char> symbols(count);
-	for(int keySize(1); keySize <= 24; ++keySize) {
+	for(int keySize(16); keySize <= 24; ++keySize) {
 
 		int numSegs;
 		float avSegLength;

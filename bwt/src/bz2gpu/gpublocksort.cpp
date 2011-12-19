@@ -39,6 +39,7 @@ struct CudaSupport {
 	bwtEngine_t engine;
 };
 
+
 bool CreateCudaSupport(std::auto_ptr<CudaSupport>* cudaSupport) {
 	CUresult result = cuInit(0);
 	if(CUDA_SUCCESS != result) {
@@ -101,7 +102,7 @@ extern "C" void BZ2_blockSort(EState* s) {
 	// code does the string permutation in compress.c: generateMTFValues.
 	int segCount;
 	float avSegSize;
-	bwtStatus_t status = bwtSortBlock(cudaSupport->engine, symbols, count, 16,
+	bwtStatus_t status = bwtSortBlock(cudaSupport->engine, symbols, count, 20,
 		0, indices, &segCount, &avSegSize);
 	if(BWT_STATUS_SUCCESS != status) {
 		fprintf(stderr, "Failure in MGPU-BWT block sort: %s.\n",

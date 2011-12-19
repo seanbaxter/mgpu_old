@@ -1,18 +1,5 @@
-#include "../../../inc/mgpubwt.h"
-#include "../../../inc/mgpusort.hpp"
-#include "../../../util/cucpp.h"
-#include <memory>
-#include <sstream>
-#include <algorithm>
+#include "bwtsort.h"
 
-typedef unsigned char byte;
-
-const int BWTGatherThreads = 512;
-const int BWTCompareThreads = 512;
-const int TinyBlockCutoff = 3000;
-
-// Returns a textual representation of the enums.
-const char* BWTAPI bwtStatusString(bwtStatus_t status);
 
 const char* BwtStatusStrings[] = {
 	"BWT_STATUS_SUCCESS",
@@ -29,6 +16,7 @@ const char* BwtStatusStrings[] = {
 	"BWT_STATUS_SORT_ERROR"
 };
 
+// Returns a textual representation of the enums.
 const char* BWTAPI bwtStatusString(bwtStatus_t status) {
 	if(status > sizeof(BwtStatusStrings) / sizeof(char*)) return 0;
 	return BwtStatusStrings[status];
@@ -185,27 +173,6 @@ CUresult AllocBWTMem(bwtEngine_d* engine, int count, BlockPointers& pointers) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// HostSortRange
-
-// On the CPU uses a comparison sort (std::sort) to sort elements that fall 
-// within the same segment (that is, their first gpuKeySize elements are the
-// same). This predicate object does a truncated string compare between indices
-// a and b.
-
-struct QSortPred {
-	const byte* symbols;
-	int count2;
-	int gpuKeySize;
-
-	bool operator()(int a, int b) const {
-		int result = memcmp(symbols + a + gpuKeySize, symbols + b + gpuKeySize,
-			count2);
-		return (result < 0) || (!result && (a < b));
-	}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////
 // TinyBlockSort
 // If the string is very small, sort directly on CPU as GPU utilization will be
 // poor.
@@ -221,12 +188,8 @@ void TinyBlockSort(const void* block, int count, void* transform, int* indices,
 	for(int i(0); i < count; ++i)
 		hostIndices[i] = i;
 
-	QSortPred sortPred;
-	sortPred.symbols = &symbols[0];
-	sortPred.count2 = count;
-	sortPred.gpuKeySize = 0;
-
-	std::sort(&hostIndices[0], &hostIndices[0] + count, sortPred);
+	QSortStrings(&hostIndices[0], &hostIndices[0] + count - 1, &symbols[0], 
+		count);
 
 	if(segCount) *segCount = 1;
 	if(avSegSize) *avSegSize = (float)count;
@@ -366,12 +329,13 @@ bwtStatus_t BWTAPI bwtSortBlock(bwtEngine_t engine, const void* block,
 	int numSegments = 0;
 	int totalSegLength = 0;
 	int prevSegStart = 0;
-	QSortPred sortPred;
-	sortPred.symbols = &engine->symbols[0];
-	sortPred.count2 = count - gpuKeySize;
-	sortPred.gpuKeySize = gpuKeySize;
-
+	
+	const byte* sortSymbols = &engine->symbols[0] + gpuKeySize;
+	int count2 = count - gpuKeySize;
+		
 	int* hostIndices = (int*)&engine->indices[0];
+
+	int maxSegSize = 0;
 
 	for(int i(1); i <= count; ++i) {
 		if(engine->flags[i]) {
@@ -380,14 +344,16 @@ bwtStatus_t BWTAPI bwtSortBlock(bwtEngine_t engine, const void* block,
 				++numSegments;
 				totalSegLength += len;
 
-		//		std::sort(hostIndices + prevSegStart, hostIndices + i, 
-		//			sortPred);
+				QSortStrings(hostIndices + prevSegStart, hostIndices + i - 1, 
+					sortSymbols, count2);
+		
+				maxSegSize = std::max(len, maxSegSize);
 			}
 			prevSegStart = i;
 		}
 	}
 
-	if(segCount) *segCount = numSegments;
+	if(segCount) *segCount = maxSegSize;//numSegments;
 	if(avSegSize) *avSegSize = numSegments ? 
 		((float)totalSegLength / numSegments) : 0;
 
