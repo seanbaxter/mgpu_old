@@ -49,8 +49,8 @@ int main(int argc, char** argv) {
 
 	std::vector<int> indices(count);
 	std::vector<char> symbols(count);
-	for(int keySize(16); keySize <= 24; ++keySize) {
 
+	for(int keySize(1); keySize <= 24; ++keySize) {
 		int numSegs;
 		float avSegLength;
 		status = bwtSortBlock(engine, &data[0], count, keySize, &symbols[0],
@@ -81,11 +81,8 @@ int main(int argc, char** argv) {
 	}
 
 
-return 0;
 
-
-
-//	return 0;
+	return 0;
 
 	/*
 	for(int i(0); i < count; ++i) {
