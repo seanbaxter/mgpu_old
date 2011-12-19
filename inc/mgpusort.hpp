@@ -88,7 +88,7 @@ public:
 	// increment the engine's reference counter on construction, and dec it on
 	// destruction.
 	MgpuSort(sortEngine_t engine) {
-		_engine = engine;
+		_engine = engine; 
 		if(engine) sortIncEngine(engine);
 	}
 

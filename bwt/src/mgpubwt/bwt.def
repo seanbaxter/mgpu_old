@@ -1,0 +1,7 @@
+LIBRARY	"mgpubwt"
+EXPORTS
+	bwtStatusString
+	bwtCreateEngine
+	bwtDestroyEngine
+	bwtSortBlock
+	

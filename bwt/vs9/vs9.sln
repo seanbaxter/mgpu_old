@@ -1,0 +1,29 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "bwttest", "bwttest\bwttest.vcproj", "{77EC8137-495B-4380-8789-7F3EDCB4CFDE}"
+	ProjectSection(ProjectDependencies) = postProject
+		{ED2CC272-53E7-4238-B6A5-24E7CB9A1EBD} = {ED2CC272-53E7-4238-B6A5-24E7CB9A1EBD}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mgpubwt", "mgpubwt\mgpubwt.vcproj", "{ED2CC272-53E7-4238-B6A5-24E7CB9A1EBD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{77EC8137-495B-4380-8789-7F3EDCB4CFDE}.Debug|Win32.ActiveCfg = Debug|Win32
+		{77EC8137-495B-4380-8789-7F3EDCB4CFDE}.Debug|Win32.Build.0 = Debug|Win32
+		{77EC8137-495B-4380-8789-7F3EDCB4CFDE}.Release|Win32.ActiveCfg = Release|Win32
+		{77EC8137-495B-4380-8789-7F3EDCB4CFDE}.Release|Win32.Build.0 = Release|Win32
+		{ED2CC272-53E7-4238-B6A5-24E7CB9A1EBD}.Debug|Win32.ActiveCfg = Debug|Win32
+		{ED2CC272-53E7-4238-B6A5-24E7CB9A1EBD}.Debug|Win32.Build.0 = Debug|Win32
+		{ED2CC272-53E7-4238-B6A5-24E7CB9A1EBD}.Release|Win32.ActiveCfg = Release|Win32
+		{ED2CC272-53E7-4238-B6A5-24E7CB9A1EBD}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
