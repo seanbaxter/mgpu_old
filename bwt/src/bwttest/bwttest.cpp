@@ -6,7 +6,7 @@
 
 const char* CubinPath = "../../src/cubin/";
 
-const char* TestFile = "../../src/bwttest/mobydick.txt";
+const char* TestFile = "../../src/mobydick.txt";
 
 int main(int argc, char** argv) {
 	cuInit(0);
@@ -49,16 +49,42 @@ int main(int argc, char** argv) {
 
 	std::vector<int> indices(count);
 	std::vector<char> symbols(count);
-	for(int keySize(16); keySize <= 16; ++keySize) {
-
+	for(int keySize(1); keySize <= 24; ++keySize) {
 
 		int numSegs;
 		float avSegLength;
 		status = bwtSortBlock(engine, &data[0], count, keySize, &symbols[0],
 			&indices[0], &numSegs, &avSegLength);
-		printf("key size = %2d   numSegs = %7d   avSegLen = %10.3f\n", keySize,
+		printf("key size = %2d   numSegs = %7d   avSegLen = %10.3f   ", keySize,
 			numSegs, avSegLength);
+
+
+		printf("Verifying...\n");
+		std::vector<char> symbols2(2 * count);
+		memcpy(&symbols2[0], &data[0], count);
+		memcpy(&symbols2[0] + count, &data[0], count);
+
+		for(int i(1); i < count; ++i) {
+			// Test that the substrings are well-ordered.
+			int indexPrev = indices[i - 1];
+			int index = indices[i];
+
+			const char* a = &symbols2[0] + indexPrev;
+			const char* b = &symbols2[0] + index;
+			int result = memcmp(a, b, count);
+
+			if(result > 0) {
+				printf("Error on i = %d.\n", i);
+				return 0;
+			}
+		}
 	}
+
+
+return 0;
+
+
+
 //	return 0;
 
 	/*

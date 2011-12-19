@@ -9,6 +9,7 @@ typedef unsigned char byte;
 
 const int BWTGatherThreads = 512;
 const int BWTCompareThreads = 512;
+const int TinyBlockCutoff = 3000;
 
 // Returns a textual representation of the enums.
 const char* BWTAPI bwtStatusString(bwtStatus_t status);
@@ -205,14 +206,58 @@ struct QSortPred {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// TinyBlockSort
+// If the string is very small, sort directly on CPU as GPU utilization will be
+// poor.
+
+void TinyBlockSort(const void* block, int count, void* transform, int* indices,
+	int* segCount, float* avSegSize) {
+
+	std::vector<byte> symbols(2 * count);
+	memcpy(&symbols[0], block, count);
+	memcpy(&symbols[0] + count, block, count);
+
+	std::vector<int> hostIndices(count);
+	for(int i(0); i < count; ++i)
+		hostIndices[i] = i;
+
+	QSortPred sortPred;
+	sortPred.symbols = &symbols[0];
+	sortPred.count2 = count;
+	sortPred.gpuKeySize = 0;
+
+	std::sort(&hostIndices[0], &hostIndices[0] + count, sortPred);
+
+	if(segCount) *segCount = 1;
+	if(avSegSize) *avSegSize = (float)count;
+
+	if(indices) memcpy(indices, &hostIndices[0], 4 * count);
+	
+	if(transform) {
+		byte* xform = (byte*)transform;
+		for(int i(0); i < count; ++i) {
+			int index = hostIndices[i] + count - 1;
+			xform[i] = symbols[index];
+		}
+	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 // bwtSortBlock
 
 bwtStatus_t BWTAPI bwtSortBlock(bwtEngine_t engine, const void* block, 
 	int count, int gpuKeySize, void* transform, int* indices, int* segCount, 
 	float* avSegSize) {
 
+	// Handle very small arrays entirely in CPU. No point involving the GPU.
+	if(count < TinyBlockCutoff) {
+		TinyBlockSort(block, count, transform, indices, segCount, avSegSize);
+		return BWT_STATUS_SUCCESS;
+	}
+
+	// Check for the arguments.
 	if(!engine || gpuKeySize > 24) return BWT_STATUS_INVALID_VALUE;
-	
 	int numStreams = DivUp(gpuKeySize, 4);
 
 	////////////////////////////////////////////////////////////////////////////
@@ -331,19 +376,20 @@ bwtStatus_t BWTAPI bwtSortBlock(bwtEngine_t engine, const void* block,
 	for(int i(1); i <= count; ++i) {
 		if(engine->flags[i]) {
 			int len = i - prevSegStart;
-			if(len > 2) {
+			if(len >= 2) {
 				++numSegments;
 				totalSegLength += len;
 
-				std::sort(hostIndices + prevSegStart, hostIndices + i, 
-					sortPred);
+		//		std::sort(hostIndices + prevSegStart, hostIndices + i, 
+		//			sortPred);
 			}
 			prevSegStart = i;
 		}
 	}
 
 	if(segCount) *segCount = numSegments;
-	if(avSegSize) *avSegSize = (float)totalSegLength / numSegments;
+	if(avSegSize) *avSegSize = numSegments ? 
+		((float)totalSegLength / numSegments) : 0;
 
 	if(indices) memcpy(indices, &engine->indices[0], 4 * count);
 	

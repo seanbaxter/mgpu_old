@@ -21,6 +21,10 @@
 
 #include "bzlib_private.h"
 
+#ifdef WIN32
+#include <windows.h>
+#endif
+
 /*---------------------------------------------*/
 /*--- Fallback O(N log(N)^2) sorting        ---*/
 /*--- algorithm, for repetitive blocks      ---*/
@@ -1041,6 +1045,18 @@ void BZ2_blockSort ( EState* s )
    Int32   budgetInit;
    Int32   i;
 
+#if defined(WIN32) && defined(BENCHMARK)
+	LARGE_INTEGER freq, begin, end;
+	__int64 diff;
+	double elapsed;
+	static double totalElapsed = 0;
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&begin);
+#endif
+
+
+
+
    if (nblock < 10000) {
       fallbackSort ( s->arr1, s->arr2, ftab, nblock, verb );
    } else {
@@ -1079,6 +1095,15 @@ void BZ2_blockSort ( EState* s )
          fallbackSort ( s->arr1, s->arr2, ftab, nblock, verb );
       }
    }
+
+#if defined(WIN32) && defined(BENCHMARK)
+	QueryPerformanceCounter(&end);
+	diff = end.QuadPart - begin.QuadPart;
+	elapsed = (double)diff / freq.QuadPart;
+
+	totalElapsed += elapsed;
+	printf("%10.6f\n", totalElapsed);
+#endif
 
    s->origPtr = -1;
    for (i = 0; i < s->nblock; i++)
