@@ -45,21 +45,18 @@ DEVICE2 uint SearchInterval(uint tid, uint lane, const T* aData_shared,
 	__syncthreads();
 
 	uint shift = radixShift_shared;
-	
-	// TODO: does this work or do we need to shift? 
-	uint digitA = bfe(aRadix, shift, NumRadixBits);
+	uint aDigit = bfe(aRadix, shift, NumRadixBits);
 
-	// Get the value to the left.
+	// Extract the radix digit from the preceding aData. If tid < aCount and
+	// the preceding aDigit differs from tid's aDigit, set radix_shared[aDigit]
+	// to indicate we have a starting offset for a radix digit. 
 	uint aPrevDigit = bfe(ConvertToRadix(params.aPrev), shift, NumRadixBits);
-
-	// Set tid to the radix offset array if it holds the first value with the
-	// radix digit.
-	if(!tid || ((tid < aCount) && (aPrevDigit != digitA)))
+	if((tid < params.aCount) && (!tid || (aPrevDigit != aDigit)))
 		radix_shared[digitA] = tid;
 	__syncthreads();
 
-	// Calculate the search intervals for aData_shared and store in
-	// radix_shared.data.
+	// GetRangeBallot[32|64] ballot scans the offsets into STL-style begin/end
+	// iterator pairs to limit the search range.
 	if(tid < WARP_SIZE) {
 		if(32 == NumRadixSlots) {
 			uint2 range = GetRangeBallot32(radix_shared, lane, aCount);
@@ -67,7 +64,7 @@ DEVICE2 uint SearchInterval(uint tid, uint lane, const T* aData_shared,
 				adjust ? TestSearchInterval(aData_shared, range) : 0);
 
 			radix_shared[tid] = combined;
-			
+
 		} else if(64 == NumRadixSlots) {
 			uint4 range = GetRangeBallot64(radix_shared, lane, aCount);
 
@@ -109,8 +106,42 @@ DEVICE2 uint SearchInterval(uint tid, uint lane, const T* aData_shared,
 	return result;
 }
 
-/*
+
 template<int NumThreads, int NumRadixBits, typename T, typename T2>
+DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
+	const T* bData_global, int2 bRange, int kind) {
+
+	const int NumRadixDigits = 1<< NumRadixBits;
+	__shared__ uint radix_shared[NumRadixDigits];
+	__shared__ T aData_shared[NumThreads], bData_shared[NumThreads];
+	__shared__ uint indices_shared[2 * NumThreads];
+
+	// aLoaded and bLoaded are the counts of loaded but unprocessed values from
+	// each stream.
+	// aRemaining and bRemaining are the counts of unprocessed values from each
+	// stream, including the loaded values.
+	int aLoaded = 0;
+	int bLoaded = 0;
+	int aRemaining = aRange.y - aRange.x;
+	int bRemaining = bRange.y - bRange.x;
+
+	while(aRemaining || bRemaining) {
+		
+		////////////////////////////////////////////////////////////////////////
+		// Load the values to fill the buffers.
+
+		
+		
+		int aLoad = min(aRemaining, NumThreads - aLoaded);
+		int bLoad = min(bRemaining, NumThreads - bLoaded);
+
+
+
+	}
+	
+
+
+
 
 	T preceding = aData_shared[tid - 1];
 	result.a = aData_shared[tid];
@@ -118,3 +149,19 @@ template<int NumThreads, int NumRadixBits, typename T, typename T2>
 	result.aLast = aData_shared[aCount - 1];
 	result.bLast = bData_shared[bCount - 1];
 	*/
+
+template<typename T>
+struct SearchParams {
+	T a, b;
+	uint aCount, bCount;
+	T aPrev, bPrev;
+	T aLast, bLast;
+};
+
+template<int NumRadixBits, typename T, typename T2>
+DEVICE2 uint SearchInterval(uint tid, uint lane, const T* aData_shared, 
+	const T* bData_shared, SearchParams<T> params, uint* radix_shared, 
+	int numRadixBits, int kind, bool adjust) {
+
+
+	__shared__ T 
