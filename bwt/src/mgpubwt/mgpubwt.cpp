@@ -335,7 +335,7 @@ bwtStatus_t BWTAPI bwtSortBlock(bwtEngine_t engine, const void* block,
 		
 	int* hostIndices = (int*)&engine->indices[0];
 
-	// int maxSegSize = 0;
+	int maxSegSize = 0;
 
 	for(int i(1); i <= count; ++i) {
 		if(engine->flags[i]) {
@@ -347,7 +347,7 @@ bwtStatus_t BWTAPI bwtSortBlock(bwtEngine_t engine, const void* block,
 				QSortStrings(hostIndices + prevSegStart, hostIndices + i - 1, 
 					sortSymbols, count2);
 		
-			//	maxSegSize = std::max(len, maxSegSize);
+				maxSegSize = std::max(len, maxSegSize);
 			}
 			prevSegStart = i;
 		}

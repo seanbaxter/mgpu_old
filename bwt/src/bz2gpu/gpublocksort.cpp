@@ -102,7 +102,7 @@ extern "C" void BZ2_blockSort(EState* s) {
 	// code does the string permutation in compress.c: generateMTFValues.
 	int segCount;
 	float avSegSize;
-	bwtStatus_t status = bwtSortBlock(cudaSupport->engine, symbols, count, 20,
+	bwtStatus_t status = bwtSortBlock(cudaSupport->engine, symbols, count, 16,
 		0, indices, &segCount, &avSegSize);
 	if(BWT_STATUS_SUCCESS != status) {
 		fprintf(stderr, "Failure in MGPU-BWT block sort: %s.\n",
@@ -116,7 +116,8 @@ extern "C" void BZ2_blockSort(EState* s) {
 
 	static double totalElapsed = 0;
 	totalElapsed += elapsed;
-	printf("%6d %9.5f %10.6f\n", segCount, avSegSize, totalElapsed);
+	printf("%6d %9.5f %9.3f %10.6f %10.6f\n", segCount, avSegSize, 
+		segCount * avSegSize, elapsed, totalElapsed);
 #endif
 
 	// Advance origPtr to the index i of s->arr1[i] which holds 0. This is the 
