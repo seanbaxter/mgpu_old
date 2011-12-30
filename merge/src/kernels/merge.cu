@@ -115,6 +115,11 @@ DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
 	__shared__ uint radix_shared[NumRadixDigits];
 	__shared__ T aData_shared[NumThreads], bData_shared[NumThreads];
 	__shared__ uint indices_shared[2 * NumThreads];
+	__shared__ uint aConsumed_shared, bConsumed_shared;
+
+	// aRange.x and bRange.y refer to the first element of each array in each
+	// inner loop. They are not pointers to the next value to load. This
+	// function streams at 
 
 	// aLoaded and bLoaded are the counts of loaded but unprocessed values from
 	// each stream.
@@ -130,13 +135,188 @@ DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
 		////////////////////////////////////////////////////////////////////////
 		// Load the values to fill the buffers.
 
+		int aCount = min(NumThreads, aRemaining);
+		int bCount = min(NumThreads, bRemaining);
+
+		SearchParams<T> params;
+
+		if(tid >= aLoaded) {
+			params.a = aData_global[aRange.x + tid];
+			aData_shared[tid] = params.a;
+		}
+		if(tid >= bLoaded) {
+			params.b = bData_global[bRange.x + tid];
+			bData_shared[tid] = params.b;
+		}
+
+		if(!tid) {
+			aConsumed_shared = aCount;
+			bConsumed_shared = bCount;
+		}
+		__syncthreads();
+
+
+		////////////////////////////////////////////////////////////////////////
+		// Grab the SearchParams and test if we can stream out all aData or all
+		// bData values. If not, call SearchInterval.
+
+		int aConsumed = aCount;
+		int bConsumed = bCount;
+
+		if(aCount && bCount) {
+			// Load the last value of both arrays to establish the consumed
+			// counts.
+			params.aLast = aData_shared[aCount - 1];
+			params.bLast = bData_shared[bCount - 1];
+			if(tid) params.aPrev = aData_shared[tid - 1];
+			if(tid) params.bPrev = bData_shared[tid - 1];
+
+			// Because we're only dealing with fragments of the datasets, we
+			// need to be careful on which values can be inserted. Take the
+			// upper_bound case as an example:
+			
+			//     i = 0 1 2 3 4 5 6 7
+			// aData = 2 2 3 4 7 8 8 9 ...
+			// bData = 1 2 2 2 6 6 9 9 ...
+
+			// We can insert elements with values 1 - 6 from bData without 
+			// ambiguity. However we can't be sure where to insert the pair of
+			// 9s. The upper_bound semantics demand that they be inserted AFTER
+			// all occurences of the same value in the aData stream. Because we
+			// haven't seen the next elements in aData we don't know if we can
+			// insert bData[6] and bData[7] at i = 8.
+
+			// The same problem occurs with lower_bound:
+			//     i = 0 1 2 3 4 5 6 7
+			// aData = 2 2 3 4 7 7 7 8 ... 
+			// bData = 1 2 2 2 6 9 9 9 ...
+
+			// aData[8] could be an 8, in which case it would precede bData[5],
+			// or it could be a 9 or something larger, in which case the 9 terms
+			// from bData should come first.
+
+			// The problem is symmetric even when we only want to find insert 
+			// points from bData into aData:
+			//     i = 0 1 2 3 4 5 6 7
+			// aData = 2 3 3 3 5 6 7 7 ...
+			// bData = 1 1 2 3 3 3 3 4 (4 5 5 6 7 7 7)
+
+			// The goal is to consume both the aData and bData arrays in shared
+			// memory every iteration. However we need to retain aData values
+			// when they are required to know where to insert upcoming bData
+			// values. In the example above, we can consume all 8 values in 
+			// bData, but only the first 4 values in aData. The remaining aData
+			// values are shifted forward in aData_shared and are used for
+			// supporting the search with the subsequent bData values.
+
+			// When searching with lower_bound, if both aData and bData shared
+			// memory arrays end with the same value, both arrays are completely
+			// consumed.
+
+			// At least one of the arrays will be completely consumed. To
+			// summarize, when inserting bData into aData, lower_bound favors
+			// consuming bData and upper_bound favors consuming aData.
+
+			// Compare the last element in bData to the last element in aData.
+			bool pred = kind ? (params.bLast < params.aLast) : 
+				(params.bLast <= params.aLast);
+
+			// Get the preceding keys to find the first value that violates the
+			// consume conditions.
+			if(pred) {
+				// If the last element in bData is < (or <=) the last element in
+				// aData, completely consume the bData_shared stream.
+
+				// If upper_bound consume all values in aData that are <= bLast.
+				// If lower_bound consume all values in aData that are < bLast.
+				bool inRange = kind ? (params.a <= params.bLast) :
+					(params.a < params.bLast);
+				bool inRangePrev = kind ? (params.aPrev <= params.bLast) :
+					(params.aPrev < params.bLast);
+				if(!tid) inRangePrev = true;
+				if(!inRange && inRangePrev)
+					aConsumed_shared = tid;
+
+				__syncthreads();
+				aConsumed = aConsumed_shared;
+			} else {
+				// If the last element in bData is not < (or <=) the last
+				// element in aData, completely consume the aData_shared stream.
+
+				// If upper_bound consume all values in bData that are <= aLast.
+				// If lower_bound consume all values in bData that are < aLast.
+				bool inRange = kind ? (params.b <= params.aLast) :
+					(params.b < params.aLast);
+				bool inRangePrev = kind ? (params.bPrev <= params.aLast) :
+					(params.bPrev < params.aLast); 
+				if(!tid) inRangePrev = true;
+				if(!inRange && inRangePrev)
+					bConsumed_shared = tid;
+
+				__syncthreads();
+				bConsumed = bConsumed_shared;
+			}
+			params.aCount = aConsumed;
+			params.bCount = bConsumed;
+		}
+
+
+		if(!aCount) {
+			// We've run out of aData keys to merge into. Fill the 
+			// indices_shared buffer up sequentially, as the search keys are to
+			// be inserted consecutively.
+			indices_shared[tid] = tid;
+			aConsumed = 0;
+			bConsumed = bCount;
+		} else if(!bCount)
+			// We're done with indexing. Return immediately.
+			break;
+		else {
+
+			if(params.aLast < params.bLast) {
+
+
+			} else {
+
+
+			}
+
+			params.aCount = aCount;
+			params.bCount = bCount;
+
+			// 
+
+template<typename T>
+struct SearchParams {
+	T a, b;
+	uint aCount, bCount;
+	T aPrev, bPrev;
+	T aLast, bLast;
+		}
+
+
+		////////////////////////////////////////////////////////////////////////
+		// Stream the indices
+
+		// Update the offsets for the next serialization.
+		aRange.x += aConsumed;
+		bRange.y += bConsumed;
 		
+
+		////////////////////////////////////////////////////////////////////////
+		// Move remaining, untouched values to the start of the shared mem 
+		// arrays.
+
+		if(tid >= aConsumed)
+			aData_shared[tid - aConsumed] = a;
+		if(tid >= bConsumed)
+			bData_shared[tid - bConsumed] = b;
+
+		// 
+		aLoaded = aCount - aConsumed;
+		bLoaded = bCount - bConsumed;
 		
-		int aLoad = min(aRemaining, NumThreads - aLoaded);
-		int bLoad = min(bRemaining, NumThreads - bLoaded);
-
-
-
+		__syncthreads();
 	}
 	
 
