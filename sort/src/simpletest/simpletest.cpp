@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
 	// mgpusort.h comments for more info. Pass 0 for valueCount to indicate that
 	// we just want to sort keys, not key-value tuples.
 	sortData_t deviceData;
-	status = sortCreateData(engine, NumElements, 1, &deviceData);
+	status = sortCreateData(engine, NumElements, 0, &deviceData);
 
 	// These are resetting the default values, but it's good to be sure that we
 	// are sorting over the desired bits in the key. For best performance only

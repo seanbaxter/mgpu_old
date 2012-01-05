@@ -38,35 +38,35 @@ DEVICE2 uint SearchInterval(uint tid, const T* aData_shared,
 		T2 rightRadixA = ConvertToRadix(params.aLast);
 		T2 rightRadixB = ConvertToRadix(params.bLast);
 
-		int shift = GetRadiXShift(aRadix, bRadix, rightRadixA, rightRadixB,
+		int shift = GetRadixShift(aRadix, bRadix, rightRadixA, rightRadixB,
 			numRadixBits);
 		radixShift_shared = shift;
 	}
 	__syncthreads();
 
 	uint shift = radixShift_shared;
-	uint aDigit = bfe(aRadix, shift, NumRadixBits);
+	uint aDigit = bfe(aRadix, shift, numRadixBits);
 
 	// Extract the radix digit from the preceding aData. If tid < aCount and
 	// the preceding aDigit differs from tid's aDigit, set radix_shared[aDigit]
 	// to indicate we have a starting offset for a radix digit. 
-	uint aPrevDigit = bfe(ConvertToRadix(params.aPrev), shift, NumRadixBits);
+	uint aPrevDigit = bfe(ConvertToRadix(params.aPrev), shift, numRadixBits);
 	if((tid < params.aCount) && (!tid || (aPrevDigit != aDigit)))
-		radix_shared[digitA] = tid;
+		radix_shared[aDigit] = tid;
 	__syncthreads();
 
 	// GetRangeBallot[32|64] ballot scans the offsets into STL-style begin/end
 	// iterator pairs to limit the search range.
 	if(tid < WARP_SIZE) {
 		if(32 == NumRadixSlots) {
-			uint2 range = GetRangeBallot32(radix_shared, tid, aCount);
+			uint2 range = GetRangeBallot32(radix_shared, tid, params.aCount);
 			uint combined = CombineSearchInterval(range, 
 				adjust ? TestSearchInterval(aData_shared, range) : 0);
 
 			radix_shared[tid] = combined;
 
 		} else if(64 == NumRadixSlots) {
-			uint4 range = GetRangeBallot64(radix_shared, tid, aCount);
+			uint4 range = GetRangeBallot64(radix_shared, tid, params.aCount);
 
 			uint2 range1 = make_uint2(range.x, range.y);
 			uint2 range2 = make_uint2(range.z, range.w);
@@ -82,28 +82,31 @@ DEVICE2 uint SearchInterval(uint tid, const T* aData_shared,
 	}
 	__syncthreads();
 
-	uint index = ValueNull;
+
+	uint index;
 
 	// If the bData_shared is valid, perform a binary search.
-	if(tid < bCount) {
+	if(tid < params.bCount) {
 		// Extract the bData digit and lookup the range for the corresponding 
 		// aData digit.
-		uint bDigit = bfe(bRadix, shift, NumRadixBits);
+		uint bDigit = bfe(bRadix, shift, numRadixBits);
 		uint combined = radix_shared[bDigit];
 		uint begin = 0x0000ffff & combined;
 		
 		if(adjust) {
 			uint end = bfe(combined, 16, 15);
 			uint end2 = (0x80000000 & combined) ? (begin + 1) : end;
-			index = RangeBinarySearch(aData_shared, begin, end2, kind);
+			index = RangeBinarySearch(aData_shared, begin, end2, params.b,
+				kind);
 			if(index == end2) index = end;
 		} else {
 			uint end = combined>> 16;
-			index = RangeBinarySearch(aData_shared, begin, end, kind);
+			index = RangeBinarySearch(aData_shared, begin, end, params.b,
+				kind);
 		}
 	}
 
-	return result;
+	return index;
 }
 
 
@@ -119,9 +122,8 @@ struct SearchInsertResult {
 template<typename T, typename T2>
 DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
 	int aRemaining, int bRemaining, T aData, T bData, T* aData_shared, 
-	T* bData_shared, uint* radix_shared, int kind) {
+	T* bData_shared, uint* radix_shared, int numRadixBits, int kind) {
 
-	const int NumRadixDigits = 1<< NumRadixBits;
 
 	////////////////////////////////////////////////////////////////////////////
 	// Grab the SearchParams and test if we can stream out all aData or all
@@ -137,7 +139,6 @@ DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
 	params.aCount = aCount;
 	params.bCount = bCount;
 
-	__shared__ uint radix_shared[NumRadixDigits];
 	__shared__ int consumed_shared;
 
 	if(aCount && bCount) {
@@ -251,7 +252,7 @@ DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
 		// Both aCount and bCount are defined. For this we perform the batched
 		// binary search.
 		result.index = SearchInterval<T, T2>(tid, aData_shared, bData_shared, 
-			params, radix_shared, NumRadixBits, kind, true);
+			params, radix_shared, numRadixBits, kind, true);
 	}
 	return result;
 }
@@ -261,7 +262,7 @@ DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
 
 template<int NumThreads, int NumRadixBits, typename T, typename T2>
 DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
-	const T* bData_global, int2 bRange, int kind) {
+	const T* bData_global, int2 bRange, int kind, uint* indices_global) {
 
 	const int NumRadixDigits = 1<< NumRadixBits;
 	__shared__ uint radix_shared[NumRadixDigits];
@@ -304,53 +305,25 @@ DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
 		}
 		__syncthreads();
 
-		SearchInsertResult result = SearchInsertRange(tid, aCount, bCount,
-			0, 0, a, b, aData_shared, bData_shared, radix_shared, kind);
+		SearchInsertResult result = SearchInsertRange<T, T2>(tid, aCount,
+			bCount, 0, 0, a, b, aData_shared, bData_shared, radix_shared, 
+			NumRadixBits, kind);
+
+		indices_global[tid] = result.index;
+		break;
+	}
 
 
-
-struct SearchInsertResult {
-	uint index;
-	int aConsume;
-	int bConsume;
-};
-
+/*
 template<typename T, typename T2>
 DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
 	int aRemaining, int bRemaining, T aData, T bData, T* aData_shared, 
-	T* bData_shared, uint* radix_shared, int kind) 
+	T* bData_shared, uint* radix_shared, int kind) {
+*/
+
+/*
 
 
-
-
-		if(!aCount) {
-			// We've run out of aData keys to merge into. Fill the 
-			// indices_shared buffer up sequentially, as the search keys are to
-			// be inserted consecutively.
-			indices_shared[tid] = tid;
-			aConsumed = 0;
-			bConsumed = bCount;
-		} else if(!bCount)
-			// We're done with indexing. Return immediately.
-			break;
-		else {
-
-			if(params.aLast < params.bLast) {
-
-
-			} else {
-
-
-			}
-
-			params.aCount = aCount;
-			params.bCount = bCount;
-
-			// 
-
-
-		////////////////////////////////////////////////////////////////////////
-		// Stream the indices
 
 		// Update the offsets for the next serialization.
 		aRange.x += aConsumed;
@@ -373,5 +346,13 @@ DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
 		__syncthreads();
 		
 		}
+*/
+}
 
+extern "C" __global__ __launch_bounds__(256, 4)
+void SearchBlockInt(const uint* aData_global, int2 aRange,
+	const uint* bData_global, int2 bRange, uint* indices_global) {
+
+	SearchBlock<256, 6, uint, uint>(aData_global, aRange, bData_global,
+		bRange, 1, indices_global);
 }

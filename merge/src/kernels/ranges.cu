@@ -75,7 +75,7 @@ template<typename T>
 DEVICE2 uint RangeBinarySearch(const T* values, uint begin, uint end, T key,
 	int kind) {
 	
-	while(count) {
+	while(end > begin) {
 		uint mid = (begin + end) / 2;
 
 		T midValue = values[mid];
@@ -84,7 +84,7 @@ DEVICE2 uint RangeBinarySearch(const T* values, uint begin, uint end, T key,
 		// For lower_bound use <, because a tie should be false, as we want to
 		// insert before other equal values. For upper_bound use <=, because a 
 		// tie should be true, as we want to insert after other equal values.
-		int pred = kind ? (midValue <= x) : (midValue < x);
+		int pred = kind ? (midValue <= key) : (midValue < key);
 
 		// If pred is true, recurse right.
 		// If pred is false, recurse left.
@@ -151,7 +151,7 @@ DEVICE2 uint TestSearchInterval(const T* data_shared, uint2 range) {
 	if(range.y > range.x) {
 		T first = data_shared[range.x];
 		T last = data_shared[range.y - 1];
-		if(first != last)
+		if(first == last)
 			repeated = 0x80000000;
 	}
 	return repeated;
@@ -264,7 +264,7 @@ DEVICE2 void TestRanges(const uint* values_global, uint2* rangePairs_global) {
 		rangePairs_global[tid] = pair;
 	}
 }
-
+/*
 
 extern "C" __global__
 void TestRanges32(const uint* values_global, uint2* rangePairs_global) {
@@ -276,4 +276,4 @@ extern "C" __global__
 void TestRanges64(const uint* values_global, uint2* rangePairs_global) {
 	TestRanges<BlockSize, 6>(values_global, rangePairs_global);
 }
-
+*/
