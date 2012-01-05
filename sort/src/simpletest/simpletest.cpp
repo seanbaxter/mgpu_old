@@ -42,7 +42,13 @@ int main(int argc, char** argv) {
 	// that holds the .cubin kernel files. If these aren't already built, use
 	// build_all.bat in /kernels.
 	sortEngine_t engine;
-	sortStatus_t status = sortCreateEngine("../../src/cubin/", &engine);
+	sortStatus_t status = sortCreateEngine(
+#if defined(__LP64__) || defined(_WIN64)
+		"../../src/cubin64/",
+#else
+		"../../src/cubin/",
+#endif
+		&engine);
 	if(SORT_STATUS_SUCCESS != status) {
 		printf("Could not initialize MGPU Sort:\n\t%s",
 			sortStatusString(status));
@@ -67,7 +73,7 @@ int main(int argc, char** argv) {
 	// mgpusort.h comments for more info. Pass 0 for valueCount to indicate that
 	// we just want to sort keys, not key-value tuples.
 	sortData_t deviceData;
-	status = sortCreateData(engine, NumElements, 0, &deviceData);
+	status = sortCreateData(engine, NumElements, 1, &deviceData);
 
 	// These are resetting the default values, but it's good to be sure that we
 	// are sorting over the desired bits in the key. For best performance only

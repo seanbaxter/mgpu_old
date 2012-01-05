@@ -300,7 +300,12 @@ SortTerms ComputeSortTerms(int numSortThreads, int valuesPerThread,
 	int bucketCodeBlockSize = numBuckets;
 	if(useTransList) bucketCodeBlockSize += numBuckets + WarpSize;
 	terms.scatterStructSize = RoundUp(bucketCodeBlockSize, WarpSize);
-	terms.bucketCodesSize = 4 * terms.numSortBlocks * terms.scatterStructSize;
+	
+	// hist3 kernel (for 1 - 5 radix bits) may write two blocks of codes at a 
+	// time, even if only one block is required. To support this, round the
+	// number of sort blocks up to a multiple of 2.
+	terms.bucketCodesSize = 4 * RoundUp(terms.numSortBlocks, 2) * 
+		terms.scatterStructSize;
 
 	terms.numEndKeys = RoundUp(numElements, numValues) - numElements;
 

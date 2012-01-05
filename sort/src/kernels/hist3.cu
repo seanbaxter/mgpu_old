@@ -92,7 +92,6 @@ DEVICE uint ComputeGatherStruct(uint* bucketCodes_global, int numSortBlocks,
 			// of the pre-multiplied scatter indices.
 			bucketCodes_global[lane] =
 				4 * (scatterScan[offset] - gather) + sortedFlag;
-				
 		}
 		bucketCodes_global += TRANS_STRUCT_SIZE;
 	}
