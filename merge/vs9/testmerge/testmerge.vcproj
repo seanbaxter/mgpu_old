@@ -215,6 +215,10 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\src\kernels\merge2.cu"
+			>
+		</File>
+		<File
 			RelativePath="..\..\src\kernels\ranges.cu"
 			>
 		</File>

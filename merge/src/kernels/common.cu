@@ -136,3 +136,15 @@ DEVICE2 uint2 ConvertToRadix(double x) {
 	return DoubleToUint2(x);
 }
 
+template<typename T>
+DEVICE2 inline T DivUp(T num, T den) {
+	return (num + den - 1) / den;
+}
+template<typename T>
+DEVICE2 T RoundUp(T x, T y) {
+	return ~(y - 1) & (x + y - 1);
+}
+template<typename T>
+DEVICE2 T RoundDown(T x, T y) {
+	return ~(y - 1) & x;
+}

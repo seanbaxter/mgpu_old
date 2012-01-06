@@ -13,6 +13,17 @@ struct SearchParams {
 	T aLast, bLast;
 };
 
+template<typename T>
+DEVICE2 uint SearchIntervalNoRadix(uint tid, const T* aData_shared,
+	SearchParams<T> params, int kind) {
+
+	uint index;
+	if(tid < params.bCount)
+		index = RangeBinarySearch(aData_shared, 0, params.aCount, params.b, 
+			kind);
+	return index;
+}
+
 template<typename T, typename T2>
 DEVICE2 uint SearchInterval(uint tid, const T* aData_shared, 
 	const T* bData_shared, SearchParams<T> params, uint* radix_shared, 
@@ -134,10 +145,6 @@ DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
 	result.bConsume = bCount;
 
 	SearchParams<T> params;
-	params.a = aData;
-	params.b = bData;
-	params.aCount = aCount;
-	params.bCount = bCount;
 
 	__shared__ int consumed_shared;
 
@@ -145,10 +152,12 @@ DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
 
 		// Load the last value of both arrays to establish the consumed
 		// counts.
+		params.a = aData;
+		params.b = bData;
 		params.aLast = aData_shared[aCount - 1];
 		params.bLast = bData_shared[bCount - 1];
-		if(tid) params.aPrev = aData_shared[tid - 1];
-		if(tid) params.bPrev = bData_shared[tid - 1];
+		params.aPrev = aData_shared[tid - 1];
+		params.bPrev = bData_shared[tid - 1];
 
 		// Because we're only dealing with fragments of the datasets, we
 		// need to be careful on which values can be inserted. Take the
@@ -218,57 +227,67 @@ DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
 					consumed_shared = tid;
 
 				__syncthreads();
-				params.aCount = consumed_shared;
+				result.aConsume = consumed_shared;
 			} else {
 				// If the last element in bData is not < (or <=) the last
 				// element in aData, completely consume the aData_shared stream.
 
 				// If upper_bound consume all values in bData that are <= aLast.
 				// If lower_bound consume all values in bData that are < aLast.
-				bool inRange = kind ? (params.b <= params.aLast) :
-					(params.b < params.aLast);
-				bool inRangePrev = kind ? (params.bPrev <= params.aLast) :
-					(params.bPrev < params.aLast); 
+				bool inRange = kind ? (params.b < params.aLast) :
+					(params.b <= params.aLast);
+				bool inRangePrev = kind ? (params.bPrev < params.aLast) :
+					(params.bPrev <= params.aLast); 
 				if(!tid) inRangePrev = true;
 				if(!inRange && inRangePrev)
 					consumed_shared = tid;
 
 				__syncthreads();
-				params.bCount = consumed_shared;
+				result.bConsume = consumed_shared;
 			}
 		}
 	}
-
 
 	////////////////////////////////////////////////////////////////////////////
 	// Stream the values based on the consumed counts (params.aCount and 
 	// params.bCount).
 
-	if(!params.aCount) {
+	if(!result.aConsume) {
 		// We've run out of aData keys to merge into. All the keys get inserted
 		// to the start of the current section.
 		result.index = 0;
-	} else if(params.bCount) {
+	} else if(result.bConsume) {
 		// Both aCount and bCount are defined. For this we perform the batched
 		// binary search.
-		result.index = SearchInterval<T, T2>(tid, aData_shared, bData_shared, 
-			params, radix_shared, numRadixBits, kind, true);
+		params.aCount = result.aConsume;
+		params.bCount = result.bConsume;
+		if(numRadixBits)
+			result.index = SearchInterval<T, T2>(tid, aData_shared,
+				bData_shared, params, radix_shared, numRadixBits, kind, true);
+		else
+			result.index = SearchIntervalNoRadix(tid, aData_shared, params,
+				kind);
 	}
 	return result;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// SearchBlock
+// Run a lower_bound or upper_bound from a set of sorted keys.
 
 template<int NumThreads, int NumRadixBits, typename T, typename T2>
 DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
-	const T* bData_global, int2 bRange, int kind, uint* indices_global) {
+	const T* bData_global, int2 bRange, int kind, int2* indices_global) {
 
 	const int NumRadixDigits = 1<< NumRadixBits;
 	__shared__ uint radix_shared[NumRadixDigits];
 	__shared__ T aData_shared[NumThreads], bData_shared[NumThreads];
-
+	
 	uint tid = threadIdx.x;
+
+	// Poke the radix_shared array to make sure the compiler keeps it in.
+	if(!tid) radix_shared[0] = 0;
 
 	// aRange.x and bRange.y refer to the first element of each array in each
 	// inner loop. They are not pointers to the next value to load. This
@@ -283,7 +302,7 @@ DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
 	int aRemaining = aRange.y - aRange.x;
 	int bRemaining = bRange.y - bRange.x;
 
-	T a, b;
+	SearchInsertResult result;
 
 	while(aRemaining || bRemaining) {
 		
@@ -293,66 +312,46 @@ DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
 		int aCount = min(NumThreads, aRemaining);
 		int bCount = min(NumThreads, bRemaining);
 
-		SearchParams<T> params;
-
-		if(tid >= aLoaded) {
-			a = aData_global[aRange.x + tid];
-			aData_shared[tid] = a;
-		}
-		if(tid >= bLoaded) {
-			b = bData_global[bRange.x + tid];
-			bData_shared[tid] = b;
-		}
+		T a = (tid >= aLoaded) ? 
+			aData_global[min(aRange.y - 1, aRange.x + tid)] : 
+			aData_shared[tid + result.aConsume];
+		T b = (tid >= bLoaded) ?
+			bData_global[min(bRange.y - 1, bRange.x + tid)] :
+			bData_shared[tid + result.bConsume];
 		__syncthreads();
 
-		SearchInsertResult result = SearchInsertRange<T, T2>(tid, aCount,
-			bCount, 0, 0, a, b, aData_shared, bData_shared, radix_shared, 
-			NumRadixBits, kind);
+		aData_shared[tid] = a;
+		bData_shared[tid] = b;
+		__syncthreads();
 
-		indices_global[tid] = result.index;
-		break;
-	}
+		result = SearchInsertRange<T, T2>(tid, aCount, bCount, 
+			aRemaining - aCount, bRemaining - bCount, a, b,
+			aData_shared, bData_shared, radix_shared, NumRadixBits, kind);
 
+		if(tid < result.bConsume)
+			indices_global[bRange.x + tid] = 
+				make_int2(result.index + aRange.x, b);
 
-/*
-template<typename T, typename T2>
-DEVICE2 SearchInsertResult SearchInsertRange(uint tid, int aCount, int bCount,
-	int aRemaining, int bRemaining, T aData, T bData, T* aData_shared, 
-	T* bData_shared, uint* radix_shared, int kind) {
-*/
-
-/*
-
-
-
-		// Update the offsets for the next serialization.
-		aRange.x += aConsumed;
-		bRange.y += bConsumed;
-		
 
 		////////////////////////////////////////////////////////////////////////
-		// Move remaining, untouched values to the start of the shared mem 
-		// arrays.
+		// Advance the iterators by the consumed counts.
 
-		if(tid >= aConsumed)
-			aData_shared[tid - aConsumed] = a;
-		if(tid >= bConsumed)
-			bData_shared[tid - bConsumed] = b;
+		// Update the offsets for the next serialization.
+		aRange.x += result.aConsume;
+		bRange.x += result.bConsume;
+		
+		aLoaded = aCount - result.aConsume;
+		bLoaded = bCount - result.bConsume;
 
-		// 
-		aLoaded = aCount - aConsumed;
-		bLoaded = bCount - bConsumed;
-		
-		__syncthreads();
-		
-		}
-*/
+		aRemaining -= result.aConsume;
+		bRemaining -= result.bConsume;
+	}
 }
 
 extern "C" __global__ __launch_bounds__(256, 4)
 void SearchBlockInt(const uint* aData_global, int2 aRange,
-	const uint* bData_global, int2 bRange, uint* indices_global) {
+	const uint* bData_global, int2 bRange, int2* indices_global) {
 
-	SearchBlock<256, 6, uint, uint>(aData_global, aRange, bData_global,
-		bRange, 1, indices_global);
+	SearchBlock<256, 0, uint, uint>(aData_global, aRange, bData_global,
+		bRange, 0, indices_global);
 }
