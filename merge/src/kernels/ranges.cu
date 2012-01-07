@@ -73,9 +73,13 @@ DEVICE uint4 GetRangeBallot64(volatile uint* offsets_shared, uint lane,
 // pass kind = 0 for lower_bound, kind = 1 for upper_bound.
 template<typename T>
 DEVICE2 uint RangeBinarySearch(const T* values, uint begin, uint end, T key,
-	int kind) {
+	int kind, int& count) {
 	
+	count = 0;
 	while(end > begin) {
+		// Keep a count for debugging and diagnostics.
+		++count;
+
 		uint mid = (begin + end) / 2;
 
 		T midValue = values[mid];
