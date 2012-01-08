@@ -206,9 +206,9 @@ template<typename T>
 DEVICE2 uint FindBIntoA(uint tid, const T* bData_shared, uint bCount, T aLast,
 	int kind) {
 
-	int last = bCount - 1;
+	uint last = bCount - 1;
 	last += last / WARP_SIZE;
-	int index = min(33 * tid + 31, last); 
+	uint index = min(33 * tid + 31, last); 
 	T key = bData_shared[index];
 
 	// Find the first key in bData_shared that is not inRange
@@ -238,20 +238,96 @@ DEVICE2 uint FindBIntoA(uint tid, const T* bData_shared, uint bCount, T aLast,
 // Compute how many values to eat away from the A array. We look for the first
 // element in a that is not <=/< bLast (for lower_bound/upper_bound).
 
+// Only call with 32 threads!
 
 template<typename T>
 DEVICE2 uint FindAIntoB(uint tid, const T* aData_shared, uint aCount, T bLast,
-	int kind) {
+	uint numValues, int kind) {
 
+	// Data in aData_shared is not strided every 32 elements like bData_shared.
+	// Because of this, it's not possible to sample every 32nd element without
+	// 32-way bank conflicts.
 
+	// Instead, same every 17th element. If we have 512 or fewer elements, just
+	// a single warp (32 * 17 = 544) is enough to search. For 1024 elements, we
+	// need to do high and low searches.
+
+	uint index;
+	if(numValues <= 512) {
+		uint last = aCount - 1;
+		index = min(17 * tid + 16, last);
+		T key = aData_shared[index];
+
+		// Find the first key in bData_shared that is not inRange.
+		bool inRange = kind ? (key <= bLast) : (key < bLast);
+		uint bits = __ballot(inRange);
+
+		uint section = 32 - __clz(bits);
+		index = min(17 * section + tid, last);
+
+		// Make the same comparison and share bits using ballot.
+		inRange = kind ? (key <= bLast) : (key < bLast);
+		bits = __ballot(inRange);
+
+		index = 17 * section + (32 - __clz(bits));
+	} else if(1024 == numValues) {
+		uint last = aCount - 1;
+		uint indexLow = min(17 * tid + 16, last);
+		uint indexHigh = min(544 + 17 * tid + 16, last);
+		T keyLow = aData_shared[indexLow];
+		T keyHigh = aData_shared[indexHigh];
+
+		bool inRangeLow = kind ? (keyLow <= bLast) : (keyHigh < bLast);
+		bool inRangeHigh = kind ? (keyLow <= bLast) : (keyHigh < bLast);
+		uint bitsLow = __ballot(inRangeLow);
+		uint bitsHigh = __ballot(inRangeHigh);
+
+		uint countLow = __clz(bitsLow);
+		uint countHigh = __clz(bitsHigh);
+		uint section = countLow ? (32 - countLow) : (64 - countHigh);
+
+		index = min(17 * section + tid, last);
+		bool inRange = kind ? (key <= bLast) : (key < bLast);
+		uint bits = __ballot(inRange);
+
+		index = 17 * section + (32 - __clz(bits));
+	}
+	return index;
 }
 
 
-/////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+// FindStreamConsumed
+// Returns the number of A and B array elements to consume this iteration.
+
+template<typename T>
+DEVICE2 uint2 FindStreamConsumed(uint tid, const T* aData_shared, uint aCount,
+	const T* bData_shared, uint bCount, int kind, uint numValues) {
+
+	__shared__ uint packedCounts_shared;
+	if(tid < WARP_SIZE) {
+		T aLast = aData_shared[aCount - 1];
+		T bLast = bData_shared[bCount - 1];
+		bool pred = kind ? (bLast < aLast) : (bLast <= aLast);
+		if(pred)
+			aCount = FindAIntoB(tid, aData_shared, aCount, bLast, numValues, 
+				kind);
+		else
+			bCount = FindBIntoA(tid, bData_shared, bCount, aLast, kind);
+			
+		uint packed = bfi(aCount, bCount, 16, 16);
+	
+		if(!tid) packedCounts_shared = packed;
+	}
+	__syncthreads();
+
+	uint packed = packedCounts_shared;
+	uint2 consumed = make_uint2(0xffff & packed, packed>> 16);
+	return consumed;
+}
 
 
-
-
+////////////////////////////////////////////////////////////////////////////////
 
 
 
