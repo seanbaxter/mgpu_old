@@ -30,11 +30,12 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 	const int Spacing = numValues / WARP_SIZE;
 	const int Spacing2 = numThreads / 32;
 
-	// PROCESS 32 THREADS.
-
-	// Run elements Spacing * tid. For NumValues = 1024, these are elements:
-	// 0, 32, 64, 96, 128, etc.
 	if(tid < WARP_SIZE) {
+		// PROCESS 32 THREADS. (Spacing * tid)
+
+		// Run elements Spacing * tid. For NumValues = 1024, these are elements:
+		// 0, 32, 64, 96, 128, etc.
+
 		// Use strided indexing to retrieve every Spacing'th element without
 		// bank conflicts.
 		int i = Spacing * tid;
@@ -50,16 +51,15 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 		int j = Spacing2 * tid;
 		j += j / WARP_SIZE;
 		indices_shared[j] = index;
-	}
-	__syncthreads();
 
-	// PROCESS 32 THREADS (64 done).
 
-	// Run elements Spacing * tid + Spacing / 2. We use the indices to the left
-	// and right (i.e. Spacing * tid and Spacing * tid + Spacing) to constrain
-	// this search. For NumValues = 1024, these are elements:
-	// 16, 48, 80, 112, 144, etc.
-	if(tid < WARP_SIZE) {
+		// PROCESS 32 THREADS (64 done). (Spacing * tid + Spacing / 2)
+
+		// Run elements Spacing * tid + Spacing / 2. We use the indices to the left
+		// and right (i.e. Spacing * tid and Spacing * tid + Spacing) to constrain
+		// this search. For NumValues = 1024, these are elements:
+		// 16, 48, 80, 112, 144, etc.
+	
 		int j = Spacing2 * tid;
 		j += j / WARP_SIZE;
 		int j2 = Spacing2 * tid + Spacing2;
@@ -329,133 +329,29 @@ DEVICE2 uint2 FindStreamConsumed(uint tid, const T* aData_shared, uint aCount,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-		// Load the last value of both arrays to establish the consumed
-		// counts.
-		params.a = aData;
-		params.b = bData;
-		params.aLast = aData_shared[aCount - 1];
-		params.bLast = bData_shared[bCount - 1];
-		params.aPrev = aData_shared[tid - 1];
-		params.bPrev = bData_shared[tid - 1];
-
-		// Because we're only dealing with fragments of the datasets, we
-		// need to be careful on which values can be inserted. Take the
-		// upper_bound case as an example:
-		
-		//     i = 0 1 2 3 4 5 6 7
-		// aData = 2 2 3 4 7 8 8 9 ...
-		// bData = 1 2 2 2 6 6 9 9 ...
-
-		// We can insert elements with values 1 - 6 from bData without 
-		// ambiguity. However we can't be sure where to insert the pair of
-		// 9s. The upper_bound semantics demand that they be inserted AFTER
-		// all occurences of the same value in the aData stream. Because we
-		// haven't seen the next elements in aData we don't know if we can
-		// insert bData[6] and bData[7] at i = 8.
-
-		// The same problem occurs with lower_bound: 
-		//     i = 0 1 2 3 4 5 6 7
-		// aData = 2 2 3 4 7 7 7 8 ... 
-		// bData = 1 2 2 2 6 9 9 9 ...
-
-		// aData[8] could be an 8, in which case it would precede bData[5],
-		// or it could be a 9 or something larger, in which case the 9 terms
-		// from bData should come first.
-
-		// The problem is symmetric even when we only want to find insert 
-		// points from bData into aData:
-		//     i = 0 1 2 3 4 5 6 7
-		// aData = 2 3 3 3 5 6 7 7 ...
-		// bData = 1 1 2 3 3 3 3 4 (4 5 5 6 7 7 7)
-
-		// The goal is to consume both the aData and bData arrays in shared
-		// memory every iteration. However we need to retain aData values
-		// when they are required to know where to insert upcoming bData
-		// values. In the example above, we can consume all 8 values in 
-		// bData, but only the first 4 values in aData. The remaining aData
-		// values are shifted forward in aData_shared and are used for
-		// supporting the search with the subsequent bData values.
-
-		// When searching with lower_bound, if both aData and bData shared
-		// memory arrays end with the same value, both arrays are completely
-		// consumed.
-
-		// At least one of the arrays will be completely consumed. To
-		// summarize, when inserting bData into aData, lower_bound favors
-		// consuming bData and upper_bound favors consuming aData.
-
-		if(aRemaining + bRemaining) {
-			// Compare the last element in bData to the last element in aData.
-			bool pred = kind ? (params.bLast < params.aLast) : 
-				(params.bLast <= params.aLast);
-
-			// Get the preceding keys to find the first value that violates the
-			// consume conditions.
-			if(pred) {
-				// If the last element in bData is < (or <=) the last element in
-				// aData, completely consume the bData_shared stream.
-
-				// If upper_bound consume all values in aData that are <= bLast.
-				// If lower_bound consume all values in aData that are < bLast.
-				bool inRange = kind ? (params.a <= params.bLast) :
-					(params.a < params.bLast);
-				bool inRangePrev = kind ? (params.aPrev <= params.bLast) :
-					(params.aPrev < params.bLast);
-				if(!tid) inRangePrev = true;
-				if(!inRange && inRangePrev)
-					consumed_shared = tid;
-
-				__syncthreads();
-				result.aConsume = consumed_shared;
-			} else {
-				// If the last element in bData is not < (or <=) the last
-				// element in aData, completely consume the aData_shared stream.
-
-				// If upper_bound consume all values in bData that are <= aLast.
-				// If lower_bound consume all values in bData that are < aLast.
-				bool inRange = kind ? (params.b < params.aLast) :
-					(params.b <= params.aLast);
-				bool inRangePrev = kind ? (params.bPrev < params.aLast) :
-					(params.bPrev <= params.aLast); 
-				if(!tid) inRangePrev = true;
-				if(!inRange && inRangePrev)
-					consumed_shared = tid;
-
-				__syncthreads();
-				result.bConsume = consumed_shared;
-			}
-		}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 template<int NumThreads, int VT, typename T>
 DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
 	const T* bData_global, int2 bRange, int kind, int2* indices_global) {
+
+
+
+
+
+
+		T a = (tid >= aLoaded) ? 
+			aData_global[min(aRange.y - 1, aRange.x + tid)] : 
+			aData_shared[tid + result.aConsume];
+		T b = (tid >= bLoaded) ?
+			bData_global[min(bRange.y - 1, bRange.x + tid)] :
+			bData_shared[tid + result.bConsume];
+		__syncthreads();
+
+		aData_shared[tid] = a;
+		bData_shared[tid] = b;
+		__syncthreads();
+
+
+
 
 
 
