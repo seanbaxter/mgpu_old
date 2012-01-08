@@ -1,10 +1,19 @@
 #include "ranges.cu"
 
-template<int VT>
-struct InsertResult {
-	uint indices[VT];
-	uint aConsume, bConsume;
-};
+
+////////////////////////////////////////////////////////////////////////////////
+// SearchBLockConstricted
+
+// Finds the search index for the first value in each thread. This is done in
+// multiple passes. The first pass of 32 elements searches the entire 
+// aData_shared array. The next pass of 32 elements is constrained by the 
+// results of the first pass. The third pass of 64 elements is constrained by
+// the results of the first two passes. The fourth pass (only for 256 threads
+// per block) is constrained by all the preceding passes.
+
+// With 4 values per thread, 25% of the searching is done in this function.
+// The remaining 75% is executed in SearchThread4, a generally high-performing
+// function due to all searches being well constrained.
 
 // NOTE: prefill indices_shared[numThreads - 1] with aCount.
 
@@ -121,10 +130,22 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 	__syncthreads();
 }
 
+
+////////////////////////////////////////////////////////////////////////////////
+
+// SearchThread4 performs the per-thread searches that were started in 
+// SearchBlockConstricted.
+
+// If store is 0: store directly to target_shared with WARP_SIZE stride. This is
+// used for lower_bound/upper_bound search.
+
+// If store is 1: scatter to 4 * tid + n to 4 * tid + n + index[n] with no
+// stride. This is used for sorted array merge.
+
 template<typename T>
 DEVICE2 void SearchThread4(uint tid, const T* aData_shared, 
 	const uint* indices_shared, uint bCount, const uint* indices_shared,
-	const T keys[4], uint indices[4], uint* target_shared) {
+	const T keys[4], uint indices[4], uint* target_shared, int store) {
 
 	uint activeThreads = DivUp(bCount, 4);
 	if(tid < activeThreads) {
@@ -150,15 +171,210 @@ DEVICE2 void SearchThread4(uint tid, const T* aData_shared,
 		indices[2] = index2;
 		indices[3] = index3;
 
-		i = 4 * tid;
-		i += i / WARP_SIZE;
-		target_shared[i] = index0;
-		target_shared[i + 1] = index1;
-		target_shared[i + 2] = index2;
-		target_shared[i + 3] = index3;
+		if(0 == store) {
+			i = 4 * tid;
+			i += i / WARP_SIZE;
+			target_shared[i] = index0;
+			target_shared[i + 1] = index1;
+			target_shared[i + 2] = index2;
+			target_shared[i + 3] = index3;
+		} else if(1 == store) {
+			target_shared[4 * tid + index0] = 4 * tid;
+			target_shared[4 * tid + 1 + index1] = 4 * tid + 1;
+			target_shared[4 * tid + 1 + index2] = 4 * tid + 2;
+			target_shared[4 * tid + 1 + index3] = 4 * tid + 3;
+		}
 	}
 	__syncthreads();
 }
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Compute how many values to consume in the B array. We look for the first 
+// element in b that is not <=/< aLast (for lower_bound/upper_bound).
+
+// We use a "btree" ballot search. This is similar to the MGPU lower_bound btree
+// search. Because there is a misalignment slot between every set of 32 values,
+// we can load values 32 apart into a single warp without bank conflicts. Each 
+// lane compares against aLast and ballot is used to find the interval to zoom
+// in on. This technique requires two passes, although only one warp is
+// involved.
+
+// Only call FindBIntoA with 32 threads!
+
+template<typename T>
+DEVICE2 uint FindBIntoA(uint tid, const T* bData_shared, uint bCount, T aLast,
+	int kind) {
+
+	int last = bCount - 1;
+	last += last / WARP_SIZE;
+	int index = min(33 * tid + 31, last); 
+	T key = bData_shared[index];
+
+	// Find the first key in bData_shared that is not inRange
+	bool inRange = kind ? (key < aLast) : (key <= aLast);
+	uint bits = __ballot(inRange);
+
+	// clz returns the number of consecutive zero bits starting at the most
+	// significant bit. Subtract from 32 to find the warp containing the 
+	// first out of range value. Note that clz will not return 0 - we know 
+	// there is at least one key (the last one) that is out of range, or 
+	// else we wouldn't take this FindAIntoB branch.
+	uint warp = 32 - __clz(bits);
+
+	index = min(33 * warp + tid, last);
+	key = bData_shared[index];
+
+	// Make the same comparison and share bits using ballot.
+	inRange = kind ? (key < aLast) : (key <= aLast);
+	bits = __ballot(inRange);
+
+	index = 32 * warp + (32 - __clz(bits));
+
+	return index;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Compute how many values to eat away from the A array. We look for the first
+// element in a that is not <=/< bLast (for lower_bound/upper_bound).
+
+
+template<typename T>
+DEVICE2 uint FindAIntoB(uint tid, const T* aData_shared, uint aCount, T bLast,
+	int kind) {
+
+
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		// Load the last value of both arrays to establish the consumed
+		// counts.
+		params.a = aData;
+		params.b = bData;
+		params.aLast = aData_shared[aCount - 1];
+		params.bLast = bData_shared[bCount - 1];
+		params.aPrev = aData_shared[tid - 1];
+		params.bPrev = bData_shared[tid - 1];
+
+		// Because we're only dealing with fragments of the datasets, we
+		// need to be careful on which values can be inserted. Take the
+		// upper_bound case as an example:
+		
+		//     i = 0 1 2 3 4 5 6 7
+		// aData = 2 2 3 4 7 8 8 9 ...
+		// bData = 1 2 2 2 6 6 9 9 ...
+
+		// We can insert elements with values 1 - 6 from bData without 
+		// ambiguity. However we can't be sure where to insert the pair of
+		// 9s. The upper_bound semantics demand that they be inserted AFTER
+		// all occurences of the same value in the aData stream. Because we
+		// haven't seen the next elements in aData we don't know if we can
+		// insert bData[6] and bData[7] at i = 8.
+
+		// The same problem occurs with lower_bound: 
+		//     i = 0 1 2 3 4 5 6 7
+		// aData = 2 2 3 4 7 7 7 8 ... 
+		// bData = 1 2 2 2 6 9 9 9 ...
+
+		// aData[8] could be an 8, in which case it would precede bData[5],
+		// or it could be a 9 or something larger, in which case the 9 terms
+		// from bData should come first.
+
+		// The problem is symmetric even when we only want to find insert 
+		// points from bData into aData:
+		//     i = 0 1 2 3 4 5 6 7
+		// aData = 2 3 3 3 5 6 7 7 ...
+		// bData = 1 1 2 3 3 3 3 4 (4 5 5 6 7 7 7)
+
+		// The goal is to consume both the aData and bData arrays in shared
+		// memory every iteration. However we need to retain aData values
+		// when they are required to know where to insert upcoming bData
+		// values. In the example above, we can consume all 8 values in 
+		// bData, but only the first 4 values in aData. The remaining aData
+		// values are shifted forward in aData_shared and are used for
+		// supporting the search with the subsequent bData values.
+
+		// When searching with lower_bound, if both aData and bData shared
+		// memory arrays end with the same value, both arrays are completely
+		// consumed.
+
+		// At least one of the arrays will be completely consumed. To
+		// summarize, when inserting bData into aData, lower_bound favors
+		// consuming bData and upper_bound favors consuming aData.
+
+		if(aRemaining + bRemaining) {
+			// Compare the last element in bData to the last element in aData.
+			bool pred = kind ? (params.bLast < params.aLast) : 
+				(params.bLast <= params.aLast);
+
+			// Get the preceding keys to find the first value that violates the
+			// consume conditions.
+			if(pred) {
+				// If the last element in bData is < (or <=) the last element in
+				// aData, completely consume the bData_shared stream.
+
+				// If upper_bound consume all values in aData that are <= bLast.
+				// If lower_bound consume all values in aData that are < bLast.
+				bool inRange = kind ? (params.a <= params.bLast) :
+					(params.a < params.bLast);
+				bool inRangePrev = kind ? (params.aPrev <= params.bLast) :
+					(params.aPrev < params.bLast);
+				if(!tid) inRangePrev = true;
+				if(!inRange && inRangePrev)
+					consumed_shared = tid;
+
+				__syncthreads();
+				result.aConsume = consumed_shared;
+			} else {
+				// If the last element in bData is not < (or <=) the last
+				// element in aData, completely consume the aData_shared stream.
+
+				// If upper_bound consume all values in bData that are <= aLast.
+				// If lower_bound consume all values in bData that are < aLast.
+				bool inRange = kind ? (params.b < params.aLast) :
+					(params.b <= params.aLast);
+				bool inRangePrev = kind ? (params.bPrev < params.aLast) :
+					(params.bPrev <= params.aLast); 
+				if(!tid) inRangePrev = true;
+				if(!inRange && inRangePrev)
+					consumed_shared = tid;
+
+				__syncthreads();
+				result.bConsume = consumed_shared;
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 template<int NumThreads, int VT, typename T>
