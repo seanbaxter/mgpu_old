@@ -34,7 +34,7 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 		// PROCESS 32 THREADS. (Spacing * tid)
 
 		// Run elements Spacing * tid. For NumValues = 1024, these are elements:
-		// 0, 32, 64, 96, 128, etc.
+		// 0, 32, 64, 96, 128, etc. 
 
 		// Use strided indexing to retrieve every Spacing'th element without
 		// bank conflicts.
@@ -60,7 +60,7 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 		// this search. For NumValues = 1024, these are elements:
 		// 16, 48, 80, 112, 144, etc.
 	
-		int j = Spacing2 * tid;
+		j = Spacing2 * tid;
 		j += j / WARP_SIZE;
 		int j2 = Spacing2 * tid + Spacing2;
 		j2 += j2 / WARP_SIZE;
@@ -68,11 +68,11 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 		uint begin = indices_shared[j];
 		uint end = indices_shared[j2];
 
-		int i = Spacing * tid + Spacing / 2;
+		i = Spacing * tid + Spacing / 2;
 		i += i / WARP_SIZE;
 
-		T key = bData_shared[i2];
-		uint index = RangeBinarySearch(aData_shared, begin, end, key, kind, 
+		key = bData_shared[i2];
+		index = RangeBinarySearch(aData_shared, begin, end, key, kind, 
 			count);
 	
 		indices_shared[j + Spacing2 / 2] = index;
@@ -143,11 +143,11 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 // stride. This is used for sorted array merge.
 
 template<typename T>
-DEVICE2 void SearchThread4(uint tid, const T* aData_shared, 
-	const uint* indices_shared, uint bCount, const uint* indices_shared,
-	const T keys[4], uint indices[4], uint* target_shared, int store) {
+DEVICE2 void SearchThread4(uint tid, const T* aData_shared, uint bCount, 
+	const uint* indices_shared, const T keys[4], uint indices[4], 
+	uint* target_shared, int store) {
 
-	uint activeThreads = DivUp(bCount, 4);
+	uint activeThreads = DivUp(bCount, 4u);
 	if(tid < activeThreads) {
 
 		// Retrieve the already-computed index for values 0 and 3:
@@ -180,9 +180,9 @@ DEVICE2 void SearchThread4(uint tid, const T* aData_shared,
 			target_shared[i + 3] = index3;
 		} else if(1 == store) {
 			target_shared[4 * tid + index0] = 4 * tid;
-			target_shared[4 * tid + 1 + index1] = 4 * tid + 1;
-			target_shared[4 * tid + 1 + index2] = 4 * tid + 2;
-			target_shared[4 * tid + 1 + index3] = 4 * tid + 3;
+			target_shared[4 * tid + index1] = 4 * tid + 1;
+			target_shared[4 * tid + index2] = 4 * tid + 2;
+			target_shared[4 * tid + index3] = 4 * tid + 3;
 		}
 	}
 	__syncthreads();
@@ -264,6 +264,7 @@ DEVICE2 uint FindAIntoB(uint tid, const T* aData_shared, uint aCount, T bLast,
 
 		uint section = 32 - __clz(bits);
 		index = min(17 * section + tid, last);
+		key = aData_shared[index];
 
 		// Make the same comparison and share bits using ballot.
 		inRange = kind ? (key <= bLast) : (key < bLast);
@@ -287,6 +288,7 @@ DEVICE2 uint FindAIntoB(uint tid, const T* aData_shared, uint aCount, T bLast,
 		uint section = countLow ? (32 - countLow) : (64 - countHigh);
 
 		index = min(17 * section + tid, last);
+		T key = aData_shared[index];
 		bool inRange = kind ? (key <= bLast) : (key < bLast);
 		uint bits = __ballot(inRange);
 
@@ -328,10 +330,10 @@ DEVICE2 uint2 FindStreamConsumed(uint tid, const T* aData_shared, uint aCount,
 
 
 ////////////////////////////////////////////////////////////////////////////////
-
+/*
 template<int NumThreads, int VT, typename T>
 DEVICE2 void SearchBlock(const T* aData_global, int2 aRange,
-	const T* bData_global, int2 bRange, int kind, int2* indices_global) {
+	const T* bData_global, int2 bRange, int kind, int2* indices_global) { 
 
 
 
