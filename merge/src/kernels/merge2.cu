@@ -1,8 +1,32 @@
 #include "ranges.cu"
 
+////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, int Count, int Capacity>
+struct CircularBuffer {
+	static const int Stride = WARP_SIZE + 1;
+	static const int NumWarps = Count / WARP_SIZE;
+	static const int NumWarpsCapacity = Capacity / WARP_SIZE;
+	static const int StridedCapacity = NumWarpsCapacity * Stride;
+
+	__shared__ T data[StridedCapacity];
+	uint i;
+
+	uint 
+
+	T Get(uint index) const {
+		index += offset;
+		if(index >= Capacity) index -= Capacity;
+		uint i2 = index + index / WARP_SIZE;
+		return data[i2];		
+	}
+
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////
-// SearchBLockConstricted
+// SearchBlockConstricted
 
 // Finds the search index for the first value in each thread. This is done in
 // multiple passes. The first pass of 32 elements searches the entire 
@@ -55,9 +79,9 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 
 		// PROCESS 32 THREADS (64 done). (Spacing * tid + Spacing / 2)
 
-		// Run elements Spacing * tid + Spacing / 2. We use the indices to the left
-		// and right (i.e. Spacing * tid and Spacing * tid + Spacing) to constrain
-		// this search. For NumValues = 1024, these are elements:
+		// Run elements Spacing * tid + Spacing / 2. We use the indices to the
+		// left and right (i.e. Spacing * tid and Spacing * tid + Spacing) to
+		// constrain this search. For NumValues = 1024, these are elements:
 		// 16, 48, 80, 112, 144, etc.
 	
 		j = Spacing2 * tid;
