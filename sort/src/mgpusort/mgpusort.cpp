@@ -224,14 +224,6 @@ sortStatus_t SORTAPI sortCreateEngine(const char* kernelPath,
 		&e->sortDetectCounters);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_KERNEL_ERROR;
 
-	// Allocate a range pair for each hist warp launched.
-	int numRangePairs = e->numSMs * NumHistWarps;
-	e->rangePairsHost.resize(numRangePairs);
-
-	result = e->context->ByteAlloc(sizeof(int2) * numRangePairs,
-		&e->rangePairs);
-	if(CUDA_SUCCESS != result) return SORT_STATUS_DEVICE_ALLOC_FAILED;
-
 	// Allocate a full set of buckets for each warp of the histogram kernels
 	// launched.
 	result = e->context->MemAlloc<uint>(e->numSMs * NumHistWarps * 64, 
@@ -242,8 +234,6 @@ sortStatus_t SORTAPI sortCreateEngine(const char* kernelPath,
 	// launched.
 	result = e->context->MemAlloc<uint>(e->numSMs * 64, &e->countScan);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_DEVICE_ALLOC_FAILED;
-
-	e->lastNumHistRowsProcessed = 0;
 
 	*engine = e.release();
 	return SORT_STATUS_SUCCESS;
@@ -378,27 +368,6 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 	status = AllocSortResources(terms, engine);
 	if(SORT_STATUS_SUCCESS != status) return status;
 	
-	// Set numHistRows into rangePairs if it hasn't already been set to this 
-	// size.
-	if(terms.numHistRows != engine->lastNumHistRowsProcessed) {
-		int2* pairs = &engine->rangePairsHost[0];
-		int numPairs = terms.numHistBlocks * NumHistWarps;
-		int pairCount = terms.numHistRows / numPairs;
-		int pairSplit = terms.numHistRows % numPairs;
-		pairs[0].x = 0;
-		for(int i = 0; i < numPairs; ++i) {
-			if(i) pairs[i].x = pairs[i - 1].y;
-			pairs[i].y = pairs[i].x + pairCount + (i < pairSplit);
-		}
-
-		// Copy rangePairsHost to device memory.
-		CUresult result = engine->rangePairs->FromHost(
-			&engine->rangePairsHost[0], numPairs);
-		if(CUDA_SUCCESS != result) return SORT_STATUS_DEVICE_ERROR;
-
-		engine->lastNumHistRowsProcessed = terms.numHistRows;
-	}
-
 	// Save the trailing keys
 	if((SORT_END_KEY_SAVE & endKeyFlags) && terms.numEndKeys) {
 		engine->restoreSourceSize = terms.numEndKeys;
@@ -452,9 +421,13 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 
 	if(*earlyExitCode <= 1) {
 
+		// Compute the range pairs.
+		int numPairs = terms.numHistBlocks * NumHistWarps;
+		div_t d = div(terms.numHistRows, numPairs);
+
 		// Run the three histogram kernels
 		callStack.Reset();
-		callStack.Push(engine->countBuffer, engine->rangePairs, 
+		callStack.Push(engine->countBuffer, d.quot, d.rem, 1, terms.numHistRows,
 			engine->countScan, engine->columnScan);
 		result = hist->pass1[numBits - 1]->Launch(terms.numHistBlocks, 1,
 			callStack);
@@ -466,7 +439,7 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 		if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 
 		callStack.Reset();
-		callStack.Push(engine->countBuffer, engine->rangePairs, 
+		callStack.Push(engine->countBuffer, d.quot, d.rem, 1, terms.numHistRows,
 			engine->countScan, engine->columnScan, engine->bucketCodes,
 			*earlyExitCode);
 		result = hist->pass3[numBits - 1]->Launch(terms.numHistBlocks, 1,

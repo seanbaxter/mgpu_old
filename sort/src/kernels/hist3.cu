@@ -242,9 +242,9 @@ DEVICE uint ComputeTransactionList(uint* bucketCodes_global, int numSortBlocks,
 
 extern "C" __global__ __launch_bounds__(NUM_THREADS, 1)
 void HISTOGRAM_FUNC3(const uint* bucketCount_global, 
-	const uint2* rangePairs_global, const uint* countScan_global, 
-	const uint* columnScan_global, uint* bucketCodes_global,
-	int supportEarlyExit) {
+	int rangeQuot, int rangeRem, int segSize, int count,
+	const uint* countScan_global, const uint* columnScan_global,
+	uint* bucketCodes_global, int supportEarlyExit) {
 
 	uint tid = threadIdx.x;
 	uint block = blockIdx.x;
@@ -254,7 +254,9 @@ void HISTOGRAM_FUNC3(const uint* bucketCount_global,
 	uint sortBlock = lane / NUM_CHANNELS;
 	uint warp = tid / WARP_SIZE;
 	
-	uint2 range = rangePairs_global[NUM_WARPS * block + warp];
+	// uint2 range = rangePairs_global[NUM_WARPS * block + warp];
+	int2 range = ComputeTaskRange(NUM_WARPS * block + warp, rangeQuot, rangeRem,
+		segSize, count);
 
 	// The early exit flag comes in the most significant bit of the low short
 	// of the first value in each sort block's radix digit frequency array.

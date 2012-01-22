@@ -184,3 +184,23 @@ DEVICE uint FloatToUint(float f) {
 	uint u = (uint)adjusted;
 	return u;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Computes an iterator range from div_t result called on the host side.
+DEVICE int2 ComputeTaskRange(int block, int taskQuot, int taskRem, 
+	int segSize, int count) {
+
+	int2 range;
+	range.x = taskQuot * block;
+	range.x += min(block, taskRem);
+	range.y = range.x + taskQuot + (block < taskRem);
+
+	range.x *= segSize;
+	range.y *= segSize;
+	range.y = min(range.y, count);
+	
+	return range;
+}
+

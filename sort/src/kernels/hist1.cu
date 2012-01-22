@@ -26,15 +26,18 @@
 
 
 extern "C" __global__ void HISTOGRAM_FUNC1(const uint* bucketCount_global,
-	const uint2* rangePairs_global, uint* countScan_global,
-	uint* columnScan_global) {
+	int rangeQuot, int rangeRem, int segSize, int count, 
+	uint* countScan_global, uint* columnScan_global) {
 
 	uint tid = threadIdx.x;
 	uint block = blockIdx.x;
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
+
+	// uint2 range = rangePairs_global[NUM_WARPS * block + warp];
+	int2 range = ComputeTaskRange(NUM_WARPS * block + warp, rangeQuot, rangeRem,
+		segSize, count);
 	
-	uint2 range = rangePairs_global[NUM_WARPS * block + warp];
 
 	// running sum only for this thread
 	uint countLow = 0;

@@ -49,11 +49,7 @@ struct sortEngine_d : public CuBase {
 	GlobalMemPtr sortDetectCounters;
 	
 	// Temporaries for hist pass.
-	DeviceMemPtr rangePairs, columnScan, countScan, bucketCodes;
-	std::vector<int2> rangePairsHost;
-
-	// Only update rangePairs when this term changes.
-	int lastNumHistRowsProcessed;
+	DeviceMemPtr columnScan, countScan, bucketCodes;
 
 	// As particular kernels are required, load the modules and functions and
 	// keep them here.
