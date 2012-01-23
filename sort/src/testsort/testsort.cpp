@@ -14,8 +14,8 @@ const int MaxCUDPPElements = 65535 * 512;
 #ifdef _DEBUG
 
 const int ElementCounts[7] = {
-	35000000,
-	1<< 19,
+	500000,
+	500000,
 	1<< 19,
 	1<< 19,
 	1<< 19,

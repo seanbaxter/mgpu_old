@@ -7,9 +7,16 @@
 // If VALUE_TYPE_NONE is defined, we are working directly on keys. Otherwise, we
 // produce fused keys and keep the key values in a register array.
 
-#ifdef VALUE_TYPE_NONE
-	#define IS_SORT_KEY
+#if defined(VALUE_TYPE_NONE)
+	#define VALUE_COUNT 0
+#elif defined(VALUE_TYPE_INDEX)
+	#define VALUE_COUNT -1
+#elif defined(VALUE_TYPE_SINGLE)
+	#define VALUE_COUNT 1
+#elif defined(VALUE_TYPE_MULTI)
+	#define VALUE_COUNT 2
 #endif
+
 
 #include "common.cu"
 
@@ -55,76 +62,41 @@
 	#define LOG_NUM_WARPS 2
 #endif
 
+#define LOAD_FROM_TEXTURE true
+
+texture<uint4, cudaTextureType1D, cudaReadModeElementType> keys_texture_in;
+
 
 #include "sortcommon.cu"
 #include "sortstore.cu"
 #include "sortgeneric.cu"
 
-#ifndef SCATTER_INPLACE
-
-#define DETECT_SORTED
-
-#define NUM_BITS 1
-#define SORT_FUNC RadixSort_ee_1
-#define SCATTER_LIST_NAME RadixSort_ee_1_scatter_shared
 #include "sort.cu"
 
-#define NUM_BITS 2
-#define SORT_FUNC RadixSort_ee_2
-#define SCATTER_LIST_NAME RadixSort_ee_2_scatter_shared
-#include "sort.cu" 
+GEN_SORT_FUNC(RadixSort_ee_1, NUM_THREADS, 1, VALUE_COUNT, false,			\
+	LOAD_FROM_TEXTURE, true, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_ee_2, NUM_THREADS, 2, VALUE_COUNT, false,			\
+	LOAD_FROM_TEXTURE, true, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_ee_3, NUM_THREADS, 3, VALUE_COUNT, false,			\
+	LOAD_FROM_TEXTURE, true, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_ee_4, NUM_THREADS, 4, VALUE_COUNT, false,			\
+	LOAD_FROM_TEXTURE, true, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_ee_5, NUM_THREADS, 5, VALUE_COUNT, false,			\
+	LOAD_FROM_TEXTURE, true, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_ee_6, NUM_THREADS, 6, VALUE_COUNT, false,			\
+	LOAD_FROM_TEXTURE, true, NUM_BLOCKS)
 
-#define NUM_BITS 3
-#define SORT_FUNC RadixSort_ee_3
-#define SCATTER_LIST_NAME RadixSort_ee_3_scatter_shared
-#include "sort.cu"
+GEN_SORT_FUNC(RadixSort_1, NUM_THREADS, 1, VALUE_COUNT, false,				\
+	LOAD_FROM_TEXTURE, false, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_2, NUM_THREADS, 2, VALUE_COUNT, false,				\
+	LOAD_FROM_TEXTURE, false, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_3, NUM_THREADS, 3, VALUE_COUNT, false,				\
+	LOAD_FROM_TEXTURE, false, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_4, NUM_THREADS, 4, VALUE_COUNT, false,				\
+	LOAD_FROM_TEXTURE, false, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_5, NUM_THREADS, 5, VALUE_COUNT, false,				\
+	LOAD_FROM_TEXTURE, false, NUM_BLOCKS)
+GEN_SORT_FUNC(RadixSort_6, NUM_THREADS, 6, VALUE_COUNT, false,				\
+	LOAD_FROM_TEXTURE, false, NUM_BLOCKS)
 
-#define NUM_BITS 4
-#define SORT_FUNC RadixSort_ee_4
-#define SCATTER_LIST_NAME RadixSort_ee_4_scatter_shared
-#include "sort.cu"
-
-#define NUM_BITS 5
-#define SORT_FUNC RadixSort_ee_5
-#define SCATTER_LIST_NAME RadixSort_ee_5_scatter_shared
-#include "sort.cu"
-
-#define NUM_BITS 6
-#define SORT_FUNC RadixSort_ee_6
-#define SCATTER_LIST_NAME RadixSort_ee_6_scatter_shared
-#include "sort.cu"
-
-#undef DETECT_SORTED
-
-#endif // SCATTER_INPLACE
-
-#define NUM_BITS 1
-#define SORT_FUNC RadixSort_1
-#define SCATTER_LIST_NAME RadixSort_1_scatter_shared
-#include "sort.cu"
-
-#define NUM_BITS 2
-#define SORT_FUNC RadixSort_2
-#define SCATTER_LIST_NAME RadixSort_2_scatter_shared
-#include "sort.cu" 
-
-#define NUM_BITS 3
-#define SORT_FUNC RadixSort_3
-#define SCATTER_LIST_NAME RadixSort_3_scatter_shared
-#include "sort.cu"
-
-#define NUM_BITS 4
-#define SORT_FUNC RadixSort_4
-#define SCATTER_LIST_NAME RadixSort_4_scatter_shared
-#include "sort.cu"
-
-#define NUM_BITS 5
-#define SORT_FUNC RadixSort_5
-#define SCATTER_LIST_NAME RadixSort_5_scatter_shared
-#include "sort.cu"
-
-#define NUM_BITS 6
-#define SORT_FUNC RadixSort_6
-#define SCATTER_LIST_NAME RadixSort_6_scatter_shared
-#include "sort.cu"
 

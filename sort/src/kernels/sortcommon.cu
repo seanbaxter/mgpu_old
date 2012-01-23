@@ -223,42 +223,28 @@ DEVICE void ScatterFromIndex(const Values scatter, bool premultiplied,
 // Build fused keys by packing the radix digits into 31:24 and the index within
 // the block into 23:0.
 
-DEVICE void ScatterFusedWarpKeys(uint warp, uint lane, const Values keys, 
-	uint bitOffset, uint numBits, bool strided) {
+DEVICE void BuildFusedKeysWarpOrder(uint warp, uint lane, const Values keys,
+	uint bitOffset, uint numBits, Values fusedKeys, bool strided) {
 
 	uint stride = strided ? (WARP_SIZE + 1) : WARP_SIZE;
 	uint sharedStart = stride * VALUES_PER_THREAD * warp + lane;
 
-	Values fusedKeys;
 	#pragma unroll
 	for(int v = 0; v < VALUES_PER_THREAD; ++v) {
 		uint key = bfe(keys[v], bitOffset, numBits);
 		uint index = 4 * (sharedStart + stride * v);
 		fusedKeys[v] = index + (key<< 24);
 	}
-	ScatterWarpOrder(warp, lane, true, fusedKeys);
 }
 
-DEVICE void ScatterFusedBlockKeys(uint tid, const Values keys, uint bitOffset, 
-	uint numBits, bool strided) {
+DEVICE void BuildFusedKeysThreadOrder(uint tid, const Values keys, 
+	uint bitOffset, uint numBits, Values fusedKeys, bool strided) {
 
-	uint stride, sharedStart;
-	if(strided) {
-		stride = NUM_THREADS + (NUM_THREADS / WARP_SIZE);
-		sharedStart = tid + (tid / WARP_SIZE);
-	} else {
-		stride = NUM_THREADS;
-		sharedStart = tid;
-	}
+	uint stride = strided ? (WARP_SIZE + 1) : WARP_SIZE;
+	// uint sharedStart = 
 
-	Values fusedKeys;
-	#pragma unroll
-	for(int v = 0; v < VALUES_PER_THREAD; ++v) {
-		uint key = bfe(keys[v], bitOffset, numBits);
-		uint index = 4 * (sharedStart + stride * v);
-		fusedKeys[v] = index + (key<< 24);
-	}
-	ScatterBlockOrder(tid, true, fusedKeys);
+	// blHA
+
 }
 
 DEVICE void BuildGatherFromFusedKeys(const Values fusedKeys, Values scatter) {

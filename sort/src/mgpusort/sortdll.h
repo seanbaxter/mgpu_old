@@ -25,6 +25,7 @@ struct sortEngine_d : public CuBase {
 	// after encountering a sort request.
 	struct SortKernel {
 		ModulePtr module;
+		CUtexref keysTexRef;
 		FunctionPtr functions[6];
 		FunctionPtr eeFunctions[6];
 	};

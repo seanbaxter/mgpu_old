@@ -3,6 +3,8 @@
 #include "../kernels/params.cu"
 #include <sstream>
 
+const bool LoadKeysTexture = true;
+
 const char* SortStatusStrings[] = {
 	"SORT_STATUS_SUCCESS",
 	"SORT_STATUS_NOT_INITIALIZED",
@@ -133,6 +135,10 @@ sortStatus_t LoadSortModule(sortEngine_d* engine, const char* path,
 		s->eeFunctions);
 	if(!success) return SORT_STATUS_KERNEL_ERROR;
 
+	result = cuModuleGetTexRef(&s->keysTexRef, s->module->Handle(),
+		"keys_texture_in");
+	if(CUDA_SUCCESS != result) return SORT_STATUS_KERNEL_ERROR;
+
 	*sort = s;
 	return SORT_STATUS_SUCCESS;
 }
@@ -255,6 +261,7 @@ sortStatus_t SORTAPI sortReleaseEngine(sortEngine_t engine) {
 // SortTerms used both when sorting and when allocating engine resources.
 
 struct SortTerms {
+	int valuesPerBlock;
 	int numSortBlocks;
 	int numCountBlocks;
 	int countValuesPerThread;
@@ -272,6 +279,7 @@ SortTerms ComputeSortTerms(int numSortThreads, int valuesPerThread,
 	SortTerms terms;
 	
 	int numValues = numSortThreads * valuesPerThread;
+	terms.valuesPerBlock = numValues;
 	terms.numSortBlocks = DivUp(numElements, numValues);
 	terms.numCountBlocks = DivUp(terms.numSortBlocks, NumCountWarps);
 	terms.countValuesPerThread = numValues / WarpSize;
@@ -450,12 +458,22 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 		// Run the sort kernel
 		// Because the max grid size is only 65535 in any dimension, large
 		// sorts require multiple kernel launche.
-		int MaxGridSize = 65535;
+		int MaxGridSize = 64512;		// 64512 = 1024 * 63
 		int numSortLaunches = DivUp(terms.numSortBlocks, MaxGridSize);
 
 		for(int launch(0); launch < numSortLaunches; ++launch) {
 			int block = MaxGridSize * launch;
 			int numBlocks = std::min(MaxGridSize, terms.numSortBlocks - block);
+
+			if(LoadKeysTexture) {
+				// Select the current source range of keys into keys_texture_in.
+				size_t offset;
+				CUdeviceptr ptr = data->keys[0] + 
+					4 * block * terms.valuesPerBlock;
+				result = cuTexRefSetAddress(&offset, sort->keysTexRef, ptr,
+					4 * terms.valuesPerBlock * numBlocks);
+				if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
+			}
 
 			callStack.Reset();
 			callStack.Push(data->keys[0], block, engine->bucketCodes, firstBit, 
