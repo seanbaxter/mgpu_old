@@ -32,12 +32,26 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 	uint* values3_global_out, uint* values4_global_out,
 	uint* values5_global_out, uint* values6_global_out) {
 
+	const int NumWarps = NumThreads / WARP_SIZE;
+	const int Stride = LoadFromTexture ? WARP_SIZE : (WARP_SIZE + 1);
+
 	const int NumBuckets = 1<< NumBits;
+
+	// Reserve enough scratch space for the scans. The 3-bit multi-scan requires
+	// the most shared memory. It stores 2 values per thread. These are 
+	// strided with an extra slot for each WARP_SIZE of elements. Additionally,
+	// 64 slots are required to hold the sequential scan results. Add in another
+	// 32 slots for scan offsets.
+	const int ScratchSize = 2 * (NumThreads + (NumThreads / WARP_SIZE)) + 96;
+
+	__shared__ uint scratch_shared[ScratchSize];
+
 
 	// Simple scatter
 	const int ScatterStructSize = NumBuckets;
 	
 	__shared__ uint scatterList_shared[ScatterStructSize];
+	__shared__ uint scattergather_shared[NumWarps * VALUES_PER_THREAD * Stride];
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -72,7 +86,7 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD / 4; ++i) {
-			uint k = tex1Dfetch(keys_texture_in, keysOffset / 4 + i);
+			uint4 k = tex1Dfetch(keys_texture_in, keysOffset / 4 + i);
 			keys[4 * i + 0] = k.x;
 			keys[4 * i + 1] = k.y;
 			keys[4 * i + 2] = k.z;
@@ -107,7 +121,7 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 		// Store the keys or fused keys into shared memory for the
 		// strided->thread order transpose.
-		ScatterWarpOrder(warp, lane, true, fusedKeys);
+		ScatterWarpOrder(warp, lane, true, fusedKeys, scattergather_shared);
 	}
 
 
@@ -132,28 +146,28 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 		if(1 == NumBits) 
 			SortAndScatter(tid, fusedKeys, scanBitOffset, 1, !LoadFromTexture,
-				debug_global_out);
+				false, debug_global_out);
 		else if(2 == NumBits)
 			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, !LoadFromTexture,
-				debug_global_out);
+				false, debug_global_out);
 		else if(3 == NumBits)
 			SortAndScatter(tid, fusedKeys, scanBitOffset, 3, !LoadFromTexture,
-				debug_global_out);
+				false, debug_global_out);
 		else if(4 == NumBits) {
 			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, !LoadFromTexture,
-				debug_global_out);
-			SortAndScatter(tid, 0, scanBitOffset + 2, 2, true,
-				debug_global_out);
+				true, debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 2, true,
+				false, debug_global_out);
 		} else if(5 == NumBits) {
 			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, !LoadFromTexture,
-				debug_global_out);
-			SortAndScatter(tid, 0, scanBitOffset + 2, 3, true,
-				debug_global_out);
+				true, debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 3, true,
+				false, debug_global_out);
 		} else if(6 == NumBits) {
 			SortAndScatter(tid, fusedKeys, scanBitOffset, 3, !LoadFromTexture,
-				debug_global_out);
-			SortAndScatter(tid, 0, scanBitOffset + 3, 3, true,
-				debug_global_out);
+				true, debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset + 3, 3, true,
+				false, debug_global_out);
 		}
 	}
 
@@ -163,9 +177,9 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 	if(0 == ValueCount) {
 		// Store only keys.
-		GatherBlockOrder(tid, true, keys);
+		GatherBlockOrder(tid, false, keys);
 		ScatterKeysSimple(tid, keys_global_out, bit, NumBits, 
-			scatterList_shared, keys);
+			scattergather_shared, keys);
 	
 	} else if(-1 == ValueCount) {
 		// Store keys and indices.
@@ -303,6 +317,7 @@ void Name(const uint* keys_global_in, uint firstBlock,						\
 		values4_global_out, values5_global_out, values6_global_out);		\
 }
 
+/*
 #define GEN_SORT_FUNC_
 
 #ifdef VALUE_TYPE_NONE
@@ -333,3 +348,4 @@ void SORT_FUNC(const uint* keys_global_in, uint firstBlock,
 	uint* values1_global_out, uint* values2_global_out,
 	uint* values3_global_out, uint* values4_global_out,
 	uint* values5_global_out, uint* values6_global_out) {
+	*/

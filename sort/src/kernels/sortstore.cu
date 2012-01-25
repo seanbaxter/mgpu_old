@@ -108,17 +108,18 @@ DEVICE void MultiScatterSimple(uint tid, uint* keys_global, uint bitOffset,
 	}
 }
 
-DEVICE void GlobalGatherScatter(uint tid, uint block, const uint* source, 
-	uint* dest, const Values gather, const Values globalScatter) {
+DEVICE void GlobalGatherScatter(uint tid, uint block, uint numThreads,
+	const uint* source, uint* dest, uint* scattergather_shared, 
+	const Values gather, const Values globalScatter) {
 
 	__syncthreads();
 
 	Values values;
 	LoadBlockValues(source, tid, block, values);
-	ScatterBlockOrder(tid, false, values);
+	ScatterBlockOrder(tid, false, numThreads, values, scattergather_shared);
 	__syncthreads();
 
-	GatherFromIndex(gather, true, values);
+	GatherFromIndex(gather, true, values, scattergather_shared);
 
 	#pragma unroll
 	for(int v = 0; v < VALUES_PER_THREAD; ++v)
@@ -153,7 +154,7 @@ DEVICE void GlobalGatherScatter(uint tid, uint block, const uint* source,
 // This struct is aligned to a multiple of the segment size (WARP_SIZE).
 // Typical usage: NUM_THREADS = 1024, VALUES_PER_THREAD = 8, NUM_BUCKETS = 64:
 // NUM_THREADS / WARP_SIZE = 32. Each struct is 160 bytes, or 5 transactions.
-
+/*
 DEVICE uint2 GetTransactionInterval(uint scatter, uint count, uint request) {
 	uint start = ~(WARP_SIZE - 1) & (scatter + request * WARP_SIZE);
 	uint end = min(start + WARP_SIZE, scatter + count);
@@ -235,6 +236,9 @@ DEVICE void ExpandScatterList(uint lane, uint numBuckets,
 	}
 }
 
+*/
+/*
+// WriteCoalesced is for transaction list support.
 
 DEVICE void WriteCoalesced(uint warp, uint lane, uint numBuckets, bool strided,
 	const uint* uncompressed, uint* sorted_global) {
@@ -336,3 +340,4 @@ DEVICE void WriteCoalescedAndCache(uint warp, uint lane, uint numBuckets,
 	}
 }
 
+*/

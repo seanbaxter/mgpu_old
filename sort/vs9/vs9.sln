@@ -29,6 +29,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kernels", "kernels", "{6F25
 		..\src\kernels\sortcommon.cu = ..\src\kernels\sortcommon.cu
 		..\src\kernels\sortgen.cu = ..\src\kernels\sortgen.cu
 		..\src\kernels\sortgeneric.cu = ..\src\kernels\sortgeneric.cu
+		..\src\kernels\sortlocal.cu = ..\src\kernels\sortlocal.cu
 		..\src\kernels\sortscan1.cu = ..\src\kernels\sortscan1.cu
 		..\src\kernels\sortscan2.cu = ..\src\kernels\sortscan2.cu
 		..\src\kernels\sortscan3.cu = ..\src\kernels\sortscan3.cu

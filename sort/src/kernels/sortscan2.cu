@@ -1,46 +1,52 @@
 
-#define SCAN_SIZE_2 (NUM_THREADS + (NUM_THREADS / WARP_SIZE))
-#define STREAMS_PER_WARP_2 (WARP_SIZE / NUM_WARPS)
-#define STREAM_LENGTH_2 (WARP_SIZE / STREAMS_PER_WARP_2)
+DEVICE uint2 MultiScan2(uint tid, uint predInc, uint numThreads, uint packed[4],
+	uint* scratch_shared, uint* debug_global) {
 
-#define predInc2_shared reduction_shared
-#define reduction2_shared (predInc2_shared + SCAN_SIZE_2)
-#define parallelScan2_shared (scattergather_shared + 16)
+	const int NumValues = VALUES_PER_THREAD * numThreads;
+	const int NumWarps = numThreads / WARP_SIZE;
 
-DEVICE uint2 MultiScan2(uint tid, uint predInc, uint numTransBuckets,
-	volatile uint* compressed, volatile uint* uncompressed, 
-	uint* debug_global) {
+	// Allocate 1 int for each thread to store its digit count. These are
+	// strided for fast parallel scan access, so consume 33 values per warp.
+	const int ScanSize = numThreads + NumWarps;
+	volatile uint* predInc_shared = (volatile uint*)scratch_shared;
 
-	volatile uint* scan = predInc2_shared + (tid + tid / WARP_SIZE);
-	scan[0] = predInc;
-	__syncthreads();
+	// Each stream has StreamLen elements. 
+	const int StreamLen = NumWarps;
+	const int StreamsPerWarp = WARP_SIZE / NumWarps;
+
+	// Store the stream totals and do a parallel scan. We need to scan 64
+	// elements, as each stream total now takes a full 16bits.
+	const int ParallelScanSize = 2 * WARP_SIZE + 16;
+	volatile uint* parallelScan_shared = predInc_shared + ScanSize + 16;
 
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
+
+	// Store the byte-packed values here.
+	volatile uint* scan = predInc_sared + tid + tid / WARP_SIZE;
+	scan[0] = predInc;
+	__syncthreads();
 
 	// Perform sequential scan over the byte-packed counts.
 	// The sequential operation exhibits very little ILP (only the addition and
 	// next LDS can be run in parallel). This is the major pipeline bottleneck
 	// for the kernel. We need to launch enough blocks to hide this latency.
 
-	// The parallel scan in the second half is executed on two warps of data, in
-	// parallel. The ILP here is 2. It is still a major bottleneck, but 
-	// effectively will run twice as fast as the sequential part.
 	if(tid < WARP_SIZE) {
 		// Each stream begins on a different bank using this indexing.
-		volatile uint* scan2 = predInc2_shared + 
-			(STREAM_LENGTH_2 * tid + tid / STREAMS_PER_WARP_2);
+		volatile uint* scan2 = predInc_shared + StreamLen * tid +
+			tid / StreamsPerWarp;
 
 		uint x = 0;
 		#pragma unroll
-		for(int i = 0; i < STREAM_LENGTH_2; ++i) {
+		for(int i = 0; i < StreamLen; ++i) {
 			uint y = scan2[i];
 			scan2[i] = x;
 			x += y;
 		}
 
 		// Write the end-of-stream total, then perform a parallel scan.
-		volatile uint* scan3 = parallelScan2_shared + tid;	
+		volatile uint* scan3 = parallelScan_shared + tid;	
 		scan3[-16] = 0;
 
 		uint x0 = prmt(x, 0, 0x4240);
@@ -70,26 +76,22 @@ DEVICE uint2 MultiScan2(uint tid, uint predInc, uint numTransBuckets,
 		scan3[WARP_SIZE] = x1;
 
 		// Add the 1 offset to all bottom-row offsets.
-		uint topRight = parallelScan2_shared[2 * WARP_SIZE - 1]<< 16;
+		uint topRight = parallelScan_shared[2 * WARP_SIZE - 1]<< 16;
 		x0 += topRight;
 		x1 += topRight;
 
 		x0 -= sum0;
 		x1 -= sum1;
 
-		reduction2_shared[tid] = x0;
-		reduction2_shared[WARP_SIZE + tid] = x1;
-	} else if(numTransBuckets && 1 == warp) 
-		// Expand the transaction list in parallel with the single-warp scan.
-		ExpandScatterList(lane, numTransBuckets, compressed, uncompressed,
-			debug_global);
-		
+		parallelScan_shared[tid] = x0;
+		parallelScan_shared[WARP_SIZE + tid] = x1;
+	}		
 	__syncthreads();
 
 	predInc = scan[0];
 
 	uint2 sortOffsets;
-	scan = reduction2_shared + tid / STREAM_LENGTH_2;
+	scan = parallelScan_shared + tid / StreamLen;
 	sortOffsets.x = scan[0];
 	sortOffsets.y = scan[WARP_SIZE];
 
@@ -104,10 +106,11 @@ DEVICE uint2 MultiScan2(uint tid, uint predInc, uint numTransBuckets,
 
 
 ////////////////////////////////////////////////////////////////////////////////
-
+// Combine the sortOffsets (computed above) with the digits and local offsets
+// for packed scatter offsets.
 
 DEVICE void SortScatter2_8(uint2 scanOffsets, uint2 bucketsPacked, 
-	uint2 localOffsets, Values fusedKeys, uint scatter[4], uint tid) {
+	uint2 localOffsets, uint scatter[4]) {
 
 	// scanOffsets holds scatter offsets within the warp for all 4 buckets.
 	// These

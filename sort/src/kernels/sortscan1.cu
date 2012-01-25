@@ -1,31 +1,40 @@
-#define SCAN_SIZE_1 (NUM_THREADS + (NUM_THREADS / WARP_SIZE))
-#define STREAMS_PER_WARP_1 (WARP_SIZE / NUM_WARPS)
-#define STREAM_LENGTH_1 (WARP_SIZE / STREAMS_PER_WARP_1)
 
-#define predInc1_shared reduction_shared
-#define reduction1_shared (predInc1_shared + SCAN_SIZE_1)
-#define parallelScan1_shared (scattergather_shared + 16)
+DEVICE void SortScatter1(uint tid, Values digits, uint numThreads,
+	uint packed[4], uint* scratch_shared, uint* debug_global) {
 
-DEVICE void SortScatter1(uint tid, Values fusedKeys, uint bit, uint scatter[4],
-	uint numTransBuckets, volatile uint* compressed, 
-	volatile uint* uncompressed, uint* debug_global) {
+	const int NumValues = VALUES_PER_THREAD * numThreads;
+	const int NumWarps = numThreads / WARP_SIZE;
 
+	// Allocate 1 int for each thread to store its digit count. These are
+	// strided for fast parallel scan access, so consume 33 values per warp.
+	const int ScanSize = numThreads + NumWarps;
+	volatile uint* predInc_shared = (volatile uint*)scratch_shared;
+
+	// In the tid < WARP_SIZE part, do a sequential scan with NumWarps elements
+	// per thread.
+	const int StreamLen = NumWarps;
+	const int StreamsPerWarp = WARP_SIZE / NumWarps;
+	
+	// Store the stream totals and do a parallel scan. Allocate a warp and a
+	// half for the parallel scan.
+	const int ParallelScanSize = WARP_SIZE + 16;
+	volatile uint* parallelScan_shared = predInc_shared + ScanSize + 16;
+
+
+	const int ScratchSpace = ScanSize + ParallelScanSize;
+	
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
 
 	// Compute the number of set bits.
 	uint predInc = 0;
-	Values bits;
-
 	#pragma unroll
-	for(int v = 0; v < VALUES_PER_THREAD; ++v) {
-		bits[v] = bfe(fusedKeys[v], bit, 1);
-		predInc += bits[v];
-	}
+	for(int v = 0; v < VALUES_PER_THREAD; ++v)
+		predInc += digits[v];
 
 	// Reserve space for the scan, with each warp distanced out 33 elements to 
 	// avoid bank conflicts.
-	volatile uint* scan = predInc1_shared + tid + warp;
+	volatile uint* scan = predInc_shared + tid + warp;
 
 	scan[0] = predInc;
 	__syncthreads();
@@ -34,22 +43,21 @@ DEVICE void SortScatter1(uint tid, Values fusedKeys, uint bit, uint scatter[4],
 	// The sequential operation exhibits very little ILP (only the addition and
 	// next LDS can be run in parallel). This is the major pipeline bottleneck
 	// for the kernel. We need to launch enough blocks to hide this latency.
-
 	if(tid < WARP_SIZE) {
 		// Each stream begins on a different bank using this indexing.
-		volatile uint* scan2 = predInc1_shared + 
-			(STREAM_LENGTH_1 * tid + tid / STREAMS_PER_WARP_1);
+		volatile uint* scan2 = predInc_shared + StreamLen * tid + 
+			tid / StreamsPerWarp;
 
 		uint x = 0;
 		#pragma unroll
-		for(int i = 0; i < STREAM_LENGTH_1; ++i) {
+		for(int i = 0; i < StreamLen; ++i) {
 			uint y = scan2[i];
 			scan2[i] = x;
 			x += y;
 		}
 
 		// Write the end-of-stream total, then perform a parallel scan.
-		volatile uint* scan3 = parallelScan1_shared + tid;	
+		volatile uint* scan3 = parallelScan_shared + tid;	
 		scan3[-16] = 0;
 		uint sum = x;
 		scan3[0] = x;
@@ -73,16 +81,12 @@ DEVICE void SortScatter1(uint tid, Values fusedKeys, uint bit, uint scatter[4],
 
 		// Store the total number of encountered set bits in the high short of
 		// x.
-		x = bfi(x, parallelScan1_shared[WARP_SIZE - 1], 16, 16);
+		x = bfi(x, parallelScan_shared[WARP_SIZE - 1], 16, 16);
 
 		// Put this packed counter back into memory to communicate to all the
 		// threads in the block.
-		reduction1_shared[tid] = x;
-	} else if(numTransBuckets && 1 == warp) 
-		// Expand the transaction list in parallel with the single-warp scan.
-		ExpandScatterList(lane, numTransBuckets, compressed, uncompressed,
-			debug_global);
-
+		parallelScan_shared[tid] = x;
+	}
 	__syncthreads();
 
 	// Update predInc to be an exclusive scan of all the encountered set bits up
@@ -92,7 +96,7 @@ DEVICE void SortScatter1(uint tid, Values fusedKeys, uint bit, uint scatter[4],
 	// Retrieve the packed integer containing the total number of encountered
 	// set bits, and the exclusive scan of encountered set bits up to the
 	// current list.
-	uint packed = reduction1_shared[tid / STREAM_LENGTH_1];
+	uint packed = parallelScan_shared[tid / StreamLen];
 	uint setExc = 0x0000ffff & packed;
 	uint setTotal = packed>> 16;
 
@@ -107,7 +111,7 @@ DEVICE void SortScatter1(uint tid, Values fusedKeys, uint bit, uint scatter[4],
 	// The offset for the first set bit key in this thread comes after all the
 	// cleared bit keys in the entire block (NUM_VALUES - setTotal) plus the
 	// number of preceding set bits.
-	uint exc1 = NUM_VALUES - setTotal + setExc;
+	uint exc1 = NumValues - setTotal + setExc;
 
 	// Pack exc0 into the low short and exc1 into the high short.
 	uint next = bfi(exc0, exc1, 16, 16);

@@ -72,7 +72,7 @@ texture<uint4, cudaTextureType1D, cudaReadModeElementType> keys_texture_in;
 #include "sortgeneric.cu"
 
 #include "sort.cu"
-
+/*
 GEN_SORT_FUNC(RadixSort_ee_1, NUM_THREADS, 1, VALUE_COUNT, false,			\
 	LOAD_FROM_TEXTURE, true, NUM_BLOCKS)
 GEN_SORT_FUNC(RadixSort_ee_2, NUM_THREADS, 2, VALUE_COUNT, false,			\
@@ -85,7 +85,7 @@ GEN_SORT_FUNC(RadixSort_ee_5, NUM_THREADS, 5, VALUE_COUNT, false,			\
 	LOAD_FROM_TEXTURE, true, NUM_BLOCKS)
 GEN_SORT_FUNC(RadixSort_ee_6, NUM_THREADS, 6, VALUE_COUNT, false,			\
 	LOAD_FROM_TEXTURE, true, NUM_BLOCKS)
-
+*/
 GEN_SORT_FUNC(RadixSort_1, NUM_THREADS, 1, VALUE_COUNT, false,				\
 	LOAD_FROM_TEXTURE, false, NUM_BLOCKS)
 GEN_SORT_FUNC(RadixSort_2, NUM_THREADS, 2, VALUE_COUNT, false,				\
