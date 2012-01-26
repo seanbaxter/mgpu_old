@@ -106,8 +106,8 @@ DEVICE void SortScatter4_8(uint4 offsetsLow, uint4 offsetsHigh, uint buckets,
 
 
 	// Mask out the high bit of each nibble. This lets us use prmt to gather.
-	uint prmtMasked = 0x77777777 & bucketsPacked;
-	uint prmtGather = 0x32103210 + ((0x88888888 & bucketsPacked)>> 1);
+	uint prmtMasked = 0x77777777 & buckets;
+	uint prmtGather = 0x32103210 + ((0x88888888 & buckets)>> 1);
 	
 	// Compute the offsets for the first four values.
 	// Update localOffsets, which is organized by value (not by radix digit) and
