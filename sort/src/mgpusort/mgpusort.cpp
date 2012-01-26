@@ -131,13 +131,13 @@ sortStatus_t LoadSortModule(sortEngine_d* engine, const char* path,
 		s->functions);
 	if(!success) return SORT_STATUS_KERNEL_ERROR;
 
-	success = LoadFunctions("RadixSort_ee", numThreads, s->module, 
-		s->eeFunctions);
-	if(!success) return SORT_STATUS_KERNEL_ERROR;
+//	success = LoadFunctions("RadixSort_ee", numThreads, s->module, 
+//		s->eeFunctions);
+//	if(!success) return SORT_STATUS_KERNEL_ERROR;
 
-	result = cuModuleGetTexRef(&s->keysTexRef, s->module->Handle(),
-		"keys_texture_in");
+	result = s->module->GetTexRef("keys_texture_in", &s->keysTexRef);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_KERNEL_ERROR;
+	result = cuTexRefSetFormat(s->keysTexRef, CU_AD_FORMAT_UNSIGNED_INT32, 4);
 
 	*sort = s;
 	return SORT_STATUS_SUCCESS;
@@ -504,6 +504,12 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 
 			result = sortFunc->Launch(numBlocks, 1, callStack);
 			if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
+
+		//	int count = data->numElements;
+		///	std::vector<uint> host(count);
+		//	cuMemcpyDtoH(&host[0], data->keys[1], 4 * count);
+
+		//	int j = 0;
 		}
 
 		// Swap the source and target buffers in the data structure.

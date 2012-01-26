@@ -13,10 +13,11 @@
 
 // returns predInc packed into nibbles (for numBits=3) or bytes (numBits = 2).
 
-DEVICE uint ComputeBucketCounts(const Values digits, uint numBits,
+template<typename T>
+DEVICE2 T ComputeBucketCounts(const Values digits, uint numBits,
 	uint2& bucketsPacked, uint2& offsetsPacked) {
 
-	uint predInc = 0;
+	T predInc = 0;
 	const int BitsPerValue = (2 == numBits) ? 8 : 4;
 		
 	#pragma unroll
@@ -70,7 +71,7 @@ DEVICE void FindScatterIndices(uint tid, Values digits, uint numBits,
 			debug_global);
 	} else if(2 == numBits) {
 		uint2 bucketsPacked, offsetsPacked;
-		uint predInc = ComputeBucketCounts(digits, 2, bucketsPacked, 
+		uint predInc = ComputeBucketCounts<uint>(digits, 2, bucketsPacked, 
 			offsetsPacked);
 
 		uint2 scanOffsets = MultiScan2(tid, predInc, numThreads, scratch_shared,
@@ -80,7 +81,7 @@ DEVICE void FindScatterIndices(uint tid, Values digits, uint numBits,
 
 	} else if(3 == numBits) {
 		uint2 bucketsPacked, offsetsPacked;
-		uint predInc = ComputeBucketCounts(digits, 3, bucketsPacked, 
+		uint predInc = ComputeBucketCounts<uint>(digits, 3, bucketsPacked, 
 			offsetsPacked);
 
 		uint4 scanOffsets = MultiScan3(tid, Expand8Uint4To8Uint8(predInc),
@@ -88,6 +89,13 @@ DEVICE void FindScatterIndices(uint tid, Values digits, uint numBits,
 			debug_global);
 
 		SortScatter3_8(scanOffsets, bucketsPacked, offsetsPacked, packed);
+	} else if(4 == numBits) {
+		uint2 bucketsPacked, offsetsPacked;
+		uint64 predInc = ComputeBucketCounts<uint64>(digits, 4, bucketsPacked, 
+			offsetsPacked);
+
+
+
 	}
 }
 

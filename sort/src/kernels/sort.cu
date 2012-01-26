@@ -19,7 +19,7 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 	const int NumValues = VALUES_PER_THREAD * NumThreads;
 	const int NumWarps = NumThreads / WARP_SIZE;
-	const int Stride = LoadFromTexture ? WARP_SIZE : (WARP_SIZE + 1);
+	const int Stride = WARP_SIZE + 1;
 
 	const int NumBuckets = 1<< NumBits;
 	const int ScratchSize = 2 * (NumThreads + NumWarps) + 4 * WARP_SIZE + 32;
@@ -166,13 +166,8 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 		// Store only keys.
 		GatherBlockOrder(tid, false, NumThreads, keys, scattergather_shared);
 		ScatterKeysSimple(tid, keys_global_out, bit, NumBits, 
-			scattergather_shared, keys);
+			scatterList_shared, keys);
 
-	//	#pragma unroll
-	//	for(int v = 0; v < VALUES_PER_THREAD; ++v)
-	//		keys_global_out[v * NumThreads + tid] = 
-	//			scattergather_shared[v * NumThreads + tid];
-	
 	} else if(-1 == ValueCount) {
 		// Store keys and indices.
 /*
@@ -284,7 +279,7 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 }
 
-
+/*
 #define GEN_SORT_FUNC(Name, NumThreads, NumBits, ValueCount,				\
 	UseScatterList, LoadFromTexture, EarlyExit, BlocksPerSM)				\
 																			\
@@ -307,7 +302,34 @@ void Name(const uint* keys_global_in, uint firstBlock,						\
 		values4_global_in, values5_global_in, values6_global_in,			\
 		values1_global_out, values2_global_out, values3_global_out,			\
 		values4_global_out, values5_global_out, values6_global_out);		\
+}*/
+
+#define GEN_SORT_FUNC(Name, NumThreads, NumBits, ValueCount,				\
+	UseScatterList, LoadFromTexture, EarlyExit, BlocksPerSM)				\
+																			\
+extern "C" __global__ __launch_bounds__(NumThreads, BlocksPerSM)			\
+void Name(const uint* keys_global_in, uint firstBlock,						\
+	const uint* bucketCodes_global, uint bit, uint* keys_global_out) {		\
+																			\
+	SortFunc<NumThreads, NumBits, ValueCount, UseScatterList,				\
+		LoadFromTexture, EarlyExit>(										\
+		keys_global_in, firstBlock, bucketCodes_global, bit,				\
+		keys_global_out, 0, 0,												\
+		0, 0, 0, 0, 0, 0,													\
+		0, 0, 0, 0, 0, 0);													\
 }
+
+
+
+
+//GEN_SORT_FUNC(RadixSort_1, NUM_THREADS, 1, VALUE_COUNT, false,				\
+//	LOAD_FROM_TEXTURE, false, NUM_BLOCKS)
+
+
+
+
+
+
 
 /*
 #define GEN_SORT_FUNC_

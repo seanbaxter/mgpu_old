@@ -40,25 +40,12 @@ DEVICE void SortAndScatter(uint tid, Values fusedKeys, uint bit, uint numBits,
 			//	indexPacked += (0xffe0ffe0 & scatter)>> 5;
 			scatter = shr_add(0xffe0ffe0 & scatter, 5, scatter);
 
-	//	scatter<<= 2;			// mul by 4 to convert from int to byte
-	//	uint low = 0x0000ffff & scatter;
-	//	uint high = scatter>> 16;
-
+		// Mul by 4 to convert from int to byte
 		uint low = bfi(0, scatter, 2, 14);
 		uint high = scatter>> 14;
 
-
-	//	uint low = 0xffff & scatter;
-	//	uint high = scatter>> 16;
-
 		StoreShifted(scattergather_shared, low, fusedKeys[2 * v]);
 		StoreShifted(scattergather_shared, high, fusedKeys[2 * v + 1]);
-
-	//	debug_global[VALUES_PER_THREAD * tid + 2 * v + 0] = low;
-	//	debug_global[VALUES_PER_THREAD * tid + 2 * v + 1] = high;
-
-	//	scattergather_shared[VALUES_PER_THREAD * tid + 2 * v + 0] = low;
-	//	scattergather_shared[VALUES_PER_THREAD * tid + 2 * v + 1] = high;
 	}
 	__syncthreads();
 }

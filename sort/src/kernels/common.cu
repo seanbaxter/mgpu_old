@@ -31,6 +31,7 @@
 
 typedef unsigned int uint;
 typedef unsigned short uint16;
+typedef unsigned __int64 uint64;
 
 
 // retrieve numBits bits from x starting at bit
@@ -57,7 +58,7 @@ DEVICE uint prmt(uint a, uint b, uint index) {
 	return ret;
 }
 
-DEVICE uint shl_add(uint a, uint b, uint c) {
+DEVICE2 uint shl_add(uint a, uint b, uint c) {
 #ifdef USE_VIDEO_INSTRUCTIONS
 	uint ret;
 	asm("vshl.u32.u32.u32.clamp.add %0, %1, %2, %3;" :
@@ -66,6 +67,10 @@ DEVICE uint shl_add(uint a, uint b, uint c) {
 #else
 	return (a<< b) + c;
 #endif
+}
+
+DEVICE2 uint64 shl_add(uint a, uint b, uint64 c) {
+	return (a<< b) + c;
 }
 
 // (a<< b) + c, where b is a constant. We hope to use the ISCADD instruction 

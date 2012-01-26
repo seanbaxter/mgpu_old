@@ -1430,6 +1430,7 @@ struct TablePair {
 const TablePair LargeTables[8] = {
 	{ sort_256_8_index_simple_large, 256 },
 	{ sort_128_8_key_simple_large, 128 },
+	// { sort_256_8_key_simple_large, 256 },
 	{ sort_256_8_single_simple_large, 256 },
 	{ sort_256_8_multi_2_simple_large, 256 },
 	{ sort_256_8_multi_3_simple_large, 256 },

@@ -33,6 +33,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kernels", "kernels", "{6F25
 		..\src\kernels\sortscan1.cu = ..\src\kernels\sortscan1.cu
 		..\src\kernels\sortscan2.cu = ..\src\kernels\sortscan2.cu
 		..\src\kernels\sortscan3.cu = ..\src\kernels\sortscan3.cu
+		..\src\kernels\sortscan4.cu = ..\src\kernels\sortscan4.cu
 		..\src\kernels\sortstore.cu = ..\src\kernels\sortstore.cu
 	EndProjectSection
 EndProject

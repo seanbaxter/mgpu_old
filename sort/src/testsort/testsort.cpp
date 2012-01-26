@@ -27,7 +27,7 @@ const int NumTests = 1;
 
 #else
 
-/*
+
 const int ElementCounts[7] = {
 	40000000,
 	27000000,
@@ -39,7 +39,8 @@ const int ElementCounts[7] = {
 };
 const int NumIterations = 15;
 const int NumTests = 5;
-*/
+
+/*
 const int ElementCounts[7] = {
 	500000,
 	500000,
@@ -51,7 +52,7 @@ const int ElementCounts[7] = {
 };
 const int NumIterations = 300;
 const int NumTests = 5;
-
+*/
 #endif
 
 std::tr1::mt19937 mt19937;
@@ -277,9 +278,12 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 	std::vector<uint> keysHost2(terms.count);
 	b40cTerms.sortedKeys->ToHost(&keysHost2[0], terms.count);
 
-	if(keysHost2 != keysHost) {
-		printf("Error in sort keys on numBits = %d\n", terms.numBits);
-		return false;
+	for(int i(0); i < terms.count; ++i) {
+		if(keysHost[i] != keysHost2[i]) {
+			printf("Error in sort keys on numBits = %d at element %d.\n",
+				terms.numBits, i);
+			return false;
+		}
 	}
 
 	if(terms.valueCount) {
@@ -313,7 +317,7 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine,
 	// Sort the keys and up to 1 value array with b40c. Sort the keys and all
 	// value arrays with MGPU, and compare the results.
 
-	for(int valueCount(0); valueCount <= 1; ++valueCount) {
+	for(int valueCount(0); valueCount <= 0; ++valueCount) {
 		int numElements = ElementCounts[abs(valueCount)];
 		switch(valueCount) {
 			case -1: printf("Sorting keys/indices\n"); break;
