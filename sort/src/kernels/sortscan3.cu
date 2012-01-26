@@ -1,21 +1,22 @@
+#pragma once
 
-DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
-	uint2& offsetsPacked, uint* scratch_shared) {
+DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint numThreads, 
+	uint2 bucketsPacked, uint2& offsetsPacked, uint* scratch_shared,
+	uint* debug_global) {
 
-	const int NumValues = VALUES_PER_THREAD * numThreads;
 	const int NumWarps = numThreads / WARP_SIZE;
 
 	// Store two values per thread. These are 8 counters packed into 2 ints.
-	const int ScanSize = numThreads + numWarps;
+	const int ScanSize = numThreads + NumWarps;
 	volatile uint* predInc_shared = (volatile uint*)scratch_shared;
 
 	// Each stream has StreamLen elements.
 	const int StreamLen = NumWarps;
-	const int StreamsPerWarp = 2 * WARP_SIZE / NumWarps;
+	const int StreamsPerWarp = WARP_SIZE / NumWarps;
 
 	// Store the stream totals and do a parallel scan. We need to scan 128
 	// elements, as each stream total now takes a full 16 bits.
-	const ParallelScanSize = 4 * WARP_SIZE + 32;
+	// const ParallelScanSize = 4 * WARP_SIZE + 32;
 	volatile uint* parallelScan_shared = predInc_shared + 2 * ScanSize + 16;
 
 	uint warp = tid / WARP_SIZE;
@@ -23,7 +24,7 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 
 	// The first half-warp sums counts 0-3, the second half-warp sums counts
 	// 4-7.
-	volatile uint* scan = predInc3_shared + (tid + warp);
+	volatile uint* scan = predInc_shared + tid + warp;
 	scan[0] = predInc.x;
 	scan[ScanSize] = predInc.y;
 	__syncthreads();
@@ -54,7 +55,7 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 		volatile uint* scan3 = parallelScan_shared + tid;
 		
 		// Add more spacing for the second warp.
-		if(tid >= WARP_SIZE) scan3 += 16;
+		if(tid >= WARP_SIZE) scan3 += 48;
 
 		scan3[-16] = 0;
 
@@ -82,8 +83,10 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 			uint y1 = scan3[WARP_SIZE - offset];
 			x0 += y0;
 			x1 += y1;
-			scan3[0] = x0;
-			scan3[WARP_SIZE] = x1;
+			if(i < LOG_WARP_SIZE - 1) {
+				scan3[0] = x0;
+				scan3[WARP_SIZE] = x1;
+			}
 		}
 
 		// Add the even sums into the odd sums.
@@ -92,14 +95,9 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 
 		// Warp 0 adds the term 1 total to sums 2 and 3.
 		// Warp 1 adds the term 5 total to sums 6 and 7.
-		uint last = scan3[(WARP_SIZE - 1) - lane];
+		uint last = scan3[(2 * WARP_SIZE - 1) - lane];
 		x0 += last<< 16;
 		x1 += last<< 16;
-
-		// Subtract the stream totals from the inclusive scans for the exclusive
-		// scans.
-		scan3[0] = x0 - sum0; 
-		scan3[WARP_SIZE] = x1 - sum1;
 
 		// Store the total count for 3. This gets added into all prefix sums 
 		// for elements 4 - 7.
@@ -107,6 +105,11 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 			uint total3 = prmt(x1, 0, 0x3232);
 			parallelScan_shared[-16] = total3;
 		}
+
+		// Subtract the stream totals from the inclusive scans for the exclusive
+		// scans.
+		x0 -= sum0;
+		x1 -= sum1;
 	}
 	__syncthreads();
 
@@ -117,16 +120,6 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 			x0 += total3;
 			x1 += total3;
 		}
-
-		// Split the prefix sums by low and high bytes. This allows us to use
-		// prmt to select between 8 values (one for each digit offset).
-
-		// x0 = (0, 2) or (4, 6).
-		// x1 = (1, 3) or (5, 7).
-
-		// For warp 0, We want low = (0L, 1L, 2L, 3L), high = (0H, 1H, 2H, 3H).
-		// For warp 1, we want low = (4L, 5L, 6L, 7L), high = (4H, 5H, 6H, 7H).
-
 		uint low = prmt(x0, x1, 0x6240);
 		uint high = prmt(x0, x1, 0x7351);
 
@@ -136,38 +129,37 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint2 bucketsPacked,
 	__syncthreads();
 
 	predInc.x = scan[0];
-	predInc.y = scan[SCAN_SIZE_3];
+	predInc.y = scan[ScanSize];
 
 	offsetsPacked.x += prmt(predInc.x, predInc.y, bucketsPacked.x);
 	offsetsPacked.y += prmt(predInc.x, predInc.y, bucketsPacked.y);
 
-	uint4 sortOffsets;
-	scan = parallelScan_shared + (tid / (2 * StreamLen));
+	uint4 scanOffsets;
+	scan = parallelScan_shared + tid / StreamLen;
 	
-	// Fill sortOffsets like this:
+	// Fill scanOffsets like this:
 	// (0L, 1L, 2L, 3L), (4L, 5L, 6L, 7L), (0H, 1H, 2H, 3H), (4H, 5H, 6H, 7H)
-	sortOffsets.x = scan[0 * WARP_SIZE];
-	sortOffsets.y = scan[1 * WARP_SIZE];
-	sortOffsets.z = scan[2 * WARP_SIZE];
-	sortOffsets.w = scan[3 * WARP_SIZE];
+	scanOffsets.x = scan[0 * WARP_SIZE];
+	scanOffsets.y = scan[1 * WARP_SIZE];
+	scanOffsets.z = scan[2 * WARP_SIZE];
+	scanOffsets.w = scan[3 * WARP_SIZE];
 
-	return sortOffsets;
+	return scanOffsets;
 }
 
 
-
-// sortOffsets are packed offsets for the first value of each bucket within the
+// scanOffsets are packed offsets for the first value of each bucket within the
 // warp. They are split into high and low bytes, and packed like this:
 // (0L, 1L, 2L, 3L), (4L, 5L, 6L, 7L), (0H, 1H, 2H, 3H), (4H, 5H, 6H, 7H).
 // bucketsPacked.x holds the first 4 buckets in the first 4 nibbles
 // bucketsPacked.y holds the next 4 buckets in the first 4 nibbles
-DEVICE void SortScatter3_8(uint4 sortOffsets, uint2 bucketsPacked, 
-	uint2 localOffsets, Values fusedKeys, uint scatter[4], uint tid) {
+DEVICE void SortScatter3_8(uint4 scanOffsets, uint2 bucketsPacked, 
+	uint2 localOffsets, uint scatter[4]) {
 
 	// use the first 4 buckets (packed into the four nibbles of bucketsPacked.x)
 	// to gather the corresponding offsets from the scan terms
-	uint scan1Low = prmt(sortOffsets.x, sortOffsets.y, bucketsPacked.x);
-	uint scan1High = prmt(sortOffsets.z, sortOffsets.w, bucketsPacked.x);
+	uint scan1Low = prmt(scanOffsets.x, scanOffsets.y, bucketsPacked.x);
+	uint scan1High = prmt(scanOffsets.z, scanOffsets.w, bucketsPacked.x);
 
 	// interleave the values together into packed WORDs
 	// add the offsets for each value within the warp to the warp offsets
@@ -178,8 +170,8 @@ DEVICE void SortScatter3_8(uint4 sortOffsets, uint2 bucketsPacked,
 		ExpandUint8High(localOffsets.x);
 
 	// Repeat the above instructions for values 4-7.
-	uint scan2Low = prmt(sortOffsets.x, sortOffsets.y, bucketsPacked.y);
-	uint scan2High = prmt(sortOffsets.z, sortOffsets.w, bucketsPacked.y);
+	uint scan2Low = prmt(scanOffsets.x, scanOffsets.y, bucketsPacked.y);
+	uint scan2High = prmt(scanOffsets.z, scanOffsets.w, bucketsPacked.y);
 
 	scatter[2] = prmt(scan2Low, scan2High, 0x5140) +
 		ExpandUint8Low(localOffsets.y);

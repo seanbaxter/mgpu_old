@@ -1,8 +1,8 @@
+#pragma once
 
-DEVICE uint2 MultiScan2(uint tid, uint predInc, uint numThreads, uint packed[4],
+DEVICE uint2 MultiScan2(uint tid, uint predInc, uint numThreads,
 	uint* scratch_shared, uint* debug_global) {
 
-	const int NumValues = VALUES_PER_THREAD * numThreads;
 	const int NumWarps = numThreads / WARP_SIZE;
 
 	// Allocate 1 int for each thread to store its digit count. These are
@@ -16,14 +16,13 @@ DEVICE uint2 MultiScan2(uint tid, uint predInc, uint numThreads, uint packed[4],
 
 	// Store the stream totals and do a parallel scan. We need to scan 64
 	// elements, as each stream total now takes a full 16bits.
-	const int ParallelScanSize = 2 * WARP_SIZE + 16;
+	// const int ParallelScanSize = 2 * WARP_SIZE + 16;
 	volatile uint* parallelScan_shared = predInc_shared + ScanSize + 16;
 
 	uint warp = tid / WARP_SIZE;
-	uint lane = (WARP_SIZE - 1) & tid;
 
 	// Store the byte-packed values here.
-	volatile uint* scan = predInc_sared + tid + tid / WARP_SIZE;
+	volatile uint* scan = predInc_shared + tid + warp;
 	scan[0] = predInc;
 	__syncthreads();
 
@@ -90,31 +89,30 @@ DEVICE uint2 MultiScan2(uint tid, uint predInc, uint numThreads, uint packed[4],
 
 	predInc = scan[0];
 
-	uint2 sortOffsets;
+	uint2 scanOffsets;
 	scan = parallelScan_shared + tid / StreamLen;
-	sortOffsets.x = scan[0];
-	sortOffsets.y = scan[WARP_SIZE];
+	scanOffsets.x = scan[0];
+	scanOffsets.y = scan[WARP_SIZE];
 
-	// sortOffsets.x holds buckets 0 and 2
-	// sortOffsets.y holds buckets 1 and 3
-	// Expand predInc into shorts and add into sortOffsets.
-	sortOffsets.x += prmt(predInc, 0, 0x4240);
-	sortOffsets.y += prmt(predInc, 0, 0x4341);
+	// scanOffsets.x holds buckets 0 and 2
+	// scanOffsets.y holds buckets 1 and 3
+	// Expand predInc into shorts and add into scanOffsets.
+	scanOffsets.x += prmt(predInc, 0, 0x4240);
+	scanOffsets.y += prmt(predInc, 0, 0x4341);
 
-	return sortOffsets;
+	return scanOffsets;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// Combine the sortOffsets (computed above) with the digits and local offsets
+// Combine the scanOffsets (computed above) with the digits and local offsets
 // for packed scatter offsets.
 
 DEVICE void SortScatter2_8(uint2 scanOffsets, uint2 bucketsPacked, 
 	uint2 localOffsets, uint scatter[4]) {
 
 	// scanOffsets holds scatter offsets within the warp for all 4 buckets.
-	// These
-	// must be added to globalOffsets[warp].
+	// These must be added to globalOffsets[warp].
 	// a holds offsets for buckets 0 and 2
 	// b holds offsets for buckets 1 and 3
 	uint a = scanOffsets.x;

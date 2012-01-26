@@ -1,6 +1,7 @@
+#pragma once
 
 DEVICE void SortScatter1(uint tid, Values digits, uint numThreads,
-	uint packed[4], uint* scratch_shared, uint* debug_global) {
+	uint scatter[4], uint* scratch_shared, uint* debug_global) {
 
 	const int NumValues = VALUES_PER_THREAD * numThreads;
 	const int NumWarps = numThreads / WARP_SIZE;
@@ -17,14 +18,11 @@ DEVICE void SortScatter1(uint tid, Values digits, uint numThreads,
 	
 	// Store the stream totals and do a parallel scan. Allocate a warp and a
 	// half for the parallel scan.
-	const int ParallelScanSize = WARP_SIZE + 16;
+	// const int ParallelScanSize = WARP_SIZE + 16;
 	volatile uint* parallelScan_shared = predInc_shared + ScanSize + 16;
 
 
-	const int ScratchSpace = ScanSize + ParallelScanSize;
-	
 	uint warp = tid / WARP_SIZE;
-	uint lane = (WARP_SIZE - 1) & tid;
 
 	// Compute the number of set bits.
 	uint predInc = 0;
@@ -118,11 +116,11 @@ DEVICE void SortScatter1(uint tid, Values digits, uint numThreads,
 
 	#pragma unroll
 	for(int v = 0; v < VALUES_PER_THREAD / 2; ++v) {
-		uint b = 16 * bits[2 * v];
+		uint b = 16 * digits[2 * v];
 		uint offset1 = bfe(next, b, 16);
 		next = shl_add(1, b, next);
 
-		b = 16 * bits[2 * v + 1];
+		b = 16 * digits[2 * v + 1];
 		uint offset2 = bfe(next, b, 16);
 		next = shl_add(1, b, next);
 

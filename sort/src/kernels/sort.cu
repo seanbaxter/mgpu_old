@@ -1,21 +1,6 @@
+#pragma once
 
-
-// Segregate the fused keys bit-by-bit to sort. When this process is completed,
-// read the fused keys back into registers. Bits 6-18 of each fused key is 
-// the gather index for retrieving keys. It is also used for fetching values
-// from global memory.
-
-// There are three parallel scan types:
-// 1 bit scan - count the number of keys with the sort bit set. this gives us 
-//   the population of bucket 0. the population of bucket 1 is found by 
-//   inference.
-// 2 bit scan - count the populations of four buckets. Pack into 4uint8 DWORD.
-//   Perform intra-warp parallel scan on these DWORDs. Unpack into 4uint16 
-//   (DWORD pair) for inter-warp multiscan phase
-// 3 bit scan - count the populations of eight buckets. Pack into 8uint8 DWORD
-//   pair. Perform intra-warp parallel scan on these DWORD pairs. Unpack into
-//   8uint16 (DWORD quad) for inter-warp multiscan phase.
-
+#include "sortcommon.cu"
 
 template<int NumThreads, int NumBits, int ValueCount, bool UseScatterList,
 	bool LoadFromTexture, bool DetectEarlyExit>
@@ -32,17 +17,12 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 	uint* values3_global_out, uint* values4_global_out,
 	uint* values5_global_out, uint* values6_global_out) {
 
+	const int NumValues = VALUES_PER_THREAD * NumThreads;
 	const int NumWarps = NumThreads / WARP_SIZE;
 	const int Stride = LoadFromTexture ? WARP_SIZE : (WARP_SIZE + 1);
 
 	const int NumBuckets = 1<< NumBits;
-
-	// Reserve enough scratch space for the scans. The 3-bit multi-scan requires
-	// the most shared memory. It stores 2 values per thread. These are 
-	// strided with an extra slot for each WARP_SIZE of elements. Additionally,
-	// 64 slots are required to hold the sequential scan results. Add in another
-	// 32 slots for scan offsets.
-	const int ScratchSize = 2 * (NumThreads + (NumThreads / WARP_SIZE)) + 96;
+	const int ScratchSize = 2 * (NumThreads + NumWarps) + 4 * WARP_SIZE + 32;
 
 	__shared__ uint scratch_shared[ScratchSize];
 
@@ -62,7 +42,7 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
 
-	debug_global_out += NUM_VALUES * block;
+	debug_global_out += NumValues * block;
 
 	// Load the scatter (transaction) structure.
 	uint globalStructOffset = ScatterStructSize * block;
@@ -70,11 +50,9 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 		scatterList_shared[tid] = 
 			bucketCodes_global[globalStructOffset + tid];
 
-
 	// Load the keys and, if sorting values, create fused keys. Store into 
 	// shared mem with a WARP_SIZE + 1 stride between warp rows, so that loads
 	// into thread order occur without bank conflicts.
-
 	Values keys, fusedKeys;
 
 	if(LoadFromTexture) {
@@ -82,7 +60,7 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 		// asynchronous independent subsystem. It helps transpose data from
 		// strided to thread order without involving the shader units.
 
-		uint keysOffset = NUM_VALUES * blockIdx.x + VALUES_PER_THREAD * tid;
+		uint keysOffset = NumValues * blockIdx.x + VALUES_PER_THREAD * tid;
 
 		#pragma unroll
 		for(int i = 0; i < VALUES_PER_THREAD / 4; ++i) {
@@ -130,14 +108,13 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 	bool isEarlyDetect = false;
 	if(DetectEarlyExit) {
-		__shared__ int isEarlyExit_shared;
 		if(!tid) {
 			uint scatter = scatterList_shared[0];
-			isEarlyExit_shared = 1 & scatter;
+			scratch_shared[0] = 1 & scatter;
 			scatterList_shared[0] = ~1 & scatter;		
 		}
 		__syncthreads();
-		isEarlyDetect = isEarlyExit_shared;
+		isEarlyDetect = scratch_shared[0];
 	}
 
 	// Sort the fused keys in shared memory if early exit was not detected.
@@ -145,31 +122,41 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 		uint scanBitOffset = ValueCount ? 24 : bit;
 
 		if(1 == NumBits) 
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 1, !LoadFromTexture,
-				false, debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset, 1, NumThreads, 
+				!LoadFromTexture, false, scattergather_shared, scratch_shared,
+				debug_global_out);
 		else if(2 == NumBits)
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, !LoadFromTexture,
-				false, debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, NumThreads,
+				!LoadFromTexture, false, scattergather_shared, scratch_shared, 
+				debug_global_out);
 		else if(3 == NumBits)
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 3, !LoadFromTexture,
-				false, debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset, 3, NumThreads,
+				!LoadFromTexture, false, scattergather_shared, scratch_shared, 
+				debug_global_out);
 		else if(4 == NumBits) {
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, !LoadFromTexture,
-				true, debug_global_out);
-			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 2, true,
-				false, debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, NumThreads,
+				!LoadFromTexture, true, scattergather_shared, scratch_shared, 
+				debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 2, NumThreads,
+				true, false, scattergather_shared, scratch_shared, 
+				debug_global_out);
 		} else if(5 == NumBits) {
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, !LoadFromTexture,
-				true, debug_global_out);
-			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 3, true,
-				false, debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, NumThreads,
+				!LoadFromTexture, true, scattergather_shared, scratch_shared,
+				debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 3, NumThreads,
+				true, false, scattergather_shared, scratch_shared,
+				debug_global_out);
 		} else if(6 == NumBits) {
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 3, !LoadFromTexture,
-				true, debug_global_out);
-			SortAndScatter(tid, fusedKeys, scanBitOffset + 3, 3, true,
-				false, debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset, 3, NumThreads,
+				!LoadFromTexture, true, scattergather_shared, scratch_shared, 
+				debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset + 3, 3, NumThreads,
+				true, false, scattergather_shared, scratch_shared, 
+				debug_global_out);
 		}
 	}
+
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -177,9 +164,14 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 	if(0 == ValueCount) {
 		// Store only keys.
-		GatherBlockOrder(tid, false, keys);
+		GatherBlockOrder(tid, false, NumThreads, keys, scattergather_shared);
 		ScatterKeysSimple(tid, keys_global_out, bit, NumBits, 
 			scattergather_shared, keys);
+
+	//	#pragma unroll
+	//	for(int v = 0; v < VALUES_PER_THREAD; ++v)
+	//		keys_global_out[v * NumThreads + tid] = 
+	//			scattergather_shared[v * NumThreads + tid];
 	
 	} else if(-1 == ValueCount) {
 		// Store keys and indices.

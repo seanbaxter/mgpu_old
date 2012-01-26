@@ -351,6 +351,9 @@ public:
 
 	CuContext* Context() { return _context.get(); }
 
+	CUresult GetTexRef(const std::string& name, CUtexref* texref);
+	CUresult GetSurfRef(const std::string& name, CUsurfref* surfref);
+
 	CUresult GetFunction(const std::string& name, int3 blockShape, 
 		FunctionPtr* ppFunction);
 	CUresult GetGlobal(const std::string& name, GlobalMemPtr* ppGlobal);

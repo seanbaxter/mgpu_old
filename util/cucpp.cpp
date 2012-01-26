@@ -375,6 +375,14 @@ CUresult CuModule::GetGlobal(const std::string& name, GlobalMemPtr* ppGlobal) {
 	return CUDA_SUCCESS;
 }
 
+CUresult CuModule::GetTexRef(const std::string& name, CUtexref* texref) {
+	return cuModuleGetTexRef(texref, _module, name.c_str());
+}
+
+CUresult CuModule::GetSurfRef(const std::string& name, CUsurfref* surfref) {
+	return cuModuleGetSurfRef(surfref, _module, name.c_str());
+}
+
 CUresult CuModule::FindTexRef(const std::string& name, 
 	CuModule::TexBind** ppTexBind) {
 

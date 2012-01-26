@@ -1,3 +1,5 @@
+#pragma once
+
 // Include just once - this code is the same no matter NUM_BUCKETS
 
 #define MAX_BITS 6
