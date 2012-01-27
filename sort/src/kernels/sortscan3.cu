@@ -269,8 +269,7 @@ DEVICE uint4 MultiScan3(uint tid, uint2 predInc, uint numThreads,
 			parallelScan_shared[-16] = total3;
 		}
 
-		// Subtract the stream totals from the inclusive scans for the exclusive
-		// scans.
+		// Subtract the stream totals from the inclusive scans.
 		x0 -= sum0;
 		x1 -= sum1;
 	}

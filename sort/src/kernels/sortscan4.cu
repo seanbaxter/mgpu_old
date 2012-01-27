@@ -1,7 +1,8 @@
 #pragma once
 
 DEVICE void MultiScan4(uint tid, uint4 predInc, uint numThreads,
-	uint bucketsPacked, uint2& offsetsPacked, uint* scratch_shared,
+	uint bucketsPacked, uint2& offsetsPacked, uint4& localOffsets2, 
+	uint4& offsetsLow, uint4& offsetsHigh, uint* scratch_shared, 
 	uint* debug_global) {
 	
 	const int NumWarps = numThreads / WARP_SIZE;
@@ -18,8 +19,9 @@ DEVICE void MultiScan4(uint tid, uint4 predInc, uint numThreads,
 	// predInc.y = (4, 5, 6, 7)
 	// predInc.z = (8, 9, 10, 11)
 	// predInc.w = (12, 13, 14, 15).
-	scan[0] = predInc.x;
-	scan[ScanSize] = predInc.y;
+
+	scan[0 * ScanSize] = predInc.x;
+	scan[1 * ScanSize] = predInc.y;
 	scan[2 * ScanSize] = predInc.z;
 	scan[3 * ScanSize = predInc.w;
 	__syncthreads();
@@ -38,10 +40,12 @@ DEVICE void MultiScan4(uint tid, uint4 predInc, uint numThreads,
 		}
 
 		// Write the end-of-stream total, then perform a parallel scan.
-		volatile uint* scan3 = parallelScan_shared + tid;
+		volatile uint* warpStart = parallelScan_shared;
+		if(tid >= WARP_SIZE) warpStart += 48;
 
 		// Add more spacing for the second warp.
-		if(tid >= WARP_SIZE) scan3 += 48;
+		volatile uint* scan3 = warpStart + tid;
+		if(16 & tid) scan3 += 16;
 
 		scan3[-16] = 0;
 
@@ -56,25 +60,80 @@ DEVICE void MultiScan4(uint tid, uint4 predInc, uint numThreads,
 		uint sum1 = x1;
 
 		scan3[0] = x0;
-		scan3[WARP_SIZE] = x1;
+		scan3[WARP_SIZE / 2] = x1;
 
-		// 0 0 0 0 1 1 1 1 
+		// 0  0  1  1  4  4  5  5 |  8  8  9  9 12 12 13 13
+		// 2  2  3  3  6  6  7  7 | 10 10 11 11 14 14 15 15
 
+		#pragma unroll
+		for(int i = 0; i < LOG_WARP_SIZE; ++i) {
+			int offset = 1<< offset;
+			uint y0 = scan3[-offset];
+			uint y1 = scan3[WARP_SIZE / 2 - offset];
+			x0 += y0;
+			x1 += y1;
+			
+			scan3[0] = x0;
+			scan3[WARP_SIZE / 2] = x1;
+		}
 
+		// We've scanned the two halves. 
+		
+		// For warp 0: add last 1 to all on bottom. Add last 5 to 6 and 7.
+		// For warp 1: add last 9 to all to bottom. Add last 13 to 14 and 15.
 
+		// mid holds the last value with elements (1, 3).
+		// rigth holds the last value with elements (5, 7).
+		uint mid = warpStart[WARP_SIZE / 2 - 1];
+		uint right = warpStart[WARP_SIZE - 1];
 
+		// Add 1 to the bottom row.
+		uint inc = mid<< 16;
 
+		// If we're in the right half of the warp...
+		if(16 & tid) {
+			// Add 3 to all elements.
+			inc += prmt(mid, 0, 0x3232);
 
+			// Add 5 to the bottom row.
+			inc += right<< 16;
+		}
+
+		x0 += inc;
+		x1 += inc;
+
+		// Store the total count for 7. This gets added into all prefix sums
+		// for elements 8-15.
+		if(WARP_SIZE - 1 == tid) {
+			uint total7 = prmt(x1, 0, 0x3232);
+			parallelScan_shared[-16] = total7;
+		}
+
+		// Subtract the stream totals from the inclusive scans.
+		x0 -= sum0;
+		x1 -= sum1;
 	}
+	__syncthreads();
 
-	uint threadScan0;			// bytes 0 - 3
-	uint threadScan1;			// bytes 4 - 7
-	uint threadScan2;			// bytes 8 - 11
-	uint threadScan3;			// bytes 12- 15
+	if(tid < 2 * WARP_SIZE) {
+		if(tid >= WARP_SIZE) {
+			// Get the inclusive scan through element 7.
+			uint total7 = parallelScan_shared[-16];
+			x0 += total7;
+			x1 += total7;
+		}
 
+		// Split the counters into low and high bytes.
+		uint low = prmt(x0, x1, 0x6240);
+		uint high = prmt(x0, x1, 0x7351);
 
+		volatile uint* offsets = parallelScan_shared;
+		if(16 & tid) offsets += 16;
 
-
+		offsets[tid] = low;
+		offsets[WARP_SIZE / 2 + tid] = high;
+	}
+	__syncthreads();
 
 	// Read out the packed values.
 	uint scan0 = scan[0 * WARP_SIZE];
@@ -112,8 +171,8 @@ DEVICE void SortScatter4_8(uint4 offsetsLow, uint4 offsetsHigh, uint buckets,
 	// Compute the offsets for the first four values.
 	// Update localOffsets, which is organized by value (not by radix digit) and
 	// byte-packed. We can add in the scan offsets without risk of overflow.
-	uint scanLeft0 = prmt(threadScan0, threadScan1, prmtMasked);
-	uint scanRight0 = prmt(threadScan2, threadScan3, prmtMasked);
+	uint scanLeft0 = prmt(localOffsets2.x, localOffsets2.y, prmtMasked);
+	uint scanRight0 = prmt(localOffsets2.z, localOffsets2.w, prmtMasked);
 	uint scan0 = prmt(scanLeft0, scanRight0, prmtGather);
 	localOffsets.x += scan0;
 
@@ -136,8 +195,8 @@ DEVICE void SortScatter4_8(uint4 offsetsLow, uint4 offsetsHigh, uint buckets,
 	prmtMasked >>= 16;
 	prmtGather >>= 16;
 
-	uint scanLeft1 = prmt(threadScan0, threadScan1, prmtMasked2);
-	uint scanRight1 = prmt(threadScan2, threadScan3, prmtMasked2);
+	uint scanLeft1 = prmt(localOffsets2.x, localOffsets2.y, prmtMasked);
+	uint scanRight1 = prmt(localOffsets2.z, localOffsets2.w, prmtMasked);
 	uint scan1 = prmt(scanLeft1, scanRight1, prmtGather2);
 	localOffsets.y += scan1;
 
