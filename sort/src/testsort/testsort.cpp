@@ -27,7 +27,7 @@ const int NumTests = 1;
 
 #else
 
-/*
+
 const int ElementCounts[7] = {
 	40000000,
 	27000000,
@@ -39,8 +39,8 @@ const int ElementCounts[7] = {
 };
 const int NumIterations = 15;
 const int NumTests = 5;
-*/
 
+/*
 const int ElementCounts[7] = {
 	500000,
 	500000,
@@ -52,7 +52,7 @@ const int ElementCounts[7] = {
 };
 const int NumIterations = 300;
 const int NumTests = 5;
-
+*/
 #endif
 
 std::tr1::mt19937 mt19937;
@@ -395,7 +395,7 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 
 			printf("%s\n", tableSuffix);
 
-			for(int bitPass(1); bitPass <= 6; ++bitPass) {
+			for(int bitPass(3); bitPass <= 6; ++bitPass) {
 				BenchmarkTerms terms;
 				terms.context = context;
 				terms.engine = engine;

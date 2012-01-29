@@ -112,7 +112,6 @@ DEVICE uint4 MultiScan3_1Warp(uint tid, uint2 predInc, uint numThreads,
 		// 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1  |  4 4 4 4 4 4 4 4 5 5 5 5 5 5 5 5
 		// 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3  |  6 6 6 6 6 6 6 6 7 7 7 7 7 7 7 7
 
-
 		uint inc = midLast<< 16;
 		if(16 & tid) {
 			// We're in the right half (second half-warp). Add 1 + 3 to all

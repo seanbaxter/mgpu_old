@@ -3,6 +3,7 @@
 #include "sortscan1.cu"
 #include "sortscan2.cu"
 #include "sortscan3.cu"
+#include "sortscan4.cu"
 
 // Load 8 fused keys and produce a bucket total and a key offset within
 // the thread-bucket. If 4 buckets are being counted, predInc is packed
@@ -72,7 +73,7 @@ DEVICE2 uint2 ComputeBucketCounts16(const Values digits, uint& bucketsPacked,
 
 		if(0 == v) {
 			// set predInc with shift
-			predInc = 1<< shift;
+			predInc = 1ull<< shift;
 			offsetsPacked.x = 0;
 			bucketsPacked = digit;
 		} else if(v < 4) {
@@ -84,6 +85,7 @@ DEVICE2 uint2 ComputeBucketCounts16(const Values digits, uint& bucketsPacked,
 			// If we're processing 3 bits we have to clear out the high bits of
 			// prevPredInc, because otherwise they won't be overwritten to zero
 			// by bfi.
+			prevPredInc &= 0x0f;
 			offsetsPacked.y = prevPredInc;
 			bucketsPacked = bfi(bucketsPacked, digit, 4 * v, 4);
 		} else {
@@ -92,7 +94,7 @@ DEVICE2 uint2 ComputeBucketCounts16(const Values digits, uint& bucketsPacked,
 			bucketsPacked = bfi(bucketsPacked, digit, 4 * v, 4);
 		}
 
-		if(v) predInc += 1ull< shift;
+		if(v) predInc += 1ull<< shift;
 	}
 	return __ulonglong2hilouint2(predInc);
 }
@@ -149,16 +151,15 @@ DEVICE void FindScatterIndices(uint tid, Values digits, uint numBits,
 
 		uint2 predIncLow = Expand8Uint4To8Uint8(predInc.x);
 		uint2 predIncHigh = Expand8Uint4To8Uint8(predInc.y);
-		uint4 predInc4 = make_uint4(predIncLow.x, predIncLow.y,
-			predIncHigh.x, predIncHigh.y);
-
-		uint4 scanOffsetsLow, scanOffsetsHigh;
-		uint2 localOffsets2;
-
+		uint4 predInc4 = make_uint4(
+			predIncLow.x, predIncLow.y, predIncHigh.x, predIncHigh.y);
+			
+		uint4 offsetsLow, offsetsHigh;
 #ifdef SCAN4_1WARP
 		MultiScan4_1Warp(tid, predInc4, numThreads, bucketsPacked, 
-			localOffsets2, scanOffsetsLow, scanOffsetsHigh, scratch_shared,
-			debug_global);
+			offsetsLow, offsetsHigh, scratch_shared, debug_global);
 #endif
+		SortScatter4_8(offsetsLow, offsetsHigh, bucketsPacked, predInc4,
+			offsetsPacked, packed);
 	}
 }

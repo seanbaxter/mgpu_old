@@ -133,6 +133,9 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 				!LoadFromTexture, false, scattergather_shared, scratch_shared, 
 				debug_global_out);
 		else if(4 == NumBits) {
+			/*SortAndScatter(tid, fusedKeys, scanBitOffset, 4, NumThreads,
+				!LoadFromTexture, false, scattergather_shared, scratch_shared, 
+				debug_global_out);*/
 			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, NumThreads,
 				!LoadFromTexture, true, scattergather_shared, scratch_shared, 
 				debug_global_out);
@@ -153,9 +156,18 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 			SortAndScatter(tid, fusedKeys, scanBitOffset + 3, 3, NumThreads,
 				true, false, scattergather_shared, scratch_shared, 
 				debug_global_out);
+		} else if(7 == NumBits) {
+			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, NumThreads,
+				!LoadFromTexture, true, scattergather_shared, scratch_shared,
+				debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 2, NumThreads,
+				true, true, scattergather_shared, scratch_shared,
+				debug_global_out);
+			SortAndScatter(tid, fusedKeys, scanBitOffset + 4, 3, NumThreads,
+				true, false, scattergather_shared, scratch_shared,
+				debug_global_out);
 		}
 	}
-
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -168,8 +180,6 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 	//	for(int v = 0; v < VALUES_PER_THREAD; ++v)
 	//		keys_global_out[NumValues * block + NumThreads * v + tid] =
 	//			scattergather_shared[NumThreads * v + tid];
-
-
 
 		// Store only keys.
 		GatherBlockOrder(tid, false, NumThreads, keys, scattergather_shared);

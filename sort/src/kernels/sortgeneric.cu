@@ -27,9 +27,16 @@ DEVICE void SortAndScatter(uint tid, Values fusedKeys, uint bit, uint numBits,
 	for(int v = 0; v < VALUES_PER_THREAD; ++v)
 		digits[v] = bfe(fusedKeys[v], bit, numBits);
 
+	if(4 == numBits)
+		__syncthreads();
+
 	// Perform the scans for the actual sort.
-	FindScatterIndices(tid, digits, numBits, numThreads, scratch_shared, packed,
+	FindScatterIndices(tid, digits, numBits, numThreads, 
+		(4 == numBits) ? scattergather_shared : scratch_shared, packed,
 		debug_global);
+
+	if(4 == numBits)
+		__syncthreads();
 
 	// Unpack the scatter indices.
 	#pragma unroll
