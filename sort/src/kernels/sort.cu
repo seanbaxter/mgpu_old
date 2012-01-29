@@ -26,7 +26,6 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 	__shared__ uint scratch_shared[ScratchSize];
 
-
 	// Simple scatter
 	const int ScatterStructSize = NumBuckets;
 	
@@ -107,7 +106,7 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 	// Check the early exit code for this block.
 
 	bool isEarlyDetect = false;
-	if(DetectEarlyExit) {
+/*	if(DetectEarlyExit) {
 		if(!tid) {
 			uint scatter = scatterList_shared[0];
 			scratch_shared[0] = 1 & scatter;
@@ -115,7 +114,7 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 		}
 		__syncthreads();
 		isEarlyDetect = scratch_shared[0];
-	}
+	}*/
 
 	// Sort the fused keys in shared memory if early exit was not detected.
 	if(!isEarlyDetect) {
@@ -163,6 +162,15 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 	// Store the keys and values to global memory.
 
 	if(0 == ValueCount) {
+
+
+	//	#pragma unroll
+	//	for(int v = 0; v < VALUES_PER_THREAD; ++v)
+	//		keys_global_out[NumValues * block + NumThreads * v + tid] =
+	//			scattergather_shared[NumThreads * v + tid];
+
+
+
 		// Store only keys.
 		GatherBlockOrder(tid, false, NumThreads, keys, scattergather_shared);
 		ScatterKeysSimple(tid, keys_global_out, bit, NumBits, 
@@ -314,7 +322,7 @@ void Name(const uint* keys_global_in, uint firstBlock,						\
 	SortFunc<NumThreads, NumBits, ValueCount, UseScatterList,				\
 		LoadFromTexture, EarlyExit>(										\
 		keys_global_in, firstBlock, bucketCodes_global, bit,				\
-		keys_global_out, 0, 0,												\
+		keys_global_out, 0, keys_global_out,								\
 		0, 0, 0, 0, 0, 0,													\
 		0, 0, 0, 0, 0, 0);													\
 }

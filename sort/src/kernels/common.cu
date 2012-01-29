@@ -31,6 +31,7 @@
 
 typedef unsigned int uint;
 typedef unsigned short uint16;
+typedef __int64 int64;
 typedef unsigned __int64 uint64;
 
 
@@ -188,6 +189,27 @@ DEVICE uint FloatToUint(float f) {
 
 	uint u = (uint)adjusted;
 	return u;
+}
+
+// Patches missing __hiloint2longlong function in CUDA library.
+typedef volatile union {
+	int64 ll;
+	uint64 ull;
+	double d;
+	uint u[2];
+} ConvertType64;
+
+DEVICE2 uint64 __hilouint2ulonglong(uint2 x) {
+	ConvertType64 t;
+	t.u[0] = x.x;
+	t.u[1] = x.y;
+	return t.ull;
+}
+
+DEVICE2 uint2 __ulonglong2hilouint2(uint64 x) {
+	ConvertType64 t;
+	t.ull = x;
+	return make_uint2(t.u[0], t.u[1]);	
 }
 
 
