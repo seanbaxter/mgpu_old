@@ -1,18 +1,28 @@
 #include "params.cu"
 #define NUM_WARPS NUM_COUNT_WARPS
 
-#include "countcommon.cu"
+#include "count.cu"
 
 #define NUM_THREADS (NUM_WARPS * WARP_SIZE)
 #define GATHER_SUM_MODE 1		// change to 2 for larger blocks.
 
+#define INNER_LOOP 16
 
-__device__ uint sortDetectCounters_global[4];
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // Count kernels without early exit detection
 
+GEN_COUNT_FUNC(CountBuckets_1, NUM_THREADS, 1, INNER_LOOP, 1, 8)
+GEN_COUNT_FUNC(CountBuckets_2, NUM_THREADS, 2, INNER_LOOP, 1, 8)
+GEN_COUNT_FUNC(CountBuckets_3, NUM_THREADS, 3, INNER_LOOP, 1, 8)
+GEN_COUNT_FUNC(CountBuckets_4, NUM_THREADS, 4, INNER_LOOP, 1, 8)
+GEN_COUNT_FUNC(CountBuckets_5, NUM_THREADS, 5, INNER_LOOP, 1, 8)
+GEN_COUNT_FUNC(CountBuckets_6, NUM_THREADS, 6, INNER_LOOP, 1, 8)
+GEN_COUNT_FUNC(CountBuckets_7, NUM_THREADS, 7, INNER_LOOP, 1, 8)
+
+
+/*
 #define NUM_BITS 1
 #define COUNT_FUNC CountBuckets_1
 #define COUNT_SHARED_MEM count_shared1
@@ -78,3 +88,4 @@ __device__ uint sortDetectCounters_global[4];
 #define COUNT_FUNC CountBuckets_ee_6
 #define COUNT_SHARED_MEM count_shared_ee6
 #include "count.cu"
+*/

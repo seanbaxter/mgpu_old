@@ -329,7 +329,7 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine,
 			NumIterations, NumTests);
 
 		// Test for all bit sizes.
-		for(int numBits(1); numBits <= 32; ++numBits) {
+		for(int numBits(6); numBits <= 32; ++numBits) {
 
 			printf("%2d bits  ", numBits);
 
