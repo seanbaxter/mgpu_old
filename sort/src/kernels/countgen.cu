@@ -13,14 +13,23 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Count kernels without early exit detection
 
+// 66% occupancy
 GEN_COUNT_FUNC(CountBuckets_1, NUM_THREADS, 1, INNER_LOOP, 1, 8)
 GEN_COUNT_FUNC(CountBuckets_2, NUM_THREADS, 2, INNER_LOOP, 1, 8)
 GEN_COUNT_FUNC(CountBuckets_3, NUM_THREADS, 3, INNER_LOOP, 1, 8)
 GEN_COUNT_FUNC(CountBuckets_4, NUM_THREADS, 4, INNER_LOOP, 1, 8)
 GEN_COUNT_FUNC(CountBuckets_5, NUM_THREADS, 5, INNER_LOOP, 1, 8)
-GEN_COUNT_FUNC(CountBuckets_6, NUM_THREADS, 6, INNER_LOOP, 1, 8)
-GEN_COUNT_FUNC(CountBuckets_7, NUM_THREADS, 7, INNER_LOOP, 1, 8)
 
+// 50% occupancy
+GEN_COUNT_FUNC(CountBuckets_6, NUM_THREADS, 6, INNER_LOOP, 1, 6)
+
+// 25% occupancy
+GEN_COUNT_FUNC(CountBuckets_7, NUM_THREADS, 7, INNER_LOOP, 1, 3)
+
+// TODO: use named barriers (or even regular syncthreads) to have a warp always
+// be loading and a warp always be adding. They then switch tasks and continue.
+// The loading thread requires no shared memory, so we get an easy increase in 
+// occupancy.
 
 /*
 #define NUM_BITS 1

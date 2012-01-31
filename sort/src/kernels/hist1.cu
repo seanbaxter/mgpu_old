@@ -24,6 +24,14 @@
 // The 16-bit totals from the count kernel are expanded to 32 bits in this
 // kernel.
 
+template<int NumThreads, int NumBits>
+DEVICE2 void HistogramFunc1(const uint* bucketCount_global, int rangeQuot,
+	int rangeRem, int segSize, int count, uint* countScan_global,
+	uint* columnScan_global) {
+
+
+}
+
 
 extern "C" __global__ void HISTOGRAM_FUNC1(const uint* bucketCount_global,
 	int rangeQuot, int rangeRem, int segSize, int count, 
