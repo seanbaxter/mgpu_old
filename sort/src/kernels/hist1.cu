@@ -24,80 +24,132 @@
 // The 16-bit totals from the count kernel are expanded to 32 bits in this
 // kernel.
 
+#pragma once
+
+#include "common.cu"
+#include "params.cu"
+
 template<int NumThreads, int NumBits>
 DEVICE2 void HistogramFunc1(const uint* bucketCount_global, int rangeQuot,
 	int rangeRem, int segSize, int count, uint* countScan_global,
 	uint* columnScan_global) {
 
+	const int NumWarps = NumThreads / WARP_SIZE;
+	const int NumDigits = 1<< NumBits;
+	const int NumChannels = NumDigits / 2;
+	const int WarpStride = MAX(NumChannels, WARP_SIZE);
+	const int BlocksPerWarp = WarpStride / NumChannels;
 
-}
-
-
-extern "C" __global__ void HISTOGRAM_FUNC1(const uint* bucketCount_global,
-	int rangeQuot, int rangeRem, int segSize, int count, 
-	uint* countScan_global, uint* columnScan_global) {
+	__shared__ volatile uint hist_shared[4 * NumThreads];
 
 	uint tid = threadIdx.x;
 	uint block = blockIdx.x;
 	uint warp = tid / WARP_SIZE;
 	uint lane = (WARP_SIZE - 1) & tid;
 
-	// uint2 range = rangePairs_global[NUM_WARPS * block + warp];
-	int2 range = ComputeTaskRange(NUM_WARPS * block + warp, rangeQuot, rangeRem,
-		segSize, count);
-	
+	////////////////////////////////////////////////////////////////////////////
+	// Iterate over all the block digit counts and accumulate.
 
-	// running sum only for this thread
-	uint countLow = 0;
-	uint countHigh = 0;
+	// uint2 range = rangePairs_global[NUM_WARPS * block + warp];
+	int2 range = ComputeTaskRange(NumWarps * block + warp, rangeQuot, rangeRem,
+		segSize, count);
+
+	// Running sum only for this thread. For NumBits = 7 (NumDigits = 128), 
+	// we have 64 elements. The first warp of values holds (0, 64) - (31, 95).
+	// The second warp of values holds (32, 96) - (63, 127). These are unpacked
+	// into 32-bit registers.
+
+	// For NumBits <= 6, only count0 and count1 are used. count0 holds the least
+	// significant count from each loaded value, and count1 holds the most 
+	// significant count.
+
+	// For 7 == NumBits:
+	// count0: 0-31, count1: 64-95, count2: 32-63, count3: 96-127.
+	uint count0 = 0;
+	uint count1 = 0;
+	uint count2 = 0;
+	uint count3 = 0;
 
 	uint current = range.x;
 	while(current < range.y) {
-		uint packed = bucketCount_global[WARP_SIZE * current + lane];
+		uint packed = bucketCount_global[WarpStride * current + lane];
 
 		// The most sig bit of the lo short is a flag indicating sort detect.
 		// Clear this bit in hist1, and read it in hist3.
-		countLow += 0x00007fff & packed;
-		countHigh = shr_add(packed, 16, countHigh);
+		count0 += 0x00007fff & packed;
+		count1 += packed>> 16;
+
+		if(7 == NumBits) {
+			uint packed2 = bucketCount_global[
+				WarpStride * current + WARP_SIZE + lane];
+			count2 += 0xffff & packed2;
+			count3 += packed>> 16;
+		}
 		++current;
 	}
 
-	// Store the low counts at tid and the high counts at NUM_THREADS + tid.
-	hist_shared1[tid] = countLow;
-	hist_shared1[NUM_THREADS + tid] = countHigh;
 
-#if NUM_SORT_BLOCKS_PER_WARP > 1
-	if(lane < NUM_CHANNELS) {
-		for(int i = 1; i < NUM_SORT_BLOCKS_PER_WARP; ++i) {
-			countLow += hist_shared1[tid + i * NUM_CHANNELS];
-			countHigh += hist_shared1[NUM_THREADS + tid + i * NUM_CHANNELS];
-		}
-		hist_shared1[tid] = countLow;
-		hist_shared1[NUM_THREADS + tid] = countHigh;
+	////////////////////////////////////////////////////////////////////////////
+	// Store the counts in shared memory and run a simple reduction over 
+	// duplicate digit counts within the same warp.
+
+	hist_shared[tid] = count0;
+	hist_shared[NumThreads + tid] = count1;
+	if(7 == NumBits) {
+		hist_shared[2 * NumThreads + tid] = count2;
+		hist_shared[3 * NumThreads + tid] = count3;
 	}
-#endif
+
+	if(lane < NumChannels) {
+		#pragma unroll
+		for(int i = 1; i < BlocksPerWarp; ++i) {
+			count0 += hist_shared[tid + i * NumChannels];
+			count1 += hist_shared[NumThreads + tid + i * NumChannels];
+		}
+	}
 	__syncthreads();
 
-	// Perform inter-warp scan for bucket totals for each warp.
-	if(tid < NUM_BUCKETS) {
-		volatile uint* shared = hist_shared1 + ((NUM_CHANNELS - 1) & tid);
-		if(tid >= NUM_CHANNELS) shared += NUM_THREADS;
+	volatile uint* warp_shared = hist_shared + NumDigits * warp;
+	if(NumBits <= 6) {
+		if(lane < NumChannels) {
+			warp_shared[lane] = count0;
+			warp_shared[NumChannels + lane] = count1;
+		}
+	} else if(7 == NumBits) {
+		warp_shared[lane] = count0;
+		warp_shared[32 + lane] = count2;
+		warp_shared[64 + lane] = count1;
+		warp_shared[96 + lane] = count3;
+	}
+	__syncthreads();
 
-		uint index = NUM_BUCKETS * NUM_WARPS * block + 
-			((NUM_CHANNELS - 1) & tid);
-		if(tid >= NUM_CHANNELS) index += NUM_CHANNELS * NUM_WARPS;
+	
+	////////////////////////////////////////////////////////////////////////////
+	// Perform inter-warp reduction for bucket totals for each warp.
 
+	if(tid < NumDigits) {
 		uint x = 0;
+
+		uint index = NumDigits * NumWarps * block;
 		#pragma unroll
-		for(int i = 0; i < NUM_WARPS; ++i) {
-			// Output the scan values (not perfectly coalesced)
-			columnScan_global[index + i * NUM_CHANNELS] = x;
-			uint y = shared[i * WARP_SIZE];
-			x += y;
+		for(int i = 0; i < NumWarps; ++i) {
+			// Output the scan values.
+			columnScan_global[index + tid + i * NumDigits] = x;
+			x += hist_shared[tid + i * NumDigits];
 		}
 
-		// Output the bucket totals
-		countScan_global[block * NUM_BUCKETS + tid] = x;
+		// Output the digit totals.
+		countScan_global[block * NumDigits + tid] = x;
 	}
 }
 
+
+#define GEN_HIST1_FUNC(Name, NumThreads, NumBits)							\
+																			\
+extern "C" __global__ void Name(const uint* bucketCount_global,				\
+	int rangeQuot, int rangeRem, int segSize, int count,					\
+	uint* countScan_global, uint* columnScan_global) {						\
+																			\
+	HistogramFunc1<NumThreads, NumBits>(bucketCount_global, rangeQuot,		\
+		rangeRem, segSize, count, countScan_global, columnScan_global);		\
+}

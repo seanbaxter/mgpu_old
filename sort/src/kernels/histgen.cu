@@ -1,4 +1,26 @@
+#include "hist1.cu"
+#include "hist2.cu"
 
+GEN_HIST1_FUNC(HistogramReduce_1_1, 1024, 1)
+GEN_HIST1_FUNC(HistogramReduce_1_2, 1024, 2)
+GEN_HIST1_FUNC(HistogramReduce_1_3, 1024, 3)
+GEN_HIST1_FUNC(HistogramReduce_1_4, 1024, 4)
+GEN_HIST1_FUNC(HistogramReduce_1_5, 1024, 5)
+GEN_HIST1_FUNC(HistogramReduce_1_6, 1024, 6)
+GEN_HIST1_FUNC(HistogramReduce_1_7, 1024, 7)
+
+GEN_HIST2_FUNC(HistogramReduce_2_1, 1024, 1)
+GEN_HIST2_FUNC(HistogramReduce_2_2, 1024, 2)
+GEN_HIST2_FUNC(HistogramReduce_2_3, 1024, 3)
+GEN_HIST2_FUNC(HistogramReduce_2_4, 1024, 4)
+GEN_HIST2_FUNC(HistogramReduce_2_5, 1024, 5)
+GEN_HIST2_FUNC(HistogramReduce_2_6, 1024, 6)
+GEN_HIST2_FUNC(HistogramReduce_2_7, 1024, 7)
+
+
+
+
+/*
 // Defines NUM_COUNT_WARPS and NUM_HIST_WARPS
 #include "params.cu"
 #define NUM_WARPS NUM_HIST_WARPS
@@ -131,25 +153,6 @@ DEVICE uint GetNextOccupiedBucket(uint bucket, uint count, int numBits,
 }
 
 
-// Scan from right into left. This can be function is parameterized to be used
-// either to compute scatters (the same bucket over multiple sort blocks) or
-// gathers (different buckets within a sort block) dependending on pred and
-// stride.
-DEVICE uint HistParallelScan(uint pred, uint stride, uint x, int loops, 
-	volatile uint* scan) {
-
-	uint sum = x;
-	scan[0] = x;
-	#pragma unroll
-	for(int i = 0; i < loops; ++i) {
-		uint offset = stride<< i;
-		uint y = scan[-offset];
-		if(pred >= offset) x += y;
-		scan[0] = x;
-	}
-	return x - sum;
-}
-
 
 
 #define NUM_BITS 1
@@ -198,3 +201,4 @@ DEVICE uint HistParallelScan(uint pred, uint stride, uint x, int loops,
 #define HISTOGRAM_FUNC3 HistogramReduce_3_6
 #include "histogram.cu"
 
+*/

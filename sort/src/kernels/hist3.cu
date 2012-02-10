@@ -1,3 +1,5 @@
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // PHASE THREE
 // Phase one built an exclusive scan for the first row of bucket counts within
@@ -30,19 +32,38 @@
 // (or 2-bit sort when NUM_BITS=4), so the transaction list must be kept as 
 // short as possible.
 
+#pragma once
 
-////////////////////////////////////////////////////////////////////////////////
-// NUM_BITS < 6 HISTOGRAM_FUNC3
+#include "common.cu"
+
+// Scan from right into left. This can be function is parameterized to be used
+// either to compute scatters (the same bucket over multiple sort blocks) or
+// gathers (different buckets within a sort block) dependending on pred and
+// stride.
+DEVICE uint HistParallelScan(uint pred, uint stride, uint x, int loops, 
+	volatile uint* scan) {
+
+	uint sum = x;
+	scan[0] = x;
+	#pragma unroll
+	for(int i = 0; i < loops; ++i) {
+		uint offset = stride<< i;
+		uint y = scan[-offset];
+		if(pred >= offset) x += y;
+		scan[0] = x;
+	}
+	return x - sum;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // Given a single count per thread and a scatter for each bucket in the first 
 // sort block (i.e. when lane < NUM_BUCKETS), compute scatter and gather indices
 // and write to global memory. This function is called twice from the hist3
-// kernel. Return the next scatter offset for the lane 
-// (when lane < NUM_BUCKETS).
-
-DEVICE uint ComputeGatherStruct(uint* bucketCodes_global, int numSortBlocks,
+// kernel. Return the next scatter offset for the lane (when lane < NUM_BUCKETS).
+/*
+template<int NumBits>
+DEVICE2 uint ComputeGatherStruct(uint* bucketCodes_global, int numSortBlocks,
 	uint tid, uint warp, uint lane, uint bucket, uint scatter, uint count,
 	uint earlyExitMask) {
 
@@ -82,7 +103,7 @@ DEVICE uint ComputeGatherStruct(uint* bucketCodes_global, int numSortBlocks,
 	for(int i = 0; i < numSortBlocks; ++i) {
 		int offset = NUM_BUCKETS * i;
 		if(lane < NUM_BUCKETS) {
-			// Subtract gather index from scatter index. Multiply by 4 to avoid
+			 // Subtract gather index from scatter index. Multiply by 4 to avoid
 			// a SHL in the sort kernel.
 			gather = gatherScan[offset];
 			sortedFlag = gather>> 15;
@@ -97,8 +118,315 @@ DEVICE uint ComputeGatherStruct(uint* bucketCodes_global, int numSortBlocks,
 	}
 	return nextScatter;
 }
+*/
+
+template<int NumBits>
+DEVICE2 uint ComputeGatherStruct(uint* bucketCodes_global, int numSortBlocks,
+	uint tid, uint warp, uint lane, uint bucket, uint scatter, uint count,
+	uint earlyExitMask) {
+
+template<int NumThreads, int NumBits>
+DEVICE2 void HistogramFunc3(const uint* bucketCount_global, int rangeQuot,
+	int rangeRem, int segSize, int count, const uint* countScan_global, 
+	const uint* columnScan_global, uint* bucketCodes_global, 
+	int supportEarlyExit) {
+
+	const int NumWarps = NumThreads / WARP_SIZE;
+	const int NumDigits = 1<< NumBits;
+	const int NumChannels = NumDigits / 2;
+
+	const int TransStructSize = NumDigits;
+	const int BlocksPerWarp = MIN(NUM_COUNT_WARPS, WarpStride / NumChannels);
+
+	const int CountersSize = MIN(NumDigits / 2, WARP_SIZE);
+
+	uint tid = threadIdx.x;
+	uint block = blockIdx.x;
+	uint lane = (WARP_SIZE - 1) & tid;
+	uint warp = tid / WARP_SIZE;
+
+//	uint channel = (NumChannels - 1) & tid;
+//	uint sortBlock = lane / NumChannels;
+	
+	// uint2 range = rangePairs_global[NUM_WARPS * block + warp];
+	int2 range = ComputeTaskRange(NumWarps * block + warp, rangeQuot, rangeRem,
+		segSize, count);
+
+	__shared__ volatile uint scatterScan_shared[NumDigits];
+	__shared__ volatile uint columnScan_shared[NumDigits * NumWarps];
+	__shared__ volatile uint bucketCodes_shared[
+		TransStructSize * BlocksPerWarp * NumWarps];
+	
+	// Find the starting scatter offsets for the first sort block in for each
+	// warp in this histogram pass. Phase one has already computed the offsets
+	// for the first sort block in each warp within this histogram block and 
+	// cached the values in columnScan_global. We take those values and add the
+	// global bucket scatter offsets from countScan_global.
+	if(tid < NumDigits)
+		scatterScan_shared3[tid] = countScan_global[NumDigits * block + tid];
+
+	// columnScan_global indicates where each column of the packed block
+	// offsets should start. Add these with countScan_global.
+	for(int i = tid; tid < NumDigits * NumWarps; tid += NumThreads)
+		columnScan_shared[i] = 
+			columnScan_global[NumDigits * NumWarps * block + i];
+
+	__syncthreads();
+
+	uint scatter0 = 0, scatter1 = 0, scatter2 = 0, scatter3 = 0;
+	if(NumBits <= 5) {
+		if(lane < NumChannels) {
+		}
+	} else if(NumBits <= 7) {
+		// scatter0 = digit lane.
+		// scatter1 = digit WARP_SIZE + lane.
+		volatile uint* scan = columnScan_shared + NumDigits * warp + lane;
+		scatter0 = scan[0] + scatterScan_shared[lane];
+		scatter1 = scan[WARP_SIZE] + scatterScan_shared[WARP_SIZE + lane];
+		if(7 == NumBits) {
+			scatter2 = scan[2 * WARP_SIZE] + 
+				scatterScan_shared[2 * WARP_SIZE + lane];
+			scatter3 = scan[3 * WARP_SIZE] + 
+				scatterScan_shared[3 * WARP_SIZE + lane];
+		}
+	}
 
 
+	////////////////////////////////////////////////////////////////////////////
+	// Loop over every warp's worth of data and accumulate global offsets.
+
+	// Advance bucketCodes_global to the next set of digit counts for this warp.
+	bucketCodes_global += TransStructSize * BlocksPerWarp * range.x;
+
+	volatile uint* bucketCodes_warp = bucketCodes_shared + 
+		TransStructSize * BlocksPerWarp * warp;
+
+	uint current = range.x;
+	while(current < range.y) {
+		uint offset = CountersSize * current + lane;
+		uint packed0 = bucketCount_global[offset];
+
+		if(NumBits <= 5) {
+			// Run an exclusive scan over multiple columns (sort blocks) in this
+			// warp. We only have multiple columns for NumBits <= 5.
+			uint x = 0;
+			bucketCount_global[lane] = packed0;
+			if(lane < NumChannels) {
+				#pragma unroll
+				for(int i = 0; i < BlocksPerWarp; ++i) {
+					uint y = bucketCodes_warp[lane + NumChannels * i];
+					bucketCodes_warp[lane + NumChannels * i] = x;
+					x += y;
+				}
+			}
+			scatter = bucketCount_global[lane] - packed0;			
+		} else if(6 == NumBits) {
+
+		}
+
+		// Extract the packed counts to low and high parts.
+		uint count0 = 0x0000ffff & packed0;
+		uint count1 = packed>> 16;
+		uint count2, count3;
+
+		if(7 == NumBits) {
+			uint packed1 = bucketCount_global[WARP_SIZE + offset];
+			count2 = 0x0000ffff & packed1;
+			count3 = packed1>> 16;
+		}
+
+		// Re-order 
+
+
+
+
+
+
+
+
+		++current;
+	}
+
+
+
+
+
+
+	// Each thread loads a low and high counter. The block sort managed by each
+	// thread changes every NUM_CHANNELS threads.
+	volatile uint* countWarp = columnScan_shared3 + 2 * WARP_SIZE * warp;
+	volatile uint* countBlock = countWarp + NUM_BUCKETS * sortBlock + channel;
+
+	// We want to exchange the scatter and count values to reduce bank conflicts
+	// and simplify code.
+	countBlock[0] = scatter1;
+	countBlock[NUM_CHANNELS] = scatter2;
+	uint scatter = countWarp[lane];
+
+	bucketCodes_global += 
+		TRANS_STRUCT_SIZE * NUM_SORT_BLOCKS_PER_WARP * range.x;
+
+	uint current = range.x;
+	while(current < range.y) {
+
+		uint packed = bucketCount_global[WARP_SIZE * current + lane];
+		uint count1 = 0x0000ffff & packed;
+		uint count2 = packed>> 16;
+
+		// Exchange the counters to match the scatter indices.
+		countBlock[0] = count1;
+		countBlock[NUM_CHANNELS] = count2;
+		count1 = countWarp[lane];
+	
+#ifdef INCLUDE_TRANSACTION_LIST
+		// TODO: Get the number of sort blocks for each pass.
+		scatter = ComputeTransactionList(bucketCodes_global, 
+			NUM_HALF1_SORT_BLOCKS, tid, warp, lane, bucket, scatter, 
+			count1, earlyExitShift);
+		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF1_SORT_BLOCKS;
+
+#if NUM_HALF2_SORT_BLOCKS > 0
+		count2 = countWarp[WARP_SIZE + lane];
+		scatter = ComputeTransactionList(bucketCodes_global, 
+			NUM_HALF2_SORT_BLOCKS, tid, warp, lane, bucket, scatter,
+			count2, earlyExitShift);
+		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF2_SORT_BLOCKS;
+#endif
+#else // !defined(INCLUDE_TRANSACTION_LIST)
+		scatter = ComputeGatherStruct(bucketCodes_global,
+			NUM_HALF1_SORT_BLOCKS, tid, warp, lane, bucket, scatter,
+			count1, earlyExitMask);
+		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF1_SORT_BLOCKS;
+		
+#if NUM_HALF2_SORT_BLOCKS > 0
+		count2 = countWarp[WARP_SIZE + lane];
+		scatter = ComputeGatherStruct(bucketCodes_global, 
+			NUM_HALF2_SORT_BLOCKS, tid, warp, lane, bucket, scatter,
+			count2, earlyExitMask);
+		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF2_SORT_BLOCKS;
+#endif
+
+#endif
+		++current;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	// The early exit flag comes in the most significant bit of the low short
+	// of the first value in each sort block's radix digit frequency array.
+#ifdef INCLUDE_TRANSACTION_LIST
+	uint earlyExitShift = supportEarlyExit ? 15 : 16;
+#else
+	uint earlyExitMask = supportEarlyExit ? 0x8000 : 0x0000;
+#endif
+
+	// Zero out the unused part of the bucket codes structure
+	bucketCodes_shared3[tid] = 0;
+	bucketCodes_shared3[NUM_THREADS + tid] = 0;
+	bucketCodes_shared3[2 * NUM_THREADS + tid] = 0;
+
+	
+	if(tid < NUM_BUCKETS * NUM_WARPS)
+		columnScan_shared3[tid] = 
+			columnScan_global[NUM_BUCKETS * NUM_WARPS * block + tid];
+
+	__syncthreads();
+	
+	// Each thread reads packed offsets, consisting of a low count and a high
+	// count. If lane < NUM_CHANNELS (NUM_BUCKETS / 2), then this thread will
+	// encounter the first counters for the low and high bucket in this warp,
+	// and they are responsible for setting the scatter offsets.
+	uint scatter1 = 0;
+	uint scatter2 = 0;
+	if(lane < NUM_CHANNELS) {
+		scatter1 = 
+			columnScan_shared3[warp * NUM_CHANNELS + lane] +
+			scatterScan_shared3[lane];
+		scatter2 = 
+			columnScan_shared3[(NUM_WARPS + warp) * NUM_CHANNELS + lane] +
+			scatterScan_shared3[NUM_CHANNELS + lane];
+	}
+
+	__syncthreads();
+
+	// Each thread loads a low and high counter. The block sort managed by each
+	// thread changes every NUM_CHANNELS threads.
+	volatile uint* countWarp = columnScan_shared3 + 2 * WARP_SIZE * warp;
+	volatile uint* countBlock = countWarp + NUM_BUCKETS * sortBlock + channel;
+
+	// We want to exchange the scatter and count values to reduce bank conflicts
+	// and simplify code.
+	countBlock[0] = scatter1;
+	countBlock[NUM_CHANNELS] = scatter2;
+	uint scatter = countWarp[lane];
+
+	bucketCodes_global += 
+		TRANS_STRUCT_SIZE * NUM_SORT_BLOCKS_PER_WARP * range.x;
+
+	uint current = range.x;
+	while(current < range.y) {
+
+		uint packed = bucketCount_global[WARP_SIZE * current + lane];
+		uint count1 = 0x0000ffff & packed;
+		uint count2 = packed>> 16;
+
+		// Exchange the counters to match the scatter indices.
+		countBlock[0] = count1;
+		countBlock[NUM_CHANNELS] = count2;
+		count1 = countWarp[lane];
+	
+#ifdef INCLUDE_TRANSACTION_LIST
+		// TODO: Get the number of sort blocks for each pass.
+		scatter = ComputeTransactionList(bucketCodes_global, 
+			NUM_HALF1_SORT_BLOCKS, tid, warp, lane, bucket, scatter, 
+			count1, earlyExitShift);
+		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF1_SORT_BLOCKS;
+
+#if NUM_HALF2_SORT_BLOCKS > 0
+		count2 = countWarp[WARP_SIZE + lane];
+		scatter = ComputeTransactionList(bucketCodes_global, 
+			NUM_HALF2_SORT_BLOCKS, tid, warp, lane, bucket, scatter,
+			count2, earlyExitShift);
+		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF2_SORT_BLOCKS;
+#endif
+#else // !defined(INCLUDE_TRANSACTION_LIST)
+		scatter = ComputeGatherStruct(bucketCodes_global,
+			NUM_HALF1_SORT_BLOCKS, tid, warp, lane, bucket, scatter,
+			count1, earlyExitMask);
+		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF1_SORT_BLOCKS;
+		
+#if NUM_HALF2_SORT_BLOCKS > 0
+		count2 = countWarp[WARP_SIZE + lane];
+		scatter = ComputeGatherStruct(bucketCodes_global, 
+			NUM_HALF2_SORT_BLOCKS, tid, warp, lane, bucket, scatter,
+			count2, earlyExitMask);
+		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF2_SORT_BLOCKS;
+#endif
+
+#endif
+		++current;
+	}
+}
+
+
+
+
+/*
 ////////////////////////////////////////////////////////////////////////////////
 // Given a single count per thread and a scatter for each bucket in the first
 // sort block (i.e. when lane < NUM_BUCKETS), compute the transaction list 
@@ -237,127 +565,4 @@ DEVICE uint ComputeTransactionList(uint* bucketCodes_global, int numSortBlocks,
 	}
 	
 	return nextScatter;
-}
-
-
-extern "C" __global__ __launch_bounds__(NUM_THREADS, 1)
-void HISTOGRAM_FUNC3(const uint* bucketCount_global, 
-	int rangeQuot, int rangeRem, int segSize, int count,
-	const uint* countScan_global, const uint* columnScan_global,
-	uint* bucketCodes_global, int supportEarlyExit) {
-
-	uint tid = threadIdx.x;
-	uint block = blockIdx.x;
-	uint lane = (WARP_SIZE - 1) & tid;
-	uint channel = (NUM_CHANNELS - 1) & tid;
-	uint bucket = (NUM_BUCKETS - 1) & tid;
-	uint sortBlock = lane / NUM_CHANNELS;
-	uint warp = tid / WARP_SIZE;
-	
-	// uint2 range = rangePairs_global[NUM_WARPS * block + warp];
-	int2 range = ComputeTaskRange(NUM_WARPS * block + warp, rangeQuot, rangeRem,
-		segSize, count);
-
-	// The early exit flag comes in the most significant bit of the low short
-	// of the first value in each sort block's radix digit frequency array.
-#ifdef INCLUDE_TRANSACTION_LIST
-	uint earlyExitShift = supportEarlyExit ? 15 : 16;
-#else
-	uint earlyExitMask = supportEarlyExit ? 0x8000 : 0x0000;
-#endif
-
-	// Zero out the unused part of the bucket codes structure
-	bucketCodes_shared3[tid] = 0;
-	bucketCodes_shared3[NUM_THREADS + tid] = 0;
-	bucketCodes_shared3[2 * NUM_THREADS + tid] = 0;
-
-	// Find the starting scatter offsets for the first sort block in for each
-	// warp in this histogram pass. Phase one has already computed the offsets
-	// for the first sort block in each warp within this histogram block and 
-	// cached the values in columnScan_global. We take those values and add the
-	// global bucket scatter offsets from countScan_global.
-	if(tid < NUM_BUCKETS)
-		scatterScan_shared3[tid] = countScan_global[NUM_BUCKETS * block + tid];
-	
-	if(tid < NUM_BUCKETS * NUM_WARPS)
-		columnScan_shared3[tid] = 
-			columnScan_global[NUM_BUCKETS * NUM_WARPS * block + tid];
-
-	__syncthreads();
-	
-	// Each thread reads packed offsets, consisting of a low count and a high
-	// count. If lane < NUM_CHANNELS (NUM_BUCKETS / 2), then this thread will
-	// encounter the first counters for the low and high bucket in this warp,
-	// and they are responsible for setting the scatter offsets.
-	uint scatter1 = 0;
-	uint scatter2 = 0;
-	if(lane < NUM_CHANNELS) {
-		scatter1 = 
-			columnScan_shared3[warp * NUM_CHANNELS + lane] +
-			scatterScan_shared3[lane];
-		scatter2 = 
-			columnScan_shared3[(NUM_WARPS + warp) * NUM_CHANNELS + lane] +
-			scatterScan_shared3[NUM_CHANNELS + lane];
-	}
-
-	__syncthreads();
-
-	// Each thread loads a low and high counter. The block sort managed by each
-	// thread changes every NUM_CHANNELS threads.
-	volatile uint* countWarp = columnScan_shared3 + 2 * WARP_SIZE * warp;
-	volatile uint* countBlock = countWarp + NUM_BUCKETS * sortBlock + channel;
-
-	// We want to exchange the scatter and count values to reduce bank conflicts
-	// and simplify code.
-	countBlock[0] = scatter1;
-	countBlock[NUM_CHANNELS] = scatter2;
-	uint scatter = countWarp[lane];
-
-	bucketCodes_global += 
-		TRANS_STRUCT_SIZE * NUM_SORT_BLOCKS_PER_WARP * range.x;
-
-	uint current = range.x;
-	while(current < range.y) {
-
-		uint packed = bucketCount_global[WARP_SIZE * current + lane];
-		uint count1 = 0x0000ffff & packed;
-		uint count2 = packed>> 16;
-
-		// Exchange the counters to match the scatter indices.
-		countBlock[0] = count1;
-		countBlock[NUM_CHANNELS] = count2;
-		count1 = countWarp[lane];
-	
-#ifdef INCLUDE_TRANSACTION_LIST
-		// TODO: Get the number of sort blocks for each pass.
-		scatter = ComputeTransactionList(bucketCodes_global, 
-			NUM_HALF1_SORT_BLOCKS, tid, warp, lane, bucket, scatter, 
-			count1, earlyExitShift);
-		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF1_SORT_BLOCKS;
-
-#if NUM_HALF2_SORT_BLOCKS > 0
-		count2 = countWarp[WARP_SIZE + lane];
-		scatter = ComputeTransactionList(bucketCodes_global, 
-			NUM_HALF2_SORT_BLOCKS, tid, warp, lane, bucket, scatter,
-			count2, earlyExitShift);
-		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF2_SORT_BLOCKS;
-#endif
-#else // !defined(INCLUDE_TRANSACTION_LIST)
-		scatter = ComputeGatherStruct(bucketCodes_global,
-			NUM_HALF1_SORT_BLOCKS, tid, warp, lane, bucket, scatter,
-			count1, earlyExitMask);
-		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF1_SORT_BLOCKS;
-		
-#if NUM_HALF2_SORT_BLOCKS > 0
-		count2 = countWarp[WARP_SIZE + lane];
-		scatter = ComputeGatherStruct(bucketCodes_global, 
-			NUM_HALF2_SORT_BLOCKS, tid, warp, lane, bucket, scatter,
-			count2, earlyExitMask);
-		bucketCodes_global += TRANS_STRUCT_SIZE * NUM_HALF2_SORT_BLOCKS;
-#endif
-
-#endif
-		++current;
-	}
-}
-
+}*/

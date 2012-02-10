@@ -46,8 +46,7 @@ const int SORT_END_KEY_RESTORE = 4;
 bool LoadFunctions(const char* name, int numThreads, CuModule* module,
 	FunctionPtr functions[6]) {
 
-		// TODO: change to bits = 1
-	for(int bits(1); bits <= 6; ++bits) {
+	for(int bits(1); bits <= 7; ++bits) {
 		std::ostringstream oss;
 		oss<< name<< "_"<< bits;
 		CUresult result = module->GetFunction(oss.str(), 
@@ -73,9 +72,9 @@ sortStatus_t LoadCountModule(sortEngine_d* engine, const char* path,
 		c->functions);
 	if(!success) return SORT_STATUS_KERNEL_ERROR;
 
-	success = LoadFunctions("CountBuckets_ee", NumCountThreads, c->module, 
-		c->eeFunctions);
-	if(!success) return SORT_STATUS_KERNEL_ERROR;
+//	success = LoadFunctions("CountBuckets_ee", NumCountThreads, c->module, 
+//		c->eeFunctions);
+//	if(!success) return SORT_STATUS_KERNEL_ERROR;
 
 	*count = c;
 	return SORT_STATUS_SUCCESS;

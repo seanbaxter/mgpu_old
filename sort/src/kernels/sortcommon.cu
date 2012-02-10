@@ -155,10 +155,11 @@ DEVICE void BuildFusedKeysWarpOrder(uint warp, uint lane, const Values keys,
 	}
 }
 
+
 DEVICE void BuildFusedKeysThreadOrder(uint tid, const Values keys, 
 	uint bitOffset, uint numBits, Values fusedKeys, bool strided) {
 
-	uint stride = strided ? (WARP_SIZE + 1) : WARP_SIZE;
+//	uint stride = strided ? (WARP_SIZE + 1) : WARP_SIZE;
 	// uint sharedStart = 
 
 	// blHA

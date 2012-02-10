@@ -2,6 +2,57 @@
 
 #include "sortcommon.cu"
 
+////////////////////////////////////////////////////////////////////////////////
+// SortLocal
+
+// Given keys in thread order (fusedKeys) or keys in shared memory in strided
+// order (scattergather_shared), sort between 1 and 7 key bits and store into
+// shared memory.
+
+template<int NumThreads, int NumBits>
+DEVICE2 void SortLocal(uint tid, Values fusedKeys, uint bit, bool loadFromArray,
+	uint* scattergather_shared, uint* scratch_shared, uint* debug_global) {
+
+	if(1 == NumBits) 
+		SortAndScatter(tid, fusedKeys, bit, 1, NumThreads, loadFromArray,
+			false, scattergather_shared, scratch_shared, debug_global);
+	else if(2 == NumBits)
+		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray,
+			false, scattergather_shared, scratch_shared, debug_global);
+	else if(3 == NumBits)
+		SortAndScatter(tid, fusedKeys, bit, 3, NumThreads, loadFromArray,
+			false, scattergather_shared, scratch_shared, debug_global);
+	else if(4 == NumBits) {
+		/*SortAndScatter(tid, fusedKeys, bit, 4, NumThreads,
+			!LoadFromTexture, false, scattergather_shared, scratch_shared, 
+			debug_global_out);*/
+		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray, 
+			true, scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 2, 2, NumThreads, true, false,
+			scattergather_shared, scratch_shared, debug_global);
+	} else if(5 == NumBits) {
+		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray, 
+			true, scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 2, 3, NumThreads, true, false,
+			scattergather_shared, scratch_shared, debug_global);
+	} else if(6 == NumBits) {
+		SortAndScatter(tid, fusedKeys, bit, 3, NumThreads, loadFromArray, 
+			true, scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 3, 3, NumThreads, true, false,
+			scattergather_shared, scratch_shared, debug_global);
+	} else if(7 == NumBits) {
+		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray, 
+			true, scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 2, 2, NumThreads, true, true,
+			scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 4, 3, NumThreads, true, false,
+			scattergather_shared, scratch_shared, debug_global);
+	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+
 template<int NumThreads, int NumBits, int ValueCount, bool UseScatterList,
 	bool LoadFromTexture, bool DetectEarlyExit>
 DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
@@ -22,11 +73,12 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 	const int Stride = WARP_SIZE + 1;
 
 	const int NumBuckets = 1<< NumBits;
+
+	// Simple scatter
 	const int ScratchSize = 2 * (NumThreads + NumWarps) + 4 * WARP_SIZE + 32;
 
 	__shared__ uint scratch_shared[ScratchSize];
 
-	// Simple scatter
 	const int ScatterStructSize = NumBuckets;
 	
 	__shared__ uint scatterList_shared[ScatterStructSize];
@@ -120,53 +172,13 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 	if(!isEarlyDetect) {
 		uint scanBitOffset = ValueCount ? 24 : bit;
 
-		if(1 == NumBits) 
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 1, NumThreads, 
-				!LoadFromTexture, false, scattergather_shared, scratch_shared,
-				debug_global_out);
-		else if(2 == NumBits)
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, NumThreads,
-				!LoadFromTexture, false, scattergather_shared, scratch_shared, 
-				debug_global_out);
-		else if(3 == NumBits)
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 3, NumThreads,
-				!LoadFromTexture, false, scattergather_shared, scratch_shared, 
-				debug_global_out);
-		else if(4 == NumBits) {
-			/*SortAndScatter(tid, fusedKeys, scanBitOffset, 4, NumThreads,
-				!LoadFromTexture, false, scattergather_shared, scratch_shared, 
-				debug_global_out);*/
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, NumThreads,
-				!LoadFromTexture, true, scattergather_shared, scratch_shared, 
-				debug_global_out);
-			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 2, NumThreads,
-				true, false, scattergather_shared, scratch_shared, 
-				debug_global_out);
-		} else if(5 == NumBits) {
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, NumThreads,
-				!LoadFromTexture, true, scattergather_shared, scratch_shared,
-				debug_global_out);
-			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 3, NumThreads,
-				true, false, scattergather_shared, scratch_shared,
-				debug_global_out);
-		} else if(6 == NumBits) {
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 3, NumThreads,
-				!LoadFromTexture, true, scattergather_shared, scratch_shared, 
-				debug_global_out);
-			SortAndScatter(tid, fusedKeys, scanBitOffset + 3, 3, NumThreads,
-				true, false, scattergather_shared, scratch_shared, 
-				debug_global_out);
-		} else if(7 == NumBits) {
-			SortAndScatter(tid, fusedKeys, scanBitOffset, 2, NumThreads,
-				!LoadFromTexture, true, scattergather_shared, scratch_shared,
-				debug_global_out);
-			SortAndScatter(tid, fusedKeys, scanBitOffset + 2, 2, NumThreads,
-				true, true, scattergather_shared, scratch_shared,
-				debug_global_out);
-			SortAndScatter(tid, fusedKeys, scanBitOffset + 4, 3, NumThreads,
-				true, false, scattergather_shared, scratch_shared,
-				debug_global_out);
-		}
+		SortLocal<NumThreads, NumBits>(tid, fusedKeys, scanBitOffset,
+			!LoadFromTexture, scattergather_shared, scratch_shared, 
+			debug_global_out);
+	} else if(LoadFromTexture) {
+		// Copy the data fusedKeys to shared memory?
+
+
 	}
 
 
@@ -340,7 +352,7 @@ void Name(const uint* keys_global_in, uint firstBlock,						\
 
 
 
-//GEN_SORT_FUNC(RadixSort_1, NUM_THREADS, 1, VALUE_COUNT, false,				\
+//GEN_SORT_FUNC(RadixSort_1, NUM_THREADS, 1, VALUE_COUNT, false,			\
 //	LOAD_FROM_TEXTURE, false, NUM_BLOCKS)
 
 

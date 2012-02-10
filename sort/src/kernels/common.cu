@@ -216,14 +216,20 @@ DEVICE2 uint2 __ulonglong2hilouint2(uint64 x) {
 ////////////////////////////////////////////////////////////////////////////////
 
 // Computes an iterator range from div_t result called on the host side.
-DEVICE int2 ComputeTaskRange(int block, int taskQuot, int taskRem, 
-	int segSize, int count) {
+DEVICE2 int2 ComputeTaskRange(int block, int taskQuot, int taskRem) {
 
 	int2 range;
 	range.x = taskQuot * block;
 	range.x += min(block, taskRem);
 	range.y = range.x + taskQuot + (block < taskRem);
 
+	return range;
+}
+
+DEVICE2 int2 ComputeTaskRange(int block, int taskQuot, int taskRem, 
+	int segSize, int count) {
+
+	int2 range = ComputeTaskRange(block, taskQuot, taskRem);
 	range.x *= segSize;
 	range.y *= segSize;
 	range.y = min(range.y, count);
@@ -231,3 +237,101 @@ DEVICE int2 ComputeTaskRange(int block, int taskQuot, int taskRem,
 	return range;
 }
 
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Perform an in-place scan over countScan_global. Scans 1<< NumBits elements
+// starting at shared, using a single warp.
+
+template<int NumBits>
+DEVICE2 void IntraWarpParallelScan(uint tid, volatile uint* shared, 
+	bool inclusive) {
+
+	const int NumDigits = 1<< NumBits;
+
+	if(NumBits <= 5) {
+		if(tid < NumDigits) {
+			uint x = shared[tid];
+			uint sum = x;
+
+			#pragma unroll
+			for(int i = 0; i < NumBits; ++i) {
+				uint offset = 1<< i;
+				if(tid >= offset) {
+					uint y = shared[tid - offset];
+					x += y;
+				}
+				if(i < NumBits - 1) shared[tid] = x;
+			}
+			shared[tid] = inclusive ? (x - sum) : x;
+		}
+	} else if(6 == NumDigits) {
+		if(tid < WARP_SIZE) {
+			uint x0 = shared[tid];
+			uint x1 = shared[WARP_SIZE + tid];
+
+			uint sum0 = x0;
+			uint sum1 = x1;
+
+			#pragma unroll
+			for(int i = 0; i < LOG_WARP_SIZE; ++i) {
+				uint offset = 1<< i;
+				if(tid >= offset) {
+					uint y0 = shared[tid - offset];
+					x0 += y0;
+				}
+				uint y1 = shared[WARP_SIZE + tid - offset];
+				x1 += y1;
+				if(LOG_WARP_SIZE - 1 == i) x1 += x0;
+				else {
+					shared[tid] = x0;
+					shared[WARP_SIZE + tid] = x1;
+				}
+			}
+			shared[tid] = inclusive ? (x0 - sum0) : x0;
+			shared[WARP_SIZE + tid] = inclusive ? (x1 - sum1) : x1;
+		}
+	} else if(7 == NumDigits) {
+		if(tid < WARP_SIZE) {
+			uint x0 = shared[tid];
+			uint x1 = shared[WARP_SIZE + tid];
+			uint x2 = shared[2 * WARP_SIZE + tid];
+			uint x3 = shared[3 * WARP_SIZE + tid];
+			uint sum0 = x0;
+			uint sum1 = x1;
+			uint sum2 = x2;
+			uint sum3 = x3;
+
+			#pragma unroll
+			for(int i = 0; i < LOG_WARP_SIZE; ++i) {
+				uint offset = 1<< i;
+				if(tid >= offset) {
+					uint y0 = shared[tid - offset];
+					x0 += y0;
+				}
+				uint y1 = shared[WARP_SIZE + tid - offset];
+				uint y2 = shared[2 * WARP_SIZE + tid - offset];
+				uint y3 = shared[3 * WARP_SIZE + tid - offset];
+
+				x1 += y1;
+				x2 += y2;
+				x3 += y3;
+
+				if(LOG_WARP_SIZE - 1 == i) {
+					x1 += x0;
+					x2 += x1;
+					x3 += x2;
+				} else {
+					shared[tid] = x0;
+					shared[WARP_SIZE + tid] = x1;
+					shared[2 * WARP_SIZE + tid] = x2;
+					shared[3 * WARP_SIZE + tid] = x3;
+				}
+			}
+			shared[tid] = inclusive ? (x0 - sum0) : x0;
+			shared[WARP_SIZE + tid] = inclusive ? (x1 - sum1) : x1;
+			shared[2 * WARP_SIZE + tid] = inclusive ? (x2 - sum2) : x2;
+			shared[3 * WARP_SIZE + tid] = inclusive ? (x3 - sum3) : x3;
+		}
+	}
+}
