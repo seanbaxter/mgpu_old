@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common.cu"
+
 // Include just once - this code is the same no matter NUM_BUCKETS
 
 #define MAX_BITS 6

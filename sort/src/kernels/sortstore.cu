@@ -1,3 +1,5 @@
+#pragma once
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // STORE IN-PLACE
@@ -43,7 +45,7 @@ DEVICE void ScatterKeysSimple(uint tid, uint* sorted_global, uint bitOffset,
 		// uint offset = index - compressedList_shared[numBuckets + bucket];
 		// uint scatter = compressedList_shared[bucket] + offset;
 
-		// We've already subtracting the gather offset from the scatter offset.
+		// We've already subtracted the gather offset from the scatter offset.
 		// This reduces the size of the scatter list and saves some dynamic
 		// LDSs.
 		uint scatter = compressed[bucket];

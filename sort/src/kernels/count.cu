@@ -110,7 +110,8 @@ void Name(const uint* keys_global, uint bit, uint numElements, uint vt,		\
 
 template<int NumBits, int NumThreads, int InnerLoop, int Mode>
 DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt, 
-	int taskQuot, int taskRem, uint* counts_global, uint* totals_global) {
+	int taskQuot, int taskRem, int numBlocks, uint* counts_global, 
+	uint* totals_global) {
 
 	const int NumBuckets = 1<< NumBits;
 	const int NumCounters = DIV_UP(NumBuckets, 4);
@@ -118,9 +119,10 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 	
 	const int NumWarps = NumThreads / WARP_SIZE;
 
-	const int WarpMem = WARP_SIZE * NumCounters;
+	// Reserve at least 2 ints of shared memory per thread.
+	const int WarpMem = WARP_SIZE * MAX(2, NumCounters);
 
-	__shared__ volatile uint blockCounters_shared[NumCounters * NumThreads];
+	__shared__ volatile uint blockCounters_shared[NumWarps * WarpMem];
 
 	uint tid = threadIdx.x;
 	uint lane = (WARP_SIZE - 1) & tid;
@@ -131,7 +133,7 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 	volatile uint* counters_shared = warpCounters_shared + lane;
 
 	int task = NumWarps * block + warp;
-	int2 rangePair = ComputeTaskRange(task, taskQuot, taskRem);
+	int2 rangePair = ComputeTaskRange(task, taskQuot, taskRem, 1, numBlocks);
 
 	// Offset the keys and counts pointers.
 
@@ -188,11 +190,67 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 		// NOTE: exclusive scan countPair and even pre-subtract some terms to
 		// reduce computation on 
 
-		// Store the counts to global memory.
-		if(NumBits <= 6) {
-			if(lane < NumChannels) counts_pass[lane] = countPair.x;
+		// Scan the counts and store the counts to global memory.
+		if(1 == NumBits) {
+			if(!lane) {
+				uint scan = countPair.x;
+
+				// Add the top bits of the last element to the bottom bits of
+				// all elements.
+				scan += scan<< 16;
+
+				// Subtract out the packed digits to get an exclusive scan.
+				scan -= countPair.x;
+
+				// Pre-mulitply the scan by 4.
+				scan *= 4;
+
+				counts_pass[0] = scan;
+			}
+		} else if(NumBits <= 6) {
+			if(lane < NumChannels) {
+
+				// Run an inclusive scan of the packed digit counts.
+				uint scan = IntraWarpParallelScan<NumBits - 1>(lane, 
+					countPair.x, warpCounters_shared, false, true);
+
+				// Add the top bits of the last element to the bottom bits of
+				// all elements.
+				warpCounters_shared[lane] = scan;
+				uint last = warpCounters_shared[NumChannels - 1];
+				scan += last<< 16;
+
+				// Subtract out the packed digits to get an exclusive scan.
+				scan -= countPair.x;
+
+				// Pre-mulitply the scan by 4.
+				scan *= 4;
+
+				counts_pass[lane] = scan;
+			}
 		} else if(7 == NumBits) {
-			((uint2*)counts_pass)[lane] = countPair;
+
+			// Run an inclusive scan of the packed digit counts. The values are
+			// already adjacent so we can use the 0 type.
+			uint2 scan = IntraWarpScan64(lane, countPair, warpCounters_shared,
+				true, true, 0);
+
+			// Add the top bits of the last element to the bottom bits of all
+			// elements.
+			warpCounters_shared[lane] = scan.y;
+			uint last = warpCounters_shared[WARP_SIZE - 1]<< 16;
+			scan.x += last;
+			scan.y += last;
+
+			// Subtract out the packed digits to get an exclusive scan.
+			scan.x -= countPair.x;
+			scan.y -= countPair.y;			
+
+			// Pre-mulitply the scan by 4.
+			scan.x *= 4;
+			scan.y *= 4;
+
+			((uint2*)counts_pass)[lane] = scan;
 		}
 
 		laneCount0 += 0x0000ffff & countPair.x;
@@ -229,10 +287,11 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 																			\
 extern "C" __global__ __launch_bounds__(NumThreads, BlocksPerSM)			\
 void Name(const uint* keys_global, uint bit, uint vt, int taskQuot,			\
-	int taskRem, uint* counts_global, uint* totals_global) {				\
+	int taskRem, int numBlocks, uint* counts_global,						\
+	uint* totals_global) {													\
 																			\
 	CountFuncLoop<NumBits, NumThreads, InnerLoop, Mode>(					\
-		keys_global, bit, vt, taskQuot, taskRem, counts_global,				\
-		totals_global);														\
+		keys_global, bit, vt, taskQuot, taskRem, numBlocks,					\
+		counts_global, totals_global);										\
 }
 

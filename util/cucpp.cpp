@@ -3,6 +3,26 @@
 #include <vector>
 #include <fstream>
 
+
+// Return the number of blocks that can be run concurrently on each SM given
+// the compute capability.
+int BlocksPerSM(int numRegs, int numThreads, int sharedBytes, int compute) {
+	assert(2 == compute);
+	int count = 0;
+
+	if(2 == compute) {
+		numThreads = RoundUp(numThreads, WarpSize);
+		numRegs = RoundUp(numRegs, 2) * numThreads;
+		sharedBytes = RoundUp(sharedBytes, 128);
+
+		count = std::min(32768 / numRegs, 1536 / numThreads);
+		if(sharedBytes) count = std::min(count, 49152 / sharedBytes);
+
+		count = std::min(8, count);
+	}
+	return count;
+}
+
 #define HANDLE_RESULT() if(CUDA_SUCCESS != result) return result
 
 
@@ -499,7 +519,6 @@ CUresult CuModule::BindArrayTexture(const std::string& name, CuTexture* texture,
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // CuFunction
 
@@ -530,6 +549,7 @@ CUresult CreateCuFunction(const char* name, CuModule* module, int3 blockShape,
 	f->_module = module;
 	f->_functionName = name;
 	f->_blockShape = blockShape;
+
 	ppFunction->swap(f);
 	return CUDA_SUCCESS;
 }

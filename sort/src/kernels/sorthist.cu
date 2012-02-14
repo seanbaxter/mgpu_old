@@ -8,7 +8,6 @@ template<int NumThreads, int NumBits>
 DEVICE2 uint StridedMultiScan(uint tid, uint x, volatile uint* shared,
 	volatile uint* totals_shared) {
 
-	const int NumWarps = NumThreads / WARP_SIZE;
 	const int NumDigits = 1<< NumBits;
 
 	uint lane = (WARP_SIZE - 1) & tid;
@@ -22,10 +21,10 @@ DEVICE2 uint StridedMultiScan(uint tid, uint x, volatile uint* shared,
 		shared[tid] = x;
 
 		#pragma unroll
-		for(int i = 0; i < 5 - NumDigits; ++i) {
+		for(int i = 0; i < 5 - NumBits; ++i) {
 			int offset = NumDigits<< i;
 			if(lane >= offset) x += shared[tid - offset];
-			shared[tid - offset] = x;
+			shared[tid] = x;
 		}
 		uint laneExc = x - count;
 
@@ -35,6 +34,7 @@ DEVICE2 uint StridedMultiScan(uint tid, uint x, volatile uint* shared,
 		if((int)lane >= WARP_SIZE - NumDigits)
 			shared[(WARP_SIZE + 1) * lane2 + warp] = x;
 		__syncthreads();
+
 
 		if(warp < NumDigits) {
 			// Run NumDigits simultaneous parallel scans to sum up each digit.
@@ -59,6 +59,7 @@ DEVICE2 uint StridedMultiScan(uint tid, uint x, volatile uint* shared,
 		}
 		__syncthreads();
 
+
 		// Run the exclusive scan of digit totals.
 		if(tid < NumDigits) {
 			x = totals_shared[tid];
@@ -77,7 +78,7 @@ DEVICE2 uint StridedMultiScan(uint tid, uint x, volatile uint* shared,
 		// Add the three scanned values together for an exclusive offset for 
 		// this lane.
 
-		uint totalExc = shared[NumWarps * (WARP_SIZE + 1) + lane2];
+		uint totalExc = totals_shared[lane2];
 		uint warpExc = shared[lane2 * (WARP_SIZE + 1) + warp];
 		return totalExc + warpExc + laneExc;
 	} else {
@@ -89,7 +90,8 @@ DEVICE2 uint StridedMultiScan(uint tid, uint x, volatile uint* shared,
 		// but much easier to follow.
 		if(tid < NumDigits) {
 			const int NumDuplicates = NumThreads / NumDigits;
-			uint x = 0;
+
+			x = 0;
 			#pragma unroll
 			for(int i = 0; i < NumDuplicates; ++i) {
 				uint y = shared[i * NumDigits + tid];
@@ -153,7 +155,6 @@ DEVICE2 void SortHist(uint* blockTotals_global, uint numBlocks,
 
 	if(totalsScan_global && (tid < NumDigits))
 		totalsScan_global[tid] = totals_shared[tid];
-
 
 	// Iterate over the block totals once again, adding and inc'ing laneExc.
 	for(int i = start; i < end; i += stride) {

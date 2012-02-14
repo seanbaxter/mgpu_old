@@ -14,7 +14,6 @@ sortStatus_t MgpuBenchmark(MgpuTerms& terms, sortEngine_t engine,
 	sortStatus_t status = data.Alloc(engine, terms.count, terms.valueCount);
 	if(SORT_STATUS_SUCCESS != status) return status;
 
-	data.earlyExit = terms.earlyExit;
 	data.endBit = terms.numBits;
 
 	CuEventTimer timer;

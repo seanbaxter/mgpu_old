@@ -57,6 +57,20 @@ T RoundDown(T x, T y) {
 	return ~(y - 1) & x;
 }
 
+inline int GCD(int x, int y) {
+	// x should be greater.
+	if(x > x) std::swap(x, y);
+	while(y) {
+		int t = y;
+		y = x % y;
+		x = t;
+	}
+    return x;
+}
+inline int LCM(int x, int y) {
+	return x * y / GCD(x, y);
+}
+
 // IsSameType is very useful
 template<typename T, typename U>
 struct IsSameType {

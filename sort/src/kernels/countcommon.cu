@@ -393,7 +393,7 @@ DEVICE2 uint2 GatherSumsReduce(volatile uint* warpCounters_shared, uint lane,
 				x += y;
 			}
 			reduction[0] = x;
-		}
+		}  
 	} else {
 		// Reduce over two rows.
 		volatile uint* reduction = warpCounters_shared + lane;

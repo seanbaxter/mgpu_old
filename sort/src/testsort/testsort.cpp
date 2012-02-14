@@ -379,11 +379,11 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 	const int* testSizes, int numIterations, int numTests,
 	const char* tableSuffix) {
 
-	for(int valueCount(-1); valueCount <= 6; ++valueCount) {
-		for(int numThreads(128); numThreads <= 256; numThreads *= 2) {
+	for(int valueCount(0); valueCount <= 0; ++valueCount) {
+		for(int numThreads(128); numThreads <= 128; numThreads *= 2) {
 			
 			// Formulate a table name like sort_128_8_key_simple_table
-			printf("sort_%d_8_", numThreads);
+			printf("sortloop_%d_8_", numThreads);
 			switch(valueCount) {
 				case -1: printf("index_"); break;
 				case 0: printf("key_"); break;
@@ -395,10 +395,11 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 
 			printf("%s\n", tableSuffix);
 
-			for(int bitPass(3); bitPass <= 6; ++bitPass) {
+			for(int bitPass(1); bitPass <= 7; ++bitPass) {
 				BenchmarkTerms terms;
 				terms.context = context;
 				terms.engine = engine;
+				terms.cudppHandle = 0;
 				terms.count = testSizes[abs(valueCount)];
 				terms.numBits = (32 % bitPass) ? (32 - (32 % bitPass)) : 32;
 				terms.bitPass = bitPass;
@@ -411,7 +412,9 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 				bool success = Benchmark(terms, mgpu, b40c, cudpp);
 				if(!success) return false;
 
-				printf("%7.3lf\n", mgpu.normElementsPerSec / 1.0e6);
+				printf("%d bits:%8.2lf, %7.2lf M/s\n", bitPass,
+					mgpu.elementsPerSec / 1.0e6,
+					mgpu.normElementsPerSec / 1.0e6);
 			}
 		}
 	}
@@ -433,7 +436,7 @@ void BenchmarkBitPassLarge(CuContext* context, sortEngine_t engine) {
 
 void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
 	const int SmallPass[7] = {
-		500000,
+		1024 * 120 + 1,
 		500000,
 		500000,
 		500000,
@@ -441,7 +444,8 @@ void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
 		500000,
 		500000
 	};
-	BenchmarkBitPass(context, engine, SmallPass, 100, 5, "small");
+//	BenchmarkBitPass(context, engine, SmallPass, 100, 5, "small");
+	BenchmarkBitPass(context, engine, SmallPass, 1, 1, "small");
 }
 
 
@@ -464,13 +468,13 @@ int main(int argc, char** argv) {
 			sortStatusString(status));
 		return 0;
 	}
-//	BenchmarkBitPassSmall(context, engine);
+	BenchmarkBitPassSmall(context, engine);
 //	BenchmarkBitPassLarge(context, engine);
 
 	CUDPPHandle cudppHandle;
 	cudppCreate(&cudppHandle);
 	
-	ComparisonBenchmark(context, engine, cudppHandle);
+//	ComparisonBenchmark(context, engine, cudppHandle);
 
 	cudppDestroy(cudppHandle);
 

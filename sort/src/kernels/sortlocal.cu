@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sortcommon.cu"
 #include "sortscan1.cu"
 #include "sortscan2.cu"
 #include "sortscan3.cu"
@@ -163,3 +164,129 @@ DEVICE void FindScatterIndices(uint tid, Values digits, uint numBits,
 			offsetsPacked, packed);
 	}
 }
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+// SortLocal
+
+// Given keys in thread order (fusedKeys) or keys in shared memory in strided
+// order (scattergather_shared), sort between 1 and 7 key bits and store into
+// shared memory.
+
+template<int NumThreads, int NumBits>
+DEVICE2 void SortLocal(uint tid, Values fusedKeys, uint bit, bool loadFromArray,
+	uint* scattergather_shared, uint* scratch_shared, uint* debug_global) {
+
+	if(1 == NumBits) 
+		SortAndScatter(tid, fusedKeys, bit, 1, NumThreads, loadFromArray,
+			false, scattergather_shared, scratch_shared, debug_global);
+	else if(2 == NumBits)
+		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray,
+			false, scattergather_shared, scratch_shared, debug_global);
+	else if(3 == NumBits)
+		SortAndScatter(tid, fusedKeys, bit, 3, NumThreads, loadFromArray,
+			false, scattergather_shared, scratch_shared, debug_global);
+	else if(4 == NumBits) {
+		/*SortAndScatter(tid, fusedKeys, bit, 4, NumThreads,
+			!LoadFromTexture, false, scattergather_shared, scratch_shared, 
+			debug_global_out);*/
+		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray, 
+			true, scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 2, 2, NumThreads, true, false,
+			scattergather_shared, scratch_shared, debug_global);
+	} else if(5 == NumBits) {
+		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray, 
+			true, scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 2, 3, NumThreads, true, false,
+			scattergather_shared, scratch_shared, debug_global);
+	} else if(6 == NumBits) {
+		SortAndScatter(tid, fusedKeys, bit, 3, NumThreads, loadFromArray, 
+			true, scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 3, 3, NumThreads, true, false,
+			scattergather_shared, scratch_shared, debug_global);
+	} else if(7 == NumBits) {
+		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray, 
+			true, scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 2, 2, NumThreads, true, true,
+			scattergather_shared, scratch_shared, debug_global);
+		SortAndScatter(tid, fusedKeys, bit + 4, 3, NumThreads, true, false,
+			scattergather_shared, scratch_shared, debug_global);
+	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// LoadAndSortLocal
+
+template<int NumThreads, int NumBits, bool LoadFromTexture>
+DEVICE2 void LoadAndSortLocal(uint tid, uint block, const uint* keys_global_in, 
+	uint texBlock, uint bit, uint* debug_global_out, uint* scattergather_shared,
+	uint* scratch_shared, bool useFusedKey, Values keys, Values fusedKeys) {
+
+	const int NumValues = VALUES_PER_THREAD * NumThreads;
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// LOAD KEYS, CREATE FUSED KEYS, AND REINDEX INTO THREAD ORDER
+
+	uint warp = tid / WARP_SIZE;
+	uint lane = (WARP_SIZE - 1) & tid;
+
+	// Load the keys and, if sorting values, create fused keys. Store into 
+	// shared mem with a WARP_SIZE + 1 stride between warp rows, so that loads
+	// into thread order occur without bank conflicts.
+	if(LoadFromTexture) {
+		// Load keys from a texture. The texture sampler serves as an 
+		// asynchronous independent subsystem. It helps transpose data from
+		// strided to thread order without involving the shader units.
+
+		uint keysOffset = NumValues * texBlock + VALUES_PER_THREAD * tid;
+
+		#pragma unroll
+		for(int i = 0; i < VALUES_PER_THREAD / 4; ++i) {
+			uint4 k = tex1Dfetch(keys_texture_in, keysOffset / 4 + i);
+			keys[4 * i + 0] = k.x;
+			keys[4 * i + 1] = k.y;
+			keys[4 * i + 2] = k.z;
+			keys[4 * i + 3] = k.w;
+		}
+
+		if(!useFusedKey)
+			// Sort only keys.
+			#pragma unroll
+			for(int i = 0; i < VALUES_PER_THREAD; ++i)
+				fusedKeys[i] = keys[i];
+		else
+			// Sort key-value tuples.
+			BuildFusedKeysThreadOrder(tid, keys, bit, NumBits, fusedKeys,
+				false);
+
+	} else {
+		// Load keys from global memory. This requires using shared memory to 
+		// transpose data from strided to thread order.
+
+		LoadWarpValues(keys_global_in, warp, lane, block, keys);
+
+		if(!useFusedKey)
+			// Sort only keys.
+			#pragma unroll
+			for(int i = 0; i < VALUES_PER_THREAD; ++i)
+				fusedKeys[i] = keys[i];
+		else
+			// Sort key-value tuples.
+			BuildFusedKeysWarpOrder(warp, lane, keys, bit, NumBits, fusedKeys,
+				false);
+
+		// Store the keys or fused keys into shared memory for the
+		// strided->thread order transpose.
+		ScatterWarpOrder(warp, lane, true, fusedKeys, scattergather_shared);
+	}	
+
+	uint scanBitOffset = useFusedKey ? 24 : bit;
+
+	SortLocal<NumThreads, NumBits>(tid, fusedKeys, scanBitOffset,
+		!LoadFromTexture, scattergather_shared, scratch_shared, 
+		debug_global_out);
+}
+	

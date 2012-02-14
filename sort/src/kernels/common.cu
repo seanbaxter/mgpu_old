@@ -240,9 +240,136 @@ DEVICE2 int2 ComputeTaskRange(int block, int taskQuot, int taskRem,
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// Perform a parallel scan over 1<< Levels lanes in the warp. The calling code
+// should branch so that only the 1<< Levels threads are active. shared must
+// be large enough so that every active thread can store its value. 
+
+template<int Levels>
+DEVICE2 uint IntraWarpParallelScan(uint lane, uint x, volatile uint* shared,
+	bool noPred, bool inc) {
+
+	const int Count = 1<< Levels;
+	const int Prefix = Count / 2;
+	if(noPred) {
+		shared[lane] = 0;
+		shared += Prefix;
+	}
+
+	uint sum = x;
+	shared += lane;
+	shared[0] = x;
+
+	#pragma unroll
+	for(int i = 0; i < Levels; ++i) {
+		uint offset = 1<< i;
+		if(noPred)
+			x += shared[-offset];
+		else if(lane >= offset)
+			x += shared[-offset];
+		if(i < Levels - 1)
+			shared[0] = x;
+	}
+	if(!inc) x -= sum;
+
+	return x;
+}
+
+// Run a scan over 64 elements where each thread manages two values. Adjacent
+// values are loaded into threads to allow for a single parallel scan.
+
+// 
+// If type == 0, val.x is 2 * lane + 0 and val.y is 2 * lane + 1 (optimal).
+// If type == 1, val.x is lane and val.y is lane + 32.
+DEVICE2 uint2 IntraWarpScan64(uint lane, uint2 val, volatile uint* shared,
+	bool noPred, bool inc, int type) {
+
+	if(1 == type) {
+		// Put into type 0 order.
+		shared[lane] = val.x;
+		shared[WARP_SIZE + 1 + lane] = val.y;
+		
+		volatile uint* start = shared + (lane > WARP_SIZE / 2);
+		val.x = start[2 * lane];
+		val.y = start[2 * lane + 1];
+	}
+
+	uint sum = val.x + val.y;
+	uint scan = IntraWarpParallelScan<LOG_WARP_SIZE>(lane, sum, shared, noPred,
+		inc);
+
+	if(inc) {
+		val.x = scan - val.y;
+		val.y = scan;
+	} else {
+		val.y = scan + val.x;
+		val.x = scan;
+	}
+
+	if(1 == type) {
+		volatile uint* start = shared + (lane / (WARP_SIZE / 2));
+		start[2 * lane] = val.x;
+		start[2 * lane + 1] = val.y;
+
+		val.x = shared[lane];
+		val.y = shared[WARP_SIZE + 1 + lane];
+	}
+	return val;
+}
+
+DEVICE2 uint4 IntraWarpScan128(uint lane, uint4 val, volatile uint* shared,
+	bool noPred, bool inc, int type) {
+
+	if(1 == type) {
+		// Put into type 0 order.
+		shared[lane] = val.x;
+		shared[WARP_SIZE + 1 + lane] = val.y;
+		shared[2 * WARP_SIZE + 2 + lane] = val.z;
+		shared[3 * WARP_SIZE + 3 + lane] = val.w;
+		
+		volatile uint* start = shared + (lane / (WARP_SIZE / 4));
+		val.x = start[4 * lane];
+		val.y = start[4 * lane + 1];
+		val.z = start[4 * lane + 2];
+		val.w = start[4 * lane + 3];
+	}
+
+	uint offset1 = val.x + val.y;
+	uint offset2 = offset1 + val.z;
+	uint sum = offset2 + val.w;
+	uint scan = IntraWarpParallelScan<LOG_WARP_SIZE>(lane, sum, shared, noPred,
+		inc);
+
+	if(inc) {
+		val.x = scan - offset2;
+		val.y = scan - offset1;
+		val.z = scan - val.w;
+		val.w = scan;
+	} else {
+		val.x = scan;
+		val.y = scan + val.x;
+		val.z = scan + offset1;
+		val.w = scan + offset2;
+	}
+
+	if(1 == type) {
+		volatile uint* start = shared + (lane / (WARP_SIZE / 4));
+		start[4 * lane] = val.x;
+		start[4 * lane + 1] = val.y;
+		start[4 * lane + 2] = val.z;
+		start[4 * lane + 3] = val.w;
+
+		val.x = shared[lane];
+		val.y = shared[WARP_SIZE + 1 + lane];
+		val.z = shared[2 * WARP_SIZE + 2 + lane];
+		val.w = shared[3 * WARP_SIZE + 3 + lane];
+	}
+	return val;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 // Perform an in-place scan over countScan_global. Scans 1<< NumBits elements
 // starting at shared, using a single warp.
-
 template<int NumBits>
 DEVICE2 void IntraWarpParallelScan(uint tid, volatile uint* shared, 
 	bool inclusive) {
@@ -257,15 +384,13 @@ DEVICE2 void IntraWarpParallelScan(uint tid, volatile uint* shared,
 			#pragma unroll
 			for(int i = 0; i < NumBits; ++i) {
 				uint offset = 1<< i;
-				if(tid >= offset) {
-					uint y = shared[tid - offset];
-					x += y;
-				}
+				if(tid >= offset)
+					x += shared[tid - offset];
 				if(i < NumBits - 1) shared[tid] = x;
 			}
-			shared[tid] = inclusive ? (x - sum) : x;
+			shared[tid] = inclusive ? x : (x - sum);
 		}
-	} else if(6 == NumDigits) {
+	} else if(6 == NumBits) {
 		if(tid < WARP_SIZE) {
 			uint x0 = shared[tid];
 			uint x1 = shared[WARP_SIZE + tid];
@@ -276,22 +401,20 @@ DEVICE2 void IntraWarpParallelScan(uint tid, volatile uint* shared,
 			#pragma unroll
 			for(int i = 0; i < LOG_WARP_SIZE; ++i) {
 				uint offset = 1<< i;
-				if(tid >= offset) {
-					uint y0 = shared[tid - offset];
-					x0 += y0;
-				}
-				uint y1 = shared[WARP_SIZE + tid - offset];
-				x1 += y1;
+				if(tid >= offset)
+					x0 += shared[tid - offset];
+				x1 += shared[WARP_SIZE + tid - offset];
+				
 				if(LOG_WARP_SIZE - 1 == i) x1 += x0;
 				else {
 					shared[tid] = x0;
 					shared[WARP_SIZE + tid] = x1;
 				}
 			}
-			shared[tid] = inclusive ? (x0 - sum0) : x0;
-			shared[WARP_SIZE + tid] = inclusive ? (x1 - sum1) : x1;
+			shared[tid] = inclusive ? x0 : (x0 - sum0);
+			shared[WARP_SIZE + tid] = inclusive ? x1 : (x1 - sum1);
 		}
-	} else if(7 == NumDigits) {
+	} else if(7 == NumBits) {
 		if(tid < WARP_SIZE) {
 			uint x0 = shared[tid];
 			uint x1 = shared[WARP_SIZE + tid];
@@ -305,17 +428,11 @@ DEVICE2 void IntraWarpParallelScan(uint tid, volatile uint* shared,
 			#pragma unroll
 			for(int i = 0; i < LOG_WARP_SIZE; ++i) {
 				uint offset = 1<< i;
-				if(tid >= offset) {
-					uint y0 = shared[tid - offset];
-					x0 += y0;
-				}
-				uint y1 = shared[WARP_SIZE + tid - offset];
-				uint y2 = shared[2 * WARP_SIZE + tid - offset];
-				uint y3 = shared[3 * WARP_SIZE + tid - offset];
-
-				x1 += y1;
-				x2 += y2;
-				x3 += y3;
+				if(tid >= offset)
+					x0 += shared[tid - offset];
+				x1 += shared[WARP_SIZE + tid - offset];
+				x2 += shared[2 * WARP_SIZE + tid - offset];
+				x3 += shared[3 * WARP_SIZE + tid - offset];
 
 				if(LOG_WARP_SIZE - 1 == i) {
 					x1 += x0;
@@ -328,10 +445,10 @@ DEVICE2 void IntraWarpParallelScan(uint tid, volatile uint* shared,
 					shared[3 * WARP_SIZE + tid] = x3;
 				}
 			}
-			shared[tid] = inclusive ? (x0 - sum0) : x0;
-			shared[WARP_SIZE + tid] = inclusive ? (x1 - sum1) : x1;
-			shared[2 * WARP_SIZE + tid] = inclusive ? (x2 - sum2) : x2;
-			shared[3 * WARP_SIZE + tid] = inclusive ? (x3 - sum3) : x3;
+			shared[tid] = inclusive ? x0 : (x0 - sum0);
+			shared[WARP_SIZE + tid] = inclusive ? x1 : (x1 - sum1);
+			shared[2 * WARP_SIZE + tid] = inclusive ? x2 : (x2 - sum2);
+			shared[3 * WARP_SIZE + tid] = inclusive ? x3 : (x3 - sum3);
 		}
 	}
 }

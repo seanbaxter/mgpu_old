@@ -1,57 +1,10 @@
 #pragma once
 
-#include "sortcommon.cu"
-
-////////////////////////////////////////////////////////////////////////////////
-// SortLocal
-
-// Given keys in thread order (fusedKeys) or keys in shared memory in strided
-// order (scattergather_shared), sort between 1 and 7 key bits and store into
-// shared memory.
-
-template<int NumThreads, int NumBits>
-DEVICE2 void SortLocal(uint tid, Values fusedKeys, uint bit, bool loadFromArray,
-	uint* scattergather_shared, uint* scratch_shared, uint* debug_global) {
-
-	if(1 == NumBits) 
-		SortAndScatter(tid, fusedKeys, bit, 1, NumThreads, loadFromArray,
-			false, scattergather_shared, scratch_shared, debug_global);
-	else if(2 == NumBits)
-		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray,
-			false, scattergather_shared, scratch_shared, debug_global);
-	else if(3 == NumBits)
-		SortAndScatter(tid, fusedKeys, bit, 3, NumThreads, loadFromArray,
-			false, scattergather_shared, scratch_shared, debug_global);
-	else if(4 == NumBits) {
-		/*SortAndScatter(tid, fusedKeys, bit, 4, NumThreads,
-			!LoadFromTexture, false, scattergather_shared, scratch_shared, 
-			debug_global_out);*/
-		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray, 
-			true, scattergather_shared, scratch_shared, debug_global);
-		SortAndScatter(tid, fusedKeys, bit + 2, 2, NumThreads, true, false,
-			scattergather_shared, scratch_shared, debug_global);
-	} else if(5 == NumBits) {
-		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray, 
-			true, scattergather_shared, scratch_shared, debug_global);
-		SortAndScatter(tid, fusedKeys, bit + 2, 3, NumThreads, true, false,
-			scattergather_shared, scratch_shared, debug_global);
-	} else if(6 == NumBits) {
-		SortAndScatter(tid, fusedKeys, bit, 3, NumThreads, loadFromArray, 
-			true, scattergather_shared, scratch_shared, debug_global);
-		SortAndScatter(tid, fusedKeys, bit + 3, 3, NumThreads, true, false,
-			scattergather_shared, scratch_shared, debug_global);
-	} else if(7 == NumBits) {
-		SortAndScatter(tid, fusedKeys, bit, 2, NumThreads, loadFromArray, 
-			true, scattergather_shared, scratch_shared, debug_global);
-		SortAndScatter(tid, fusedKeys, bit + 2, 2, NumThreads, true, true,
-			scattergather_shared, scratch_shared, debug_global);
-		SortAndScatter(tid, fusedKeys, bit + 4, 3, NumThreads, true, false,
-			scattergather_shared, scratch_shared, debug_global);
-	}
-}
+#include "sortlocal.cu"
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// SortFunc
 
 template<int NumThreads, int NumBits, int ValueCount, bool UseScatterList,
 	bool LoadFromTexture, bool DetectEarlyExit>
@@ -74,7 +27,6 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 	const int NumBuckets = 1<< NumBits;
 
-	// Simple scatter
 	const int ScratchSize = 2 * (NumThreads + NumWarps) + 4 * WARP_SIZE + 32;
 
 	__shared__ uint scratch_shared[ScratchSize];
@@ -90,8 +42,8 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 
 	uint tid = threadIdx.x;
 	uint block = blockIdx.x + firstBlock;
-	uint warp = tid / WARP_SIZE;
-	uint lane = (WARP_SIZE - 1) & tid;
+//	uint warp = tid / WARP_SIZE;
+//	uint lane = (WARP_SIZE - 1) & tid;
 
 	debug_global_out += NumValues * block;
 
@@ -101,85 +53,10 @@ DEVICE2 void SortFunc(const uint* keys_global_in, uint firstBlock,
 		scatterList_shared[tid] = 
 			bucketCodes_global[globalStructOffset + tid];
 
-	// Load the keys and, if sorting values, create fused keys. Store into 
-	// shared mem with a WARP_SIZE + 1 stride between warp rows, so that loads
-	// into thread order occur without bank conflicts.
 	Values keys, fusedKeys;
-
-	if(LoadFromTexture) {
-		// Load keys from a texture. The texture sampler serves as an 
-		// asynchronous independent subsystem. It helps transpose data from
-		// strided to thread order without involving the shader units.
-
-		uint keysOffset = NumValues * blockIdx.x + VALUES_PER_THREAD * tid;
-
-		#pragma unroll
-		for(int i = 0; i < VALUES_PER_THREAD / 4; ++i) {
-			uint4 k = tex1Dfetch(keys_texture_in, keysOffset / 4 + i);
-			keys[4 * i + 0] = k.x;
-			keys[4 * i + 1] = k.y;
-			keys[4 * i + 2] = k.z;
-			keys[4 * i + 3] = k.w;
-		}
-
-		if(0 == ValueCount)
-			// Sort only keys.
-			#pragma unroll
-			for(int i = 0; i < VALUES_PER_THREAD; ++i)
-				fusedKeys[i] = keys[i];
-		else
-			// Sort key-value tuples.
-			BuildFusedKeysThreadOrder(tid, keys, bit, NumBits, fusedKeys,
-				false);
-
-	} else {
-		// Load keys from global memory. This requires using shared memory to 
-		// transpose data from strided to thread order.
-
-		LoadWarpValues(keys_global_in, warp, lane, block, keys);
-
-		if(0 == ValueCount)
-			// Sort only keys.
-			#pragma unroll
-			for(int i = 0; i < VALUES_PER_THREAD; ++i)
-				fusedKeys[i] = keys[i];
-		else
-			// Sort key-value tuples.
-			BuildFusedKeysWarpOrder(warp, lane, keys, bit, NumBits, fusedKeys,
-				false);
-
-		// Store the keys or fused keys into shared memory for the
-		// strided->thread order transpose.
-		ScatterWarpOrder(warp, lane, true, fusedKeys, scattergather_shared);
-	}
-
-
-	////////////////////////////////////////////////////////////////////////////
-	// Check the early exit code for this block.
-
-	bool isEarlyDetect = false;
-/*	if(DetectEarlyExit) {
-		if(!tid) {
-			uint scatter = scatterList_shared[0];
-			scratch_shared[0] = 1 & scatter;
-			scatterList_shared[0] = ~1 & scatter;		
-		}
-		__syncthreads();
-		isEarlyDetect = scratch_shared[0];
-	}*/
-
-	// Sort the fused keys in shared memory if early exit was not detected.
-	if(!isEarlyDetect) {
-		uint scanBitOffset = ValueCount ? 24 : bit;
-
-		SortLocal<NumThreads, NumBits>(tid, fusedKeys, scanBitOffset,
-			!LoadFromTexture, scattergather_shared, scratch_shared, 
-			debug_global_out);
-	} else if(LoadFromTexture) {
-		// Copy the data fusedKeys to shared memory?
-
-
-	}
+	LoadAndSortLocal<NumThreads, NumBits, LoadFromTexture>(tid, block, 
+		keys_global_in, blockIdx.x, bit, debug_global_out, scattergather_shared,
+		scratch_shared, 0 != ValueCount, keys, fusedKeys);
 
 
 	////////////////////////////////////////////////////////////////////////////

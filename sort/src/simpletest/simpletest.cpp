@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
 
 	// Create some test data in an std::vector. Generate uints with 32 random
 	// bits.
-	int NumElements = 128;
+	int NumElements = 2048;
 	std::tr1::uniform_int<uint> r(0, 0xffffffff);
 
 	std::vector<uint> hostData(NumElements);
@@ -84,15 +84,13 @@ int main(int argc, char** argv) {
 	// Copy the host data to the device array. sortData_d::parity indicates
 	// which of the arrays holds the active data. The other array is temp
 	// buffer.
-	cuMemcpyHtoD(deviceData->keys[deviceData->parity], &hostData[0],
-		sizeof(uint) * NumElements);
+	cuMemcpyHtoD(deviceData->keys[0], &hostData[0], sizeof(uint) * NumElements);
 
 	// Sort the elements.
 	sortArray(engine, deviceData);
 
 	// Retrieve the sorted elements.
-	cuMemcpyDtoH(&hostData[0], deviceData->keys[deviceData->parity],
-		sizeof(uint) * NumElements);
+	cuMemcpyDtoH(&hostData[0], deviceData->keys[0], sizeof(uint) * NumElements);
 
 	// Free the device arrays.
 	sortDestroyData(deviceData);

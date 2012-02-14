@@ -136,7 +136,6 @@ int main(int argc, char** argv) {
 	// key are randomized.
 	sortData.firstBit = 0;
 	sortData.endBit = 32;
-	sortData.earlyExit = true;
 	sortArray(engine, &sortData);
 
 	// Print the sorted keys and indices (values1). These should match the first

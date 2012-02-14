@@ -9,6 +9,10 @@
 
 const int WarpSize = 32;
 
+// Return the number of blocks that can be run concurrently on each SM given
+// the compute capability.
+int BlocksPerSM(int numRegs, int numThreads, int sharedBytes, int compute);
+
 template<typename T>
 inline T* ToPointer(CUdeviceptr p) {
 	return reinterpret_cast<T*>(p);
@@ -421,6 +425,12 @@ public:
 	CuContext* Context() { return _module->Context(); }
 
 	CUresult Launch(int width, int height, CuCallStack& callStack);
+
+	int BlocksPerSM() const {
+		return ::BlocksPerSM(_attributes.numRegs,
+			_attributes.maxThreadsPerBlock, _attributes.sharedSizeBytes,
+			_attributes.binaryVersion / 10);
+	}
 
 private:
 	CUfunction _function;

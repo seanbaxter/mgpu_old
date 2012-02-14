@@ -82,13 +82,6 @@ typedef struct {
 	// caller wants to preserve those keys, it must set this parameter to true.
 	bool preserveEndKeys;
 
-	// Look for early exit conditions. The count kernel will check if each sort
-	// block has sorted radices, and if the entire array is already	sorted in
-	// the current radix or over the full key. If earlyExit is true, and no 
-	// blocks around found sorted, the standard sort kernel is the used. 
-	// earlyExit on a randomized arrays slows sort performance by 2.5%.
-	bool earlyExit;
-
 	// Sort the keys and up to 6 de-interleaved arrays.
 	// The [0] arrays are ource, and the [1] arrays are targets. After the sort
 	// has been completed, arrays will be swapped if necessary so that [0] hold
