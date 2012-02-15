@@ -37,8 +37,8 @@ const int ElementCounts[7] = {
 	80000000,
 	70000000
 };
-const int NumIterations = 15;
-const int NumTests = 5;
+const int NumIterations = 6;
+const int NumTests = 1;
 /*
 const int ElementCounts[7] = {
 	500000,
@@ -219,7 +219,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 	double elapsed;
 	Throughput throughput;
 	for(int test(0); test < NumTests; ++test) {
-
+/*
 		// B40C benchmark
 		if(0 == terms.valueCount || 1 == terms.valueCount) {
 			cudaError_t error = B40cBenchmark(b40cTerms, &elapsed);
@@ -246,7 +246,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 				terms.valueCount, terms.numIterations, elapsed);
 			cudpp.Max(throughput);
 		}
-		
+		*/
 		// MGPU benchmark
 		sortStatus_t status = MgpuBenchmark(mgpuTerms, terms.engine, &elapsed);
 		if(SORT_STATUS_SUCCESS != status) {
@@ -258,7 +258,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 			terms.valueCount, terms.numIterations, elapsed);
 		mgpu.Max(throughput);
 	}
-
+/*
 	// Read the MGPU results into host memory.
 	mgpuTerms.sortedKeys->ToHost(&keysHost[0], terms.count);
 	for(int i(0); i < abs(terms.valueCount); ++i) {
@@ -293,7 +293,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 				return false;
 			}
 	}
-
+*/
 	return true;
 }
 
@@ -306,9 +306,9 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine,
 	CUDPPHandle cudppHandle) {
 
 	// Benchmark thrust::sort
-	Throughput thrustThroughput = Thrust(context);
-	printf("32 bit key sort with thrust::sort: %4.7lf M/s\n\n", 
-		thrustThroughput.elementsPerSec / 1.0e6);
+//	Throughput thrustThroughput = Thrust(context);
+//	printf("32 bit key sort with thrust::sort: %4.7lf M/s\n\n", 
+//		thrustThroughput.elementsPerSec / 1.0e6);
 
 	// Sort the keys and up to 1 value array with b40c. Sort the keys and all
 	// value arrays with MGPU, and compare the results.
@@ -325,7 +325,7 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine,
 			NumIterations, NumTests);
 
 		// Test for all bit sizes.
-		for(int numBits(1); numBits <= 32; ++numBits) {
+		for(int numBits(32); numBits <= 32; ++numBits) {
 
 			printf("%2d bits  ", numBits);
 
