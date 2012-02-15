@@ -91,7 +91,6 @@ DEVICE2 void SortFuncLoop(const uint* keys_global_in,
 			globalOffsetAdvance += count;
 		}
 
-
 		////////////////////////////////////////////////////////////////////////
 		// Load keys and run the local sort.
 

@@ -2,6 +2,9 @@
 
 #include "common.cu"
 
+
+////////////////////////////////////////////////////////////////////////////////
+// StridedMultiScan
 // Runs a scan over the per-block digit counts.
 
 template<int NumThreads, int NumBits>
@@ -113,8 +116,11 @@ DEVICE2 uint StridedMultiScan(uint tid, uint x, volatile uint* shared,
 }
 
 
+////////////////////////////////////////////////////////////////////////////////
+// SortHist
+
 template<int NumThreads, int NumBits>
-DEVICE2 void SortHist(uint* blockTotals_global, uint numBlocks, 
+DEVICE2 void SortHist(uint* blockTotals_global, uint numTasks, 
 	uint* totalsScan_global) {
 	
 	const int NumDigits = 1<< NumBits;
@@ -129,14 +135,15 @@ DEVICE2 void SortHist(uint* blockTotals_global, uint numBlocks,
 
 	// Figure out which interval of the block counts to assign to each column.
 	uint col = tid / NumDigits;
-	uint quot = numBlocks / NumColumns;
-	uint rem = (NumColumns - 1) & numBlocks;
+	uint quot = numTasks / NumColumns;
+	uint rem = (NumColumns - 1) & numTasks;
 
-	int2 range = ComputeTaskRange(col, quot, rem);
+	int2 range = ComputeTaskRange(col, quot, rem, 1, numTasks);
 	
 	uint start = NumDigits * range.x + lane2;
 	uint end = NumDigits * range.y;
 	uint stride = NumDigits;
+
 
 
 	////////////////////////////////////////////////////////////////////////////

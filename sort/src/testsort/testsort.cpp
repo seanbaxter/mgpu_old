@@ -94,7 +94,7 @@ Throughput CalcThroughput(int numBits, int numElements, int valueCount,
 	throughput.elementsPerSec = numElements * iterations / elapsed;
 	throughput.bytesPerSec = sizeof(uint) * (1 + abs(valueCount)) * 
 		throughput.elementsPerSec;
-	throughput.normElementsPerSec = 
+	throughput.normElementsPerSec =  
 		(numBits / 32.0) * throughput.elementsPerSec;
 	throughput.normBytesPerSec = (numBits / 32.0) * throughput.bytesPerSec;
 
@@ -255,6 +255,11 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 				sortStatusString(status));
 			return false;
 		}
+
+		if(terms.bitPass) {
+			elapsed /= (terms.numBits / terms.bitPass);
+			terms.numBits = terms.bitPass;
+		}
 		throughput = CalcThroughput(terms.numBits, terms.count, 
 			terms.valueCount, terms.numIterations, elapsed);
 		mgpu.Max(throughput);
@@ -274,6 +279,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 		printf("Error in b40c sort on numBits = %d\n", terms.numBits);
 		return false;
 	}
+
 
 	std::vector<uint> keysHost2(terms.count);
 	b40cTerms.sortedKeys->ToHost(&keysHost2[0], terms.count);
@@ -395,7 +401,7 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 
 			printf("%s\n", tableSuffix);
 
-			for(int bitPass(1); bitPass <= 7; ++bitPass) {
+			for(int bitPass(1); bitPass <= 6; ++bitPass) {
 				BenchmarkTerms terms;
 				terms.context = context;
 				terms.engine = engine;
@@ -436,7 +442,7 @@ void BenchmarkBitPassLarge(CuContext* context, sortEngine_t engine) {
 
 void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
 	const int SmallPass[7] = {
-		1024 * 120 + 1,
+		500000,
 		500000,
 		500000,
 		500000,
@@ -444,8 +450,7 @@ void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
 		500000,
 		500000
 	};
-//	BenchmarkBitPass(context, engine, SmallPass, 100, 5, "small");
-	BenchmarkBitPass(context, engine, SmallPass, 1, 1, "small");
+	BenchmarkBitPass(context, engine, SmallPass, 100, 5, "small");
 }
 
 
@@ -461,6 +466,9 @@ int main(int argc, char** argv) {
 	ContextPtr context;
 	CreateCuContext(device, 0, &context);
 
+	CUDPPHandle cudppHandle;
+	cudppCreate(&cudppHandle);
+	
 	sortEngine_t engine;
 	sortStatus_t status = sortCreateEngine("../../src/cubin/", &engine);
 	if(SORT_STATUS_SUCCESS != status) {
@@ -468,15 +476,15 @@ int main(int argc, char** argv) {
 			sortStatusString(status));
 		return 0;
 	}
-	BenchmarkBitPassSmall(context, engine);
+	ComparisonBenchmark(context, engine, cudppHandle);
 //	BenchmarkBitPassLarge(context, engine);
+//	BenchmarkBitPassSmall(context, engine);
+	sortReleaseEngine(engine);
+	return 0;
 
-	CUDPPHandle cudppHandle;
-	cudppCreate(&cudppHandle);
-	
-//	ComparisonBenchmark(context, engine, cudppHandle);
+
 
 	cudppDestroy(cudppHandle);
 
-	sortReleaseEngine(engine);
+
 }

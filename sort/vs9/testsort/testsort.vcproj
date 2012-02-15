@@ -203,6 +203,8 @@
 			/>
 			<Tool
 				Name="Cudart Build Rule"
+				NvccPath="$(CUDA_PATH)\bin\nvcc.exe"
+				RequiredIncludes="$(CUDA_PATH)\include"
 				Include="../../src/b40c"
 				NvccCompilation="0"
 				Arch1="0"

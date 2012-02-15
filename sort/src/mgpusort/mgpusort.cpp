@@ -5,7 +5,7 @@
 
 const bool LoadKeysTexture = true;
 
-const int MaxTasks = 16 * 16;
+const int MaxTasks = 32 * 16;
 
 const char* SortStatusStrings[] = {
 	"SORT_STATUS_SUCCESS",
@@ -364,22 +364,9 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 	result = count->Launch(terms.countGridSize, 1, callStack);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 
-
-	std::vector<uint> blockScanOffsets(terms.countSize / 4);
-	cuMemcpyDtoH(&blockScanOffsets, engine->countBuffer->Handle(),
-		terms.countSize);
-
-	std::vector<uint> taskSizes(terms.numTasks * (1<< numBits));
-	cuMemcpyDtoH(&taskSizes[0], engine->taskOffsets->Handle(), 
-		terms.numTasks * (1<< numBits));
-
-
-
-
-
 	// Run the histogram pass.
 	callStack.Reset();
-	callStack.Push(engine->taskOffsets, terms.numBlocks, 
+	callStack.Push(engine->taskOffsets, terms.numTasks, 
 		engine->digitTotalsScan);
 	result = engine->hist->func[numBits - 1]->Launch(1, 1, callStack);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
@@ -526,7 +513,7 @@ sortStatus_t SORTAPI sortArrayEx(sortEngine_t engine, sortData_t data,
 		return SORT_STATUS_INVALID_VALUE;
 
 	if(data->numElements > data->maxElements) return SORT_STATUS_INVALID_VALUE;
-	if(bitPass <= 0 || bitPass > 6) bitPass = 6;
+	if(bitPass <= 0 || bitPass > 7) bitPass = 6;
 
 	int numBits = data->endBit - data->firstBit;
 	if(bitPass > numBits) bitPass = numBits;

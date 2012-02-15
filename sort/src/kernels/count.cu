@@ -127,12 +127,11 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 	uint tid = threadIdx.x;
 	uint lane = (WARP_SIZE - 1) & tid;
 	uint warp = tid / WARP_SIZE;
-	uint block = blockIdx.x;
 
 	volatile uint* warpCounters_shared = blockCounters_shared + warp * WarpMem;
 	volatile uint* counters_shared = warpCounters_shared + lane;
 
-	int task = NumWarps * block + warp;
+	int task = NumWarps * blockIdx.x + warp;
 	int2 rangePair = ComputeTaskRange(task, taskQuot, taskRem, 1, numBlocks);
 
 	// Offset the keys and counts pointers.
@@ -140,12 +139,11 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 	// Initialize the unpacked digit counters for each lane.
 	uint laneCount0 = 0, laneCount1 = 0, laneCount2 = 0, laneCount3 = 0;
 	
-	int current = rangePair.x;
 	uint end = vt / InnerLoop;
-	while(current < rangePair.y) {
+	for(int block(rangePair.x); block < rangePair.y; ++block) {
 	
-		const uint* keys_pass = keys_global + current * (WARP_SIZE * vt);
-		uint* counts_pass = counts_global + current * NumChannels;
+		const uint* keys_pass = keys_global + block * (WARP_SIZE * vt);
+		uint* counts_pass = counts_global + block * NumChannels;
 
 		const uint* warpData = keys_pass + lane;
 			
@@ -186,9 +184,6 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 
 		uint2 countPair = GatherSumsReduce<NumBits>(warpCounters_shared, lane, 
 			Mode, blockCounters_shared);
-
-		// NOTE: exclusive scan countPair and even pre-subtract some terms to
-		// reduce computation on 
 
 		// Scan the counts and store the counts to global memory.
 		if(1 == NumBits) {
@@ -259,26 +254,25 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 			laneCount2 += 0x0000ffff & countPair.y;
 			laneCount3 += countPair.y>> 16;
 		}
-
-		++current;
 	}
 
 	// Store the digit totals to global memory. Each warp stores NumDigit
 	// values.
-	if(NumBits <= 6) {
-		// Unpack and order by ascending digit count. 
-		if(lane < NumChannels) {
-			uint* totals = totals_global + NumBuckets * task;
-			totals[lane] = laneCount0;
-			totals[NumChannels + lane] = laneCount1;
+	if(rangePair.y > rangePair.x) {
+		if(NumBits <= 6) {
+			// Unpack and order by ascending digit count. 
+			if(lane < NumChannels) {
+				uint* totals = totals_global + NumBuckets * task;
+				totals[lane] = laneCount0;
+				totals[NumChannels + lane] = laneCount1;
+			}
+		} else if(7 == NumBits) {
+			// lane counts 0 and 2 hold adjacent values (0 + lane and 1 + lane),
+			// as do lane counts 1 and 3 (64 + lane and 65 + lane).
+			uint2* totals = (uint2*)(totals_global + NumBuckets * task);
+			totals[lane] = make_uint2(laneCount0, laneCount2);
+			totals[WARP_SIZE + lane] = make_uint2(laneCount1, laneCount3);
 		}
-	} else if(7 == NumBits) {
-		// lane counts 0 and 2 hold adjacent values (0 + lane and 1 + lane),
-		// as do lane counts 1 and 3 (64 + lane and 65 + lane).
-		
-		uint2* totals = (uint2*)(totals_global + NumBuckets * task);
-		totals[lane] = make_uint2(laneCount0, laneCount2);
-		totals[WARP_SIZE + lane] = make_uint2(laneCount1, laneCount3);
 	}
 }
 
