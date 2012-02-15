@@ -239,8 +239,6 @@ sortStatus_t SORTAPI sortReleaseEngine(sortEngine_t engine) {
 struct SortTerms {
 	int valuesPerBlock;
 	int numBlocks;
-	int sortGridSize;
-	int countGridSize;
 	int countValuesPerThread;
 	
 	int numTasks;
@@ -266,8 +264,6 @@ SortTerms ComputeSortTerms(sortEngine_t engine, int numSortThreads,
 		LCM(countKernel->BlocksPerSM(), sortKernel->BlocksPerSM()));
 
 	terms.valuesPerBlock = numValues;
-	terms.sortGridSize = terms.numTasks;
-	terms.countGridSize = DivUp(terms.numTasks, NumCountWarps);
 	terms.countValuesPerThread = numValues / WarpSize;
 
 	div_t d = div(terms.numBlocks, terms.numTasks);
@@ -358,10 +354,10 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 	// Run the count loop.
 	CuCallStack callStack;
 	callStack.Push(data->keys[0], firstBit, terms.countValuesPerThread, 
-		terms.taskQuot, terms.taskRem, terms.numBlocks, engine->countBuffer, 
+		terms.taskQuot, terms.taskRem, engine->countBuffer, 
 		engine->taskOffsets);
 	CuFunction* count = engine->count->func[numBits - 1].get();
-	result = count->Launch(terms.countGridSize, 1, callStack);
+	result = count->Launch(terms.numTasks, 1, callStack);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 
 	// Run the histogram pass.
@@ -406,7 +402,7 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 
 	CuFunction* sortFunc = sort->func[numBits - 1].get();
 
-	result = sortFunc->Launch(terms.sortGridSize, 1, callStack);
+	result = sortFunc->Launch(terms.numTasks, 1, callStack);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 
 	// Swap the source and target buffers in the data structure.

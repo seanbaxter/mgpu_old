@@ -549,6 +549,8 @@ CUresult CreateCuFunction(const char* name, CuModule* module, int3 blockShape,
 	f->_module = module;
 	f->_functionName = name;
 	f->_blockShape = blockShape;
+	f->_blocksPerSM = ::BlocksPerSM(attr.numRegs, attr.maxThreadsPerBlock,
+		attr.sharedSizeBytes, attr.binaryVersion / 10);
 
 	ppFunction->swap(f);
 	return CUDA_SUCCESS;

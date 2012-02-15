@@ -36,12 +36,11 @@ DEVICE2 void SortFuncLoop(const uint* keys_global_in,
 		2 * (WARP_SIZE + WARP_SIZE / 2);
 
 	__shared__ uint scattergather_shared[NumWarps * VALUES_PER_THREAD * Stride];
+	__shared__ uint scratch_shared[ScratchSize];
 
 	__shared__ uint scaledGlobalOffsets_shared[NumDigits];
 	__shared__ uint localScan_shared[NumChannels];
 
-
-	__shared__ uint scratch_shared[ScratchSize];
 	uint tid = threadIdx.x;
 	uint task = blockIdx.x;
 
@@ -104,10 +103,6 @@ DEVICE2 void SortFuncLoop(const uint* keys_global_in,
 		// Store the keys and values to global memory.
 
 		if(0 == ValueCount) {
-		//	#pragma unroll
-		//	for(int v = 0; v < VALUES_PER_THREAD; ++v)
-		//		keys_global_out[NumValues * block + NumThreads * v + tid] =
-		//			scattergather_shared[NumThreads * v + tid];
 
 			// Store only keys.
 			GatherBlockOrder(tid, false, NumThreads, keys, 

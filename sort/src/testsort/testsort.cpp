@@ -247,7 +247,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 				terms.valueCount, terms.numIterations, elapsed);
 			cudpp.Max(throughput);
 		}
-		
+	
 		// MGPU benchmark
 		sortStatus_t status = MgpuBenchmark(mgpuTerms, terms.engine, &elapsed);
 		if(SORT_STATUS_SUCCESS != status) {
@@ -335,7 +335,7 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine,
 			NumIterations, NumTests);
 
 		// Test for all bit sizes.
-		for(int numBits(6); numBits <= 32; ++numBits) {
+		for(int numBits(1); numBits <= 32; ++numBits) {
 
 			printf("%2d bits  ", numBits);
 

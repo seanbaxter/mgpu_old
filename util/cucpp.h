@@ -426,11 +426,7 @@ public:
 
 	CUresult Launch(int width, int height, CuCallStack& callStack);
 
-	int BlocksPerSM() const {
-		return ::BlocksPerSM(_attributes.numRegs,
-			_attributes.maxThreadsPerBlock, _attributes.sharedSizeBytes,
-			_attributes.binaryVersion / 10);
-	}
+	int BlocksPerSM() const { return _blocksPerSM; }
 
 private:
 	CUfunction _function;
@@ -438,6 +434,7 @@ private:
 	std::string _functionName;
 	CuFuncAttr _attributes;
 	int3 _blockShape;
+	int _blocksPerSM;
 };
 
 

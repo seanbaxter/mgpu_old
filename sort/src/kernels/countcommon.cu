@@ -53,7 +53,7 @@ DEVICE void IncBucketCounter(uint bucket, volatile uint* counters,
 	}
 }
 
-/*
+
 ////////////////////////////////////////////////////////////////////////////////
 // GatherSums
 
@@ -93,7 +93,7 @@ DEVICE void IncBucketCounter(uint bucket, volatile uint* counters,
 // "address" to GatherSums, but then NVCC generates dynamic local stores, 
 // instead of static shared stores. With the template parameter we can allocate
 // temporary register storage inside GatherSums.
-
+/*
 template<int ColHeight>
 DEVICE2 void GatherSums(uint lane, int mode, volatile uint* data) {
 
@@ -261,8 +261,8 @@ DEVICE2 void GatherSumsReduce(volatile uint* warpCounters_shared, uint lane,
 		counts_shared[lane] = packed0;
 	if(7 == NumBits)
 		counts_shared[WARP_SIZE + lane] = packed1;
-}*/
-
+}
+*/
 
 ////////////////////////////////////////////////////////////////////////////////
 // GatherSumsReduce
@@ -278,9 +278,6 @@ DEVICE2 void GatherSumsReduce(volatile uint* warpCounters_shared, uint lane,
 // components must contain packed counts. If 6 == NumBits, only .x contains
 // packed counts. If NumBits < 6, only lane < NumChannels contains valid counts
 // in .x.
-
-// For 7 == NumBits, store .x at 2 * lane and .y at 2 * lane + 1. This incurs
-// a two-way bank conflict.
 
 template<int NumBits>
 DEVICE2 uint2 GatherSumsReduce(volatile uint* warpCounters_shared, uint lane, 
@@ -449,6 +446,7 @@ DEVICE2 uint2 GatherSumsReduce(volatile uint* warpCounters_shared, uint lane,
 
 	return countPair;
 }
+
 
 
 /*

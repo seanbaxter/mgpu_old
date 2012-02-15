@@ -82,10 +82,10 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 
 	int sortBlocksPerSM = sortFunc->BlocksPerSM();
 	int countBlocksPerSM = countFunc->BlocksPerSM();
-	int numTasks = context->Device()->NumSMs() * 
-		GCD(sortFunc->BlocksPerSM(), countFunc->BlocksPerSM());
+	int numTasks = std::min(numBlocks,
+		context->Device()->NumSMs() * sortFunc->BlocksPerSM());
 
-
+	div_t d = div(numBlocks, numTasks);
 
 
 	CUtexref texRef;
@@ -120,14 +120,11 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 		last += digitCounts[i];
 	}
 
-	const int countWarps = 1;
-	const int countBlocks = 1;
-	div_t d = div(numBlocks, countWarps);
 
 	DeviceMemPtr deviceSource, deviceScan, deviceTotals;
 	result = context->MemAlloc(host, &deviceSource);
 	result = context->MemAlloc<uint>(numBlocks * NumChannels, &deviceScan);
-	result = context->MemAlloc<uint>(countWarps * NumDigits, &deviceTotals);
+	result = context->MemAlloc<uint>(numTasks * NumDigits, &deviceTotals);
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -135,10 +132,10 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 
 	CUdeviceptr nullPtr = 0;
 	CuCallStack callStack;
-	callStack.Push(deviceSource, 0, NumCountVT, d.quot, d.rem, numBlocks,
-		deviceScan, deviceTotals);
+	callStack.Push(deviceSource, 0, NumCountVT, d.quot, d.rem, deviceScan, 
+		deviceTotals);
 
-	result = countFunc->Launch(countBlocks, 1, callStack);
+	result = countFunc->Launch(numTasks, 1, callStack);
 
 	std::vector<uint> hostScan;
 	result = deviceScan->ToHost(hostScan);
@@ -176,6 +173,7 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 			if(count != counts[index]) {
 				printf("Error on block %d digit %d. Has %d wants %d\n", block,
 					d, count, counts[index]);
+				exit(0);
 			}
 		}
 
@@ -189,7 +187,7 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 	result = context->MemAlloc<uint>(NumDigits, &totalsScanDevice);
 
 	callStack.Reset();
-	callStack.Push(deviceTotals, countWarps, totalsScanDevice);
+	callStack.Push(deviceTotals, numTasks, totalsScanDevice);
 	result = histFunc->Launch(1, 1, callStack);
 
 	std::vector<uint> taskOffsetsHost;
@@ -201,13 +199,13 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 	// Construct scatter offsets for each block.
 	std::vector<uint> blockOffsets(numBlocks * NumDigits);
 	std::vector<uint> taskOffsets2 = taskOffsetsHost;
-	for(int countWarp(0); countWarp < countWarps; ++countWarp) {
-		int x = d.quot * countWarp;
-		x += std::min(countWarp, d.rem);
-		int y = x + d.quot + (countWarp < d.rem);
+	for(int task(0); task < numTasks; ++task) {
+		int x = d.quot * task;
+		x += std::min(task, d.rem);
+		int y = x + d.quot + (task < d.rem);
 
 		// Get the per-digit count warp offsets.
-		uint* countOffsets = &taskOffsets2[0] + countWarp * NumDigits;
+		uint* countOffsets = &taskOffsets2[0] + task * NumDigits;
 
 		for(int i(x); i < y; ++i) {
 			// Load the counts for each digit.
@@ -247,9 +245,9 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 
 	callStack.Reset();
 	callStack.Push(deviceSource, deviceScan, deviceTotals, 0, sortedDevice,
-		d.quot, d.rem, 0);
-
-	result = sortFunc->Launch(countWarps, 1, callStack);
+		d.quot, d.rem, (CUdeviceptr)0);
+					
+	result = sortFunc->Launch(numTasks, 1, callStack);
 
 	std::vector<uint> sortedHost;
 	result = sortedDevice->ToHost(sortedHost);
@@ -260,6 +258,7 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 	for(int i(0); i < NumElements; ++i) {
 		if(sortedHost2[i] != sortedHost[i]) {
 			printf("%d\n", i);
+			exit(0);
 		}
 	}
 
@@ -277,7 +276,7 @@ int main(int argc,  char** argv) {
 	result = CreateCuContext(device, 0, &context);
 
 	for(int numBits = 1; numBits <= 7; ++numBits) {
-		TestSort(context, numBits, 1, 128);
+		TestSort(context, numBits, 101, 128);
 	}
 
 }
