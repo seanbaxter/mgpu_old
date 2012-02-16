@@ -256,6 +256,7 @@ extern "C" __global__ void Name(const uint* keys_global_in, uint bit,		\
 		bit, scan_global_out);												\
 }
 
-// Spills with 16 values - compiles with 12?!
-GEN_MULTISCAN(MultiScan5_16_128, 5, 12, 128)
+// On nvcc 4.1: Uses 44 bytes of stackframe due to register spill with 16 vals.
+// On --open64: COMPILES WITH NO SPILL! guys...
+GEN_MULTISCAN(MultiScan5_16_128, 5, 16, 128)
 
