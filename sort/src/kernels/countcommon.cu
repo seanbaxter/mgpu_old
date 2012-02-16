@@ -315,6 +315,9 @@ DEVICE2 uint2 GatherSumsReduce(volatile uint* warpCounters_shared, uint lane,
 		// assigned to each row, and the segment length is 32 (that is, read 
 		// across the entire row). The threads start from different columns to
 		// avoid bank conflicts.
+
+		// lowAccum = 4 * lane + 0, + 1, mod NumDigits
+		// highAccum = 4 * lane + 2, + 3, mod NumDigits
 		uint lowAccum = 0;
 		uint highAccum = 0;
 

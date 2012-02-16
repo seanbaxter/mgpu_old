@@ -217,15 +217,14 @@ DEVICE2 void SortLocal(uint tid, Values fusedKeys, uint bit, bool loadFromArray,
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// LoadAndSortLocal
+// LoadKeysGlobal
 
 template<int NumThreads, int NumBits, bool LoadFromTexture>
-DEVICE2 void LoadAndSortLocal(uint tid, uint block, const uint* keys_global_in, 
-	uint texBlock, uint bit, uint* debug_global_out, uint* scattergather_shared,
-	uint* scratch_shared, bool useFusedKey, Values keys, Values fusedKeys) {
+DEVICE2 void LoadKeysGlobal(uint tid, uint block, const uint* keys_global_in,
+	uint texBlock, uint bit, uint* scattergather_shared, bool useFusedKey, 
+	Values keys, Values fusedKeys) {
 
 	const int NumValues = VALUES_PER_THREAD * NumThreads;
-
 
 	////////////////////////////////////////////////////////////////////////////
 	// LOAD KEYS, CREATE FUSED KEYS, AND REINDEX INTO THREAD ORDER
@@ -281,7 +280,21 @@ DEVICE2 void LoadAndSortLocal(uint tid, uint block, const uint* keys_global_in,
 		// Store the keys or fused keys into shared memory for the
 		// strided->thread order transpose.
 		ScatterWarpOrder(warp, lane, true, fusedKeys, scattergather_shared);
-	}	
+	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// LoadAndSortLocal
+
+template<int NumThreads, int NumBits, bool LoadFromTexture>
+DEVICE2 void LoadAndSortLocal(uint tid, uint block, const uint* keys_global_in, 
+	uint texBlock, uint bit, uint* debug_global_out, uint* scattergather_shared,
+	uint* scratch_shared, bool useFusedKey, Values keys, Values fusedKeys) {
+
+	LoadKeysGlobal<NumThreads, NumBits, LoadFromTexture>(tid, block,
+		keys_global_in, texBlock, bit, scattergather_shared, useFusedKey,
+		keys, fusedKeys);
 
 	uint scanBitOffset = useFusedKey ? 24 : bit;
 

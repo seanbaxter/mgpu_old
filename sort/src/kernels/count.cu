@@ -108,9 +108,11 @@ void Name(const uint* keys_global, uint bit, uint numElements, uint vt,		\
 ////////////////////////////////////////////////////////////////////////////////
 // CountFuncLoop 
 
-template<int NumBits, int NumThreads, int InnerLoop, int Mode>
+template<int NumBits, int NumThreads, int InnerLoop, int Mode, 
+	bool ScanBlockCounts, bool SingleBlockTask>
 DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt, 
-	int taskQuot, int taskRem, uint* counts_global, uint* totals_global) {
+	int taskQuot, int taskRem, int numTasks, uint* counts_global,
+	uint* totals_global) {
 
 	const int NumDigits = 1<< NumBits;
 	const int NumCounters = DIV_UP(NumDigits, 4);
@@ -130,21 +132,28 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 	volatile uint* warpCounters_shared = blockCounters_shared + warp * WarpMem;
 	volatile uint* counters_shared = warpCounters_shared + lane;
 
-	// Derive the range of blocks for the entire count block (it's a single
-	// task).
-	uint task = blockIdx.x;
-	int2 blockRange = ComputeTaskRange(task, taskQuot, taskRem);
+	uint task;
+	int2 blockRange;
+	if(SingleBlockTask) {
+		// Derive the range for one task per count block.
+		task = blockIdx.x;
+		blockRange = ComputeTaskRange(task, taskQuot, taskRem);
 
+		// Break the block range up evenly over all the warps.
+		uint blockCount = blockRange.y - blockRange.x;
+		uint blockQuot = blockCount / NumWarps;
+		uint blockRem = (NumWarps - 1) & blockCount;
 
-	// Break the block range up evenly over all the warps.
-	uint blockCount = blockRange.y - blockRange.x;
-	uint blockQuot = blockCount / NumWarps;
-	uint blockRem = (NumWarps - 1) & blockCount;
-
-	int2 warpRange = ComputeTaskRange(warp, blockQuot, blockRem, 1, blockCount);
-	blockRange.y = blockRange.x + warpRange.y;
-	blockRange.x += warpRange.x;
-
+		int2 warpRange = ComputeTaskRange(warp, blockQuot, blockRem, 1,
+			blockCount);
+		blockRange.y = blockRange.x + warpRange.y;
+		blockRange.x += warpRange.x;
+	} else {
+		// Derive the range for one task per count warp.
+		task = NumWarps * blockIdx.x + warp;
+		blockRange = ComputeTaskRange(task, taskQuot, taskRem, 1, numTasks);
+	}
+	
 	// Initialize the unpacked digit counters for each lane.
 	uint laneCount0 = 0, laneCount1 = 0, laneCount2 = 0, laneCount3 = 0;
 	uint end = vt / InnerLoop;
@@ -272,65 +281,76 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 		}
 	}
 
+	if(SingleBlockTask) {
+		////////////////////////////////////////////////////////////////////////
+		// Store the task's digit counters (sum of all warps digit counters) to
+		// global memory for the histogram pass.
 
-	////////////////////////////////////////////////////////////////////////////
-	// Store the task's digit counters (sum of all warps digit counters) to
-	// global memory for the histogram pass.
-
-	// First store to shared mem.
-	if(NumBits <= 6) {
-		if(lane < NumChannels) {
-			warpCounters_shared[lane] = laneCount0;
-			warpCounters_shared[NumChannels + lane] = laneCount1;
-		}
-		__syncthreads();
-
-		if(tid < NumDigits) {
-			uint digitTotal = 0;
-			
-			#pragma unroll
-			for(int i = 0; i < NumWarps; ++i)
-				digitTotal += blockCounters_shared[i * WarpMem + tid];
-			
-			uint* totals = totals_global + NumDigits * task;
-			totals[tid] = digitTotal;
-		}
-	} else if(7 == NumBits) {
-		// laneCount0 and laneCount1 are 2 * lane and 2 * lane + 1.
-		// laneCount1 and laneCount3 are 2 * lane + 64, 2 * lane + 65.
-		uint2* p = (uint2*)warpCounters_shared;
-		p[lane] = make_uint2(laneCount0, laneCount2);
-		p[32 + lane] = make_uint2(laneCount1, laneCount3);
-
-		__syncthreads();
-
-		if(tid < 64) {
-			uint2 digitTotal = make_uint2(0, 0);
-			
-			#pragma unroll
-			for(int i = 0; i < NumWarps; ++i) {
-				const uint2* p = (const uint2*)
-					(blockCounters_shared + i * WarpMem);
-				uint2 counts = p[tid];
-				digitTotal.x += counts.x;
-				digitTotal.y += counts.y;
+		// First store to shared mem.
+		if(NumBits <= 6) {
+			if(lane < NumChannels) {
+				warpCounters_shared[lane] = laneCount0;
+				warpCounters_shared[NumChannels + lane] = laneCount1;
 			}
+			__syncthreads();
 
-			uint2* totals = (uint2*)(totals_global + NumDigits * task);
-			totals[tid] = digitTotal;
+			if(tid < NumDigits) {
+				uint digitTotal = 0;
+				
+				#pragma unroll
+				for(int i = 0; i < NumWarps; ++i)
+					digitTotal += blockCounters_shared[i * WarpMem + tid];
+				
+				uint* totals = totals_global + NumDigits * task;
+				totals[tid] = digitTotal;
+			}
+		} else if(7 == NumBits) {
+			// laneCount0 and laneCount1 are 2 * lane and 2 * lane + 1.
+			// laneCount1 and laneCount3 are 2 * lane + 64, 2 * lane + 65.
+			uint2* p = (uint2*)warpCounters_shared;
+			p[lane] = make_uint2(laneCount0, laneCount2);
+			p[32 + lane] = make_uint2(laneCount1, laneCount3);
+
+			__syncthreads();
+
+			if(tid < 64) {
+				uint2 digitTotal = make_uint2(0, 0);
+				
+				#pragma unroll
+				for(int i = 0; i < NumWarps; ++i) {
+					const uint2* p = (const uint2*)
+						(blockCounters_shared + i * WarpMem);
+					uint2 counts = p[tid];
+					digitTotal.x += counts.x;
+					digitTotal.y += counts.y;
+				}
+
+				uint2* totals = (uint2*)(totals_global + NumDigits * task);
+				totals[tid] = digitTotal;
+			}
 		}
+
+	} else {
+
+
+
 	}
+
+
+
 }
 
 #define GEN_COUNT_LOOP(Name, NumThreads, NumBits, InnerLoop, Mode,			\
-	BlocksPerSM)															\
+	ScanBlockCounts, SingleBlockTask, BlocksPerSM)							\
 																			\
 extern "C" __global__ __launch_bounds__(NumThreads, BlocksPerSM)			\
 void Name(const uint* keys_global, uint bit, uint vt, int taskQuot,			\
-	int taskRem, uint* counts_global, uint* totals_global) {				\
+	int taskRem, int numTasks, uint* counts_global,							\
+	uint* totals_global) {													\
 																			\
-	CountFuncLoop<NumBits, NumThreads, InnerLoop, Mode>(					\
-		keys_global, bit, vt, taskQuot, taskRem, counts_global,				\
-		totals_global);														\
+	CountFuncLoop<NumBits, NumThreads, InnerLoop, Mode, ScanBlockCounts,	\
+		SingleBlockTask>(													\
+		keys_global, bit, vt, taskQuot, taskRem, numTasks,					\
+		counts_global, totals_global);										\
 }
 

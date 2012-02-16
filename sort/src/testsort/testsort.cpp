@@ -221,6 +221,20 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 	Throughput throughput;
 	for(int test(0); test < NumTests; ++test) {
 
+		sortStatus_t status = MgpuBenchmark(mgpuTerms, terms.engine, &elapsed);
+		if(SORT_STATUS_SUCCESS != status) {
+			printf("Error in MGPU sort on numBits = %d: %s\n", terms.numBits,
+				sortStatusString(status));
+			return false;
+		}
+		if(terms.bitPass) {
+			elapsed /= (terms.numBits / terms.bitPass);
+			terms.numBits = terms.bitPass;
+		}
+		throughput = CalcThroughput(terms.numBits, terms.count, 
+			terms.valueCount, terms.numIterations, elapsed);
+		mgpu.Max(throughput);
+
 		// B40C benchmark
 		if(0 == terms.valueCount || 1 == terms.valueCount) {
 			cudaError_t error = B40cBenchmark(b40cTerms, &elapsed);
@@ -233,6 +247,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 			b40c.Max(throughput);
 		}
 
+	/*
 		
 		// CUDPP benchmark
 		if(terms.cudppHandle && (0 == terms.valueCount || 
@@ -246,23 +261,8 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 			throughput = CalcThroughput(terms.numBits, cudppTerms.count,
 				terms.valueCount, terms.numIterations, elapsed);
 			cudpp.Max(throughput);
-		}
-	
+		}*/
 		// MGPU benchmark
-		sortStatus_t status = MgpuBenchmark(mgpuTerms, terms.engine, &elapsed);
-		if(SORT_STATUS_SUCCESS != status) {
-			printf("Error in MGPU sort on numBits = %d: %s\n", terms.numBits,
-				sortStatusString(status));
-			return false;
-		}
-
-		if(terms.bitPass) {
-			elapsed /= (terms.numBits / terms.bitPass);
-			terms.numBits = terms.bitPass;
-		}
-		throughput = CalcThroughput(terms.numBits, terms.count, 
-			terms.valueCount, terms.numIterations, elapsed);
-		mgpu.Max(throughput);
 	}
 
 	// Read the MGPU results into host memory.
@@ -316,9 +316,9 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine,
 	CUDPPHandle cudppHandle) {
 
 	// Benchmark thrust::sort
-	Throughput thrustThroughput = Thrust(context);
-	printf("32 bit key sort with thrust::sort: %4.7lf M/s\n\n", 
-		thrustThroughput.elementsPerSec / 1.0e6);
+//	Throughput thrustThroughput = Thrust(context);
+//	printf("32 bit key sort with thrust::sort: %4.7lf M/s\n\n", 
+//		thrustThroughput.elementsPerSec / 1.0e6);
 
 	// Sort the keys and up to 1 value array with b40c. Sort the keys and all
 	// value arrays with MGPU, and compare the results.
@@ -335,7 +335,7 @@ void ComparisonBenchmark(CuContext* context, sortEngine_t engine,
 			NumIterations, NumTests);
 
 		// Test for all bit sizes.
-		for(int numBits(1); numBits <= 32; ++numBits) {
+		for(int numBits(32); numBits <= 32; ++numBits) {
 
 			printf("%2d bits  ", numBits);
 
@@ -457,6 +457,13 @@ void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
 
 
 int main(int argc, char** argv) {
+
+	for(int tid(0); tid < 64; ++tid) {
+		int index = 17 * tid;
+		int bank = index % 32;
+		printf("%2d %3d %2d\n", tid, index, bank);
+	}
+	return 0;
 
 	cuInit(0);
 	

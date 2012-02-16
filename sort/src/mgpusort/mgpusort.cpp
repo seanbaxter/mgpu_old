@@ -5,7 +5,7 @@
 
 const bool LoadKeysTexture = true;
 
-const int MaxTasks = 32 * 16;
+const int MaxTasks = 20 * 32 * 16;
 
 const char* SortStatusStrings[] = {
 	"SORT_STATUS_SUCCESS",
@@ -260,7 +260,7 @@ SortTerms ComputeSortTerms(sortEngine_t engine, int numSortThreads,
 	SortTerms terms;
 	int numValues = numSortThreads * valuesPerThread;
 	terms.numBlocks = DivUp(numElements, numValues);
-	terms.numTasks = std::min(terms.numBlocks, engine->numSMs * 
+	terms.numTasks = 10 * std::min(terms.numBlocks, engine->numSMs * 
 		LCM(countKernel->BlocksPerSM(), sortKernel->BlocksPerSM()));
 
 	terms.valuesPerBlock = numValues;
@@ -354,7 +354,7 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 	// Run the count loop.
 	CuCallStack callStack;
 	callStack.Push(data->keys[0], firstBit, terms.countValuesPerThread, 
-		terms.taskQuot, terms.taskRem, engine->countBuffer, 
+		terms.taskQuot, terms.taskRem, terms.numTasks, engine->countBuffer, 
 		engine->taskOffsets);
 	CuFunction* count = engine->count->func[numBits - 1].get();
 	result = count->Launch(terms.numTasks, 1, callStack);
