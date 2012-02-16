@@ -14,7 +14,7 @@ DEVICE volatile uint* PackedCounterRef(uint digit, uint numDigits,
 	if(8 == counterSize) {
 		if(strided) {
 			uint index = numThreads * ((numDigits / 4 - 1) & digit);
-			shift = 8 * (digit / 4);
+			shift = 8 * (digit / (numDigits / 4));
 			counter = &counters_shared[index];
 		} else {
 			uint index = numThreads * (digit / 4);
@@ -24,7 +24,7 @@ DEVICE volatile uint* PackedCounterRef(uint digit, uint numDigits,
 	} else if(16 == counterSize) { 
 		if(strided) {
 			uint index = numThreads * ((numDigits / 2 - 1) & digit);
-			shift = 16 * (digit / 2);
+			shift = 16 * (digit / (numDigits / 2));
 			counter = &counters_shared[index];
 		} else {
 			uint index = numThreads * (digit / 2);
