@@ -549,7 +549,7 @@ CUresult CreateCuFunction(const char* name, CuModule* module, int3 blockShape,
 	f->_module = module;
 	f->_functionName = name;
 	f->_blockShape = blockShape;
-	f->_blocksPerSM = ::BlocksPerSM(attr.numRegs, attr.maxThreadsPerBlock,
+	f->_blocksPerSM = ::BlocksPerSM(attr.numRegs, blockShape.x,
 		attr.sharedSizeBytes, attr.binaryVersion / 10);
 
 	ppFunction->swap(f);

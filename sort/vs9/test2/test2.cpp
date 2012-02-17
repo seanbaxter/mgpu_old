@@ -13,8 +13,6 @@ const int NumCountWarps = NumCountThreads / WARP_SIZE;
 
 const int NumHistThreads = 1024;
 
-const int NumSortValuesPerThread = 8;
-
 void EasyRadixSort(int numBits, const std::vector<uint>& source,
 	std::vector<uint>& dest) {
 		
@@ -44,7 +42,80 @@ void EasyRadixSort(int numBits, const std::vector<uint>& source,
 
 
 bool TestSort(CuContext* context, int numBits, int numBlocks, 
-	int numSortThreads) {
+	int numSortThreads, int valuesPerThread) {
+
+	const int NumValues = numSortThreads * valuesPerThread;
+	const int NumDigits = 1<< numBits;
+
+	ModulePtr sortModule;
+	CUresult result = context->LoadModuleFilename(
+		"../../src/cubin/sort2.cubin", &sortModule);
+
+	char funcName[128];
+	sprintf(funcName, "MultiScan%d_%d_%d", numBits, valuesPerThread,
+		numSortThreads);
+	FunctionPtr sortFunc;
+	result = sortModule->GetFunction(funcName,
+		make_int3(numSortThreads, 1, 1), &sortFunc);
+
+	CUtexref keys_texture_in;
+	result = sortModule->GetTexRef("keys_texture_in", &keys_texture_in);
+	result = cuTexRefSetFormat(keys_texture_in, CU_AD_FORMAT_UNSIGNED_INT32, 4);
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// Generate digit arrays.
+
+	std::tr1::uniform_int<uint> r(0, NumDigits - 1);
+
+	std::vector<uint> counts(NumDigits);
+	std::vector<uint> host(NumValues);
+
+	for(int i(0); i < NumValues; ++i) {
+		host[i] = r(mt19937);
+		++counts[host[i]];
+	}
+
+	std::vector<uint> digitScan(NumDigits);
+	int last = 0;
+	for(int i(0); i < NumDigits; ++i) {
+		digitScan[i] = last;
+		last += digitScan[i];
+	}
+
+	DeviceMemPtr deviceSource, deviceScatter;
+	result = context->MemAlloc(host, &deviceSource);
+	result = context->MemAlloc<uint>(NumValues, &deviceScatter);
+
+	size_t offset;
+	result = cuTexRefSetAddress(&offset, keys_texture_in, deviceSource->Handle(),
+		4 * NumValues);
+
+	CuCallStack callStack;
+	callStack.Push(deviceSource, 0, deviceScatter);
+
+	sortFunc->Launch(1, 1, callStack);
+
+	std::vector<uint> scatter;
+	deviceScatter->ToHost(scatter);
+
+	std::vector<uint> counts2(NumDigits);
+	for(int i(0); i < numSortThreads; ++i) {
+		const uint* packed = &scatter[i * (NumDigits / 2)];
+		for(int d(0); d < NumDigits / 2; ++d) {
+			uint x = packed[d];
+			counts2[d] += 0xffff & x;
+			counts2[d + NumDigits / 2] += x>> 16;
+		}
+	}
+
+
+
+
+	int i = 0;
+
+	return 0;
+	/*
 
 	printf("Testing with %d bits.\n", numBits);
 		
@@ -262,7 +333,7 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 		}
 	}
 
-	return 0;	
+	return 0;	*/
 }
 
 int main(int argc,  char** argv) {
@@ -275,8 +346,8 @@ int main(int argc,  char** argv) {
 	ContextPtr context;
 	result = CreateCuContext(device, 0, &context);
 
-	for(int numBits = 1; numBits <= 7; ++numBits) {
-		TestSort(context, numBits, 101, 128);
+	for(int numBits = 5; numBits <= 5; ++numBits) {
+		TestSort(context, numBits, 1, 64, 16);
 	}
 
 }
