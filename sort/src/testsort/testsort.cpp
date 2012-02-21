@@ -375,8 +375,8 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 	const int* testSizes, int numIterations, int numTests,
 	const char* tableSuffix) {
 
-	for(int valueCount(-1); valueCount <= 6; ++valueCount) {
-		for(int numThreads(128); numThreads <= 256; numThreads *= 2) {
+	for(int valueCount(0); valueCount <= 0; ++valueCount) {
+		for(int numThreads(128); numThreads <= 128; numThreads *= 2) {
 			
 			// Formulate a table name like sort_128_8_key_simple_table
 			printf("sort_%d_8_", numThreads);
@@ -391,7 +391,7 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 
 			printf("%s\n", tableSuffix);
 
-			for(int bitPass(1); bitPass <= 6; ++bitPass) {
+			for(int bitPass(5); bitPass <= 5; ++bitPass) {
 				BenchmarkTerms terms;
 				terms.context = context;
 				terms.engine = engine;
@@ -424,7 +424,7 @@ void BenchmarkBitPassLarge(CuContext* context, sortEngine_t engine) {
 		8000000,
 		7000000
 	};
-	BenchmarkBitPass(context, engine, LargePass, 8, 4, "large");
+	BenchmarkBitPass(context, engine, LargePass, 12, 1, "large");
 }
 
 void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
@@ -461,12 +461,12 @@ int main(int argc, char** argv) {
 		return 0;
 	}
 //	BenchmarkBitPassSmall(context, engine);
-//	BenchmarkBitPassLarge(context, engine);
+	BenchmarkBitPassLarge(context, engine);
 
 	CUDPPHandle cudppHandle;
 	cudppCreate(&cudppHandle);
 	
-	ComparisonBenchmark(context, engine, cudppHandle);
+//	ComparisonBenchmark(context, engine, cudppHandle);
 
 	cudppDestroy(cudppHandle);
 
