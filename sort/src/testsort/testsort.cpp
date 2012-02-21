@@ -390,8 +390,8 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 	const char* tableSuffix) {
 
 	for(int valueCount(0); valueCount <= 0; ++valueCount) {
-		for(int numThreads(64); numThreads <= 128; numThreads *= 2) {
-			for(int vt(16); vt <= 24; vt += 8) {
+		for(int numThreads(64); numThreads <= 64; numThreads *= 2) {
+			for(int vt(24); vt <= 24; vt += 8) {
 			
 				// Formulate a table name like sort_128_8_key_simple_table
 				printf("sort_%d_%d_", numThreads, vt);
@@ -406,7 +406,7 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 
 				printf("%s\n", tableSuffix);
 
-				for(int bitPass(1); bitPass <= 7; ++bitPass) {
+				for(int bitPass(5); bitPass <= 5; ++bitPass) {
 					BenchmarkTerms terms;
 					terms.context = context;
 					terms.engine = engine;
@@ -445,7 +445,7 @@ void BenchmarkBitPassLarge(CuContext* context, sortEngine_t engine) {
 		8000000,
 		7000000
 	};
-	BenchmarkBitPass(context, engine, LargePass, 16, 5, "large");
+	BenchmarkBitPass(context, engine, LargePass, 12, 1, "large");
 }
 
 void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
