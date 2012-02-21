@@ -5,6 +5,9 @@
 
 const bool LoadKeysTexture = true;
 
+const int MaxBlockSize = 3072;
+const int MinBlockSize = 1024;
+
 const int MaxTasks = 20 * 32 * 16;
 
 const char* SortStatusStrings[] = {
@@ -35,6 +38,9 @@ const int NumCountThreads = WarpSize * NUM_COUNT_WARPS;
 
 const int NumHistWarps = NUM_HIST_WARPS;
 const int NumHistThreads = WarpSize * NUM_HIST_WARPS;
+
+const int NumDownsweepWarps = NUM_DOWNSWEEP_WARPS;
+const int NumDownsweepThreads = WarpSize * NUM_DOWNSWEEP_WARPS;
 
 const int SORT_END_KEY_SAVE = 1;
 const int SORT_END_KEY_SET = 2;
@@ -98,6 +104,29 @@ sortStatus_t LoadHistModule(sortEngine_d* engine, const char* path,
 	return SORT_STATUS_SUCCESS;
 }
 
+sortStatus_t LoadDownsweepModule(sortEngine_d* engine, const char* path, 
+	std::auto_ptr<sortEngine_d::DownsweepKernel>* downsweep) {
+
+	std::auto_ptr<sortEngine_d::DownsweepKernel> 
+		d(new sortEngine_d::DownsweepKernel);
+
+	std::ostringstream oss;
+	oss<< path<< "sortdownsweep.cubin";
+
+	CUresult result = engine->context->LoadModuleFilename(oss.str(),
+		&d->module);
+	if(CUDA_SUCCESS != result) return SORT_STATUS_KERNEL_NOT_FOUND;
+
+	bool success = LoadFunctions("SortDownsweep", NumDownsweepThreads, 
+		d->module, d->func);
+	if(!success) return SORT_STATUS_KERNEL_ERROR;
+
+	*downsweep = d;
+	return SORT_STATUS_SUCCESS;
+}
+
+
+
 sortStatus_t LoadSortModule(sortEngine_d* engine, const char* path, 
 	int numThreads, int valuesPerThread, int valueCode, bool transList, 
 	std::auto_ptr<sortEngine_d::SortKernel>* sort) {
@@ -105,7 +134,7 @@ sortStatus_t LoadSortModule(sortEngine_d* engine, const char* path,
 	std::auto_ptr<sortEngine_d::SortKernel> s(new sortEngine_d::SortKernel);
 
 	std::ostringstream oss;
-	oss<< path<< "sortloop_"<< numThreads<< "_"<< valuesPerThread<< "_";
+	oss<< path<< "sort_"<< numThreads<< "_"<< valuesPerThread<< "_";
 	switch(valueCode) {
 		case 0: oss<< "key"; break;
 		case 1: oss<< "index"; break;
@@ -118,7 +147,7 @@ sortStatus_t LoadSortModule(sortEngine_d* engine, const char* path,
 		&s->module);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_KERNEL_NOT_FOUND;
 	
-	bool success = LoadFunctions("RadixSortLoop", numThreads, s->module, 
+	bool success = LoadFunctions("RadixSort", numThreads, s->module, 
 		s->func);
 	if(!success) return SORT_STATUS_KERNEL_ERROR;
 
@@ -138,17 +167,18 @@ sortStatus_t LoadKernels(sortEngine_t engine, int numSortThreads,
 	int valuesPerThread, bool useTransList, int valueCode, 
 	sortEngine_d::SortKernel** pSort) {
 
-	if(128 != numSortThreads && 256 != numSortThreads)
+	if(64 != numSortThreads && 128 != numSortThreads)
 		return SORT_STATUS_INVALID_VALUE;
-	if(8 != valuesPerThread)
+	if(16 != valuesPerThread && 24 != valuesPerThread)
 		return SORT_STATUS_INVALID_VALUE;
 	if(valueCode < 0 || valueCode > 4)
 		return SORT_STATUS_INVALID_VALUE;
 
 	// Load the sort kernel.
-	int numThreadsCode = 256 == numSortThreads;
+	int numThreadsCode = 128 == numSortThreads;
+	int vtCode = 24 == valuesPerThread;
 	std::auto_ptr<sortEngine_d::SortKernel>& sort = 
-		engine->sort[numThreadsCode][valueCode];
+		engine->sort[numThreadsCode][vtCode][valueCode];
 	if(!sort.get()) {
 		sortStatus_t status = LoadSortModule(engine, engine->kernelPath.c_str(),
 			numSortThreads, valuesPerThread, valueCode, useTransList, &sort);
@@ -187,7 +217,7 @@ sortStatus_t SORTAPI sortCreateEngine(const char* kernelPath,
 	CUresult result = AttachCuContext(&e->context);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_INVALID_CONTEXT;
 	if(2 != e->context->Device()->ComputeCapability().first)
-		return SORT_STATUS_UNSUPPORTED_DEVICE;;
+		return SORT_STATUS_UNSUPPORTED_DEVICE;
 
 	e->kernelPath = kernelPath;
 	e->numSMs = e->context->Device()->NumSMs();
@@ -198,13 +228,19 @@ sortStatus_t SORTAPI sortCreateEngine(const char* kernelPath,
 	if(SORT_STATUS_SUCCESS != status) return status;
 
 	// Load the hist module - there is just one for all permutations of the
-	// sort, so load it here.
+	// sort.
 	status = LoadHistModule(e, kernelPath, &e->hist);
 	if(SORT_STATUS_SUCCESS != status) return status;
 
+	// Load the downsweep module - there is just one for all permutations of the
+	// sort.
+	status = LoadDownsweepModule(e, kernelPath, &e->downsweep);
+	if(SORT_STATUS_SUCCESS != status) return status;
+
+
 	// If we need to set the end keys to -1 to eliminate range comparisons, it
 	// may be necessary to first save those values here.
-	result = e->context->MemAlloc<uint>(2048, &e->keyRestoreBuffer);
+	result = e->context->MemAlloc<uint>(MaxBlockSize, &e->keyRestoreBuffer);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_HOST_ALLOC_FAILED;
 
 	// Reserve scan offsets for each task.
@@ -239,38 +275,52 @@ sortStatus_t SORTAPI sortReleaseEngine(sortEngine_t engine) {
 struct SortTerms {
 	int valuesPerBlock;
 	int numBlocks;
-	int countValuesPerThread;
 	
 	int numTasks;
 	int taskQuot;
 	int taskRem;
 
+	int countValuesPerThread;
+	int countBlocks;
+
+	int downsweepBlocks;
+
 	int countSize;
+	int scatterSize;
 	int numEndKeys;
 };
 
 SortTerms ComputeSortTerms(sortEngine_t engine, int numSortThreads,
 	int valuesPerThread, int valueCode, int numBits, int numElements) {
 
-	CuFunction* countKernel = engine->count->func[numBits - 1].get();
+	CuFunction* count = engine->count->func[numBits - 1].get();
+	CuFunction* downsweep = engine->downsweep->func[numBits - 1].get();
 
-	CuFunction* sortKernel = engine->sort[numSortThreads / 128 - 1]
-		[valueCode]->func[numBits - 1].get();
+	CuFunction* sortKernel = engine->sort[128 == numSortThreads]
+		[24 == valuesPerThread][valueCode]->func[numBits - 1].get();
 
 	SortTerms terms;
 	int numValues = numSortThreads * valuesPerThread;
-	terms.numBlocks = DivUp(numElements, numValues);
-	terms.numTasks = 10 * std::min(terms.numBlocks, engine->numSMs * 
-		LCM(countKernel->BlocksPerSM(), sortKernel->BlocksPerSM()));
+	int numDigits = 1<< numBits;
 
 	terms.valuesPerBlock = numValues;
-	terms.countValuesPerThread = numValues / WarpSize;
+	terms.numBlocks = DivUp(numElements, numValues);
+
+	int lcm = LCM(NumCountWarps * count->BlocksPerSM(), 
+		NumDownsweepWarps * downsweep->BlocksPerSM());
+	terms.numTasks = std::min(terms.numBlocks, engine->numSMs * lcm);
 
 	div_t d = div(terms.numBlocks, terms.numTasks);
 	terms.taskQuot = d.quot;
 	terms.taskRem = d.rem;
 
-	terms.countSize = 2 * terms.numBlocks * (1<< numBits);
+	terms.countValuesPerThread = numValues / WarpSize;
+	terms.countBlocks = DivUp(terms.numTasks, NumCountWarps);
+
+	terms.downsweepBlocks = DivUp(terms.numTasks, NumDownsweepWarps);
+
+	terms.countSize = 2 * terms.numBlocks * numDigits;
+	terms.scatterSize = 4 * numDigits * terms.numBlocks;
 
 	terms.numEndKeys = RoundUp(numElements, numValues) - numElements;
 
@@ -281,7 +331,8 @@ SortTerms ComputeSortTerms(sortEngine_t engine, int numSortThreads,
 ////////////////////////////////////////////////////////////////////////////////
 // AllocSortResources
 
-sortStatus_t AllocSortResources(int countSize, sortEngine_t engine) {
+sortStatus_t AllocSortResources(int countSize, int scatterSize, 
+	sortEngine_t engine) {
 
 	// The count kernel will pack counters together to optimize space. However
 	// it can't pack more than numCountWarps blocks into a single segment
@@ -292,6 +343,14 @@ sortStatus_t AllocSortResources(int countSize, sortEngine_t engine) {
 		CUresult result = engine->context->ByteAlloc(countSize, &mem);
 		if(CUDA_SUCCESS != result) return SORT_STATUS_DEVICE_ALLOC_FAILED;
 		engine->countBuffer = mem;
+	}
+
+	if(!engine->scatterOffsets.get() ||
+		(scatterSize > (int)engine->scatterOffsets->Size())) {
+		DeviceMemPtr mem;
+		CUresult result = engine->context->ByteAlloc(scatterSize, &mem);
+		if(CUDA_SUCCESS != result) return SORT_STATUS_DEVICE_ALLOC_FAILED;
+		engine->scatterOffsets = mem;
 	}
 
 	return SORT_STATUS_SUCCESS;
@@ -329,7 +388,7 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 	SortTerms terms = ComputeSortTerms(engine, numSortThreads, valuesPerThread,
 		valueCode, numBits, data->numElements);
 
-	status = AllocSortResources(terms.countSize, engine);
+	status = AllocSortResources(terms.countSize, terms.scatterSize, engine);
 	if(SORT_STATUS_SUCCESS != status) return status;
 	
 	// Save the trailing keys
@@ -354,10 +413,10 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 	// Run the count loop.
 	CuCallStack callStack;
 	callStack.Push(data->keys[0], firstBit, terms.countValuesPerThread, 
-		terms.taskQuot, terms.taskRem, terms.numTasks, engine->countBuffer, 
+		terms.taskQuot, terms.taskRem, terms.numBlocks, engine->countBuffer, 
 		engine->taskOffsets);
 	CuFunction* count = engine->count->func[numBits - 1].get();
-	result = count->Launch(terms.numTasks, 1, callStack);
+	result = count->Launch(terms.countBlocks, 1, callStack);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 
 	// Run the histogram pass.
@@ -367,19 +426,24 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 	result = engine->hist->func[numBits - 1]->Launch(1, 1, callStack);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 
-	// Run the sort loop.
-	if(LoadKeysTexture) {
-		// Select the current source range of keys into keys_texture_in.
-		size_t offset;
-		CUdeviceptr ptr = data->keys[0];
-		result = cuTexRefSetAddress(&offset, sort->keysTexRef, ptr,
-			4 * terms.valuesPerBlock * terms.numBlocks);
-		if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
-	}
+	// Run the downsweep pass.
+	callStack.Reset();
+	callStack.Push(engine->taskOffsets, terms.taskQuot, terms.taskRem,
+		terms.numBlocks, terms.valuesPerBlock, engine->countBuffer,
+		engine->scatterOffsets);
+	CuFunction* downsweep = engine->downsweep->func[numBits - 1].get();
+	result = downsweep->Launch(terms.downsweepBlocks, 1, callStack);
+	
+	// Select the current source range of keys into keys_texture_in.
+	size_t offset;
+	CUdeviceptr ptr = data->keys[0];
+	result = cuTexRefSetAddress(&offset, sort->keysTexRef, ptr,
+		4 * terms.valuesPerBlock * terms.numBlocks);
+	if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 	
 	callStack.Reset();
-	callStack.Push(data->keys[0], engine->countBuffer, engine->taskOffsets,
-		firstBit, data->keys[1], terms.taskQuot, terms.taskRem, (CUdeviceptr)0);
+	callStack.Push(data->keys[0], engine->scatterOffsets, firstBit,
+		data->keys[1]);
 	
 	switch(valueCode) {
 		case 1:		// VALUE_TYPE_INDEX
@@ -402,7 +466,7 @@ sortStatus_t sortPass(sortEngine_t engine, sortData_t data, int numSortThreads,
 
 	CuFunction* sortFunc = sort->func[numBits - 1].get();
 
-	result = sortFunc->Launch(terms.numTasks, 1, callStack);
+	result = sortFunc->Launch(terms.numBlocks, 1, callStack);
 	if(CUDA_SUCCESS != result) return SORT_STATUS_LAUNCH_ERROR;
 
 	// Swap the source and target buffers in the data structure.
@@ -460,7 +524,7 @@ sortStatus_t sortArrayFromList(sortEngine_t engine, sortData_t data,
 
 	// Loop through each element of the pass table.
 	bool firstPass = true;
-	for(int i(0); i < 6; ++i)
+	for(int i(0); i < 7; ++i)
 		for(int j(0); j < table.pass[i]; ++j) {
 			int endBit = bit + i + 1;
 
@@ -504,8 +568,8 @@ sortStatus_t SORTAPI sortArray(sortEngine_t engine, sortData_t data) {
 sortStatus_t SORTAPI sortArrayEx(sortEngine_t engine, sortData_t data, 
 	int numSortThreads, int valuesPerThread, int bitPass, bool useTransList) {
 
-	if((128 != numSortThreads && 256 != numSortThreads) || 
-		(8 != valuesPerThread))
+	if((64 != numSortThreads && 128 != numSortThreads) || 
+		(16 != valuesPerThread && 24 != valuesPerThread))
 		return SORT_STATUS_INVALID_VALUE;
 
 	if(data->numElements > data->maxElements) return SORT_STATUS_INVALID_VALUE;
@@ -546,7 +610,7 @@ sortStatus_t SORTAPI sortCreateData(sortEngine_t engine, int maxElements,
 	std::auto_ptr<sortData_d> d(new sortData_d);
 
 	// sortData_d
-	d->maxElements = RoundUp(maxElements, 2048);
+	d->maxElements = RoundUp(maxElements, MaxBlockSize);
 	d->numElements = maxElements;
 	d->valueCount = valueCount;
 	d->firstBit = 0;
@@ -578,15 +642,18 @@ sortStatus_t SORTAPI sortAllocData(sortEngine_t engine, sortData_t data) {
 	if(data->valueCount > 6) return SORT_STATUS_INVALID_VALUE;
 
 	DeviceMemPtr mem[7 * 2];
-	uint maxElements = RoundUp(data->maxElements, 2048);
+	uint maxElements = RoundUp(data->maxElements, MaxBlockSize);
 	int count = (-1 == data->valueCount) ? 1 : data->valueCount;
 
 	CUresult result = CUDA_SUCCESS;
 
 	// Alloc count space.
-	int numBlocks = data->maxElements / 1024;
-	int countSize = 4 * (1<< MAX_BITS) * numBlocks;
-	sortStatus_t status = AllocSortResources(countSize, engine);
+	int numBlocks = DivUp(data->maxElements, MinBlockSize);
+	int maxDigits = 1<< MAX_BITS;
+	int countSize = 2 * maxDigits * numBlocks;
+	int scatterSize = 4 * maxDigits * numBlocks;
+
+	sortStatus_t status = AllocSortResources(countSize, scatterSize, engine);
 	if(SORT_STATUS_SUCCESS != status) return status;
 
 	// Alloc temp space if the client doesn't provide it.

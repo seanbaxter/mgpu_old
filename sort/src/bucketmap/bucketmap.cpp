@@ -115,11 +115,14 @@ Pair ComputeTransactionCounts(int numBits, int numValues) {
 	return transCountPair;
 }
 
+const int TestSizes[] = {
+	512, 768, 1024, 1536, 2048, 3072, 4096
+};
+const int NumTests = sizeof(TestSizes) / sizeof(int);
 
 int main() {
 
 	const int FirstTest = 512;
-	const int NumTests = 3;				// 512, 1024, 2048
 	const int MaxBits = 7;				// 1 - 7 inclusive
 	const int NumIterations = 100;
 
@@ -127,14 +130,14 @@ int main() {
 	printf("Each test run over %d iterations.\n\n", NumIterations);
 
 	// Display with vals first, then numBits, then block size.
-	for(int vals(0); vals <= 6; ++vals) {
+	for(int vals(0); vals <= 1; ++vals) {
 		printf("VALUE COUNT=%d\n", vals);
 
 		for(int numBits(1); numBits <= MaxBits; ++numBits) {
 			printf(" BITS=%d\n", numBits);
 
 			for(int test(0); test < NumTests; ++test) {
-				int numValues = FirstTest<< test;
+				int numValues = TestSizes[test];
 				int numWarps = numValues / WARP_SIZE;
 				printf("  VALS=%4d  ", numValues);
 

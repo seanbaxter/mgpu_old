@@ -8,6 +8,8 @@
 
 #define DIV_UP(a, b) (((a) + (b) - 1) / (b))
 
+#define IS_POW_2(a) (0 == (a & (a - 1)))
+
 #define WARP_SIZE 32
 #define LOG_WARP_SIZE 5
 
@@ -161,6 +163,14 @@ DEVICE2 void StoreShifted(volatile uint* shared, uint shiftedIndex, uint val) {
 	*((volatile uint*)(((volatile char*)shared) + shiftedIndex)) = val;
 }
 
+// non-volatile for global memory.
+DEVICE void StoreToGlobal(uint* global, uint scatter, uint value) {
+	*(uint*)((char*)(global) + scatter) = value;
+}
+DEVICE void StoreToGlobal2(uint* global, uint scatter, uint index, uint value) {
+	*(uint*)((char*)(global) + scatter + index) = value;
+}
+
 
 // Put a float into radix order.
 DEVICE float UintToFloat(uint u) {
@@ -277,7 +287,6 @@ DEVICE2 uint IntraWarpParallelScan(uint lane, uint x, volatile uint* shared,
 // Run a scan over 64 elements where each thread manages two values. Adjacent
 // values are loaded into threads to allow for a single parallel scan.
 
-// 
 // If type == 0, val.x is 2 * lane + 0 and val.y is 2 * lane + 1 (optimal).
 // If type == 1, val.x is lane and val.y is lane + 32.
 DEVICE2 uint2 IntraWarpScan64(uint lane, uint2 val, volatile uint* shared,
@@ -345,10 +354,10 @@ DEVICE2 uint4 IntraWarpScan128(uint lane, uint4 val, volatile uint* shared,
 		val.z = scan - val.w;
 		val.w = scan;
 	} else {
-		val.x = scan;
-		val.y = scan + val.x;
-		val.z = scan + offset1;
 		val.w = scan + offset2;
+		val.z = scan + offset1;
+		val.y = scan + val.x;
+		val.x = scan;
 	}
 
 	if(1 == type) {

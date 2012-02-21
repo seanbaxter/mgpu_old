@@ -103,14 +103,47 @@ DEVICE2 uint StridedMultiScan(uint tid, uint x, volatile uint* shared,
 			}
 
 			// Store the totals at the end of shared.
-			totals_shared[tid] = x;
+			totals_shared[tid + tid / WARP_SIZE] = x;
 		}
 		__syncthreads();
 
-		IntraWarpParallelScan<NumBits>(tid, totals_shared, false);
+		if(tid < WARP_SIZE) {
+			if(5 == NumBits) {
+				IntraWarpParallelScan<NumBits>(tid, totals_shared, false);
+			} else if(6 == NumBits) {
+				uint index = 2 * tid;
+				index += index / WARP_SIZE;
+
+				uint2 val;
+				val.x = totals_shared[index];
+				val.y = totals_shared[index + 1];
+
+				val = IntraWarpScan64(tid, val, totals_shared, false, false, 0);
+
+				totals_shared[index] = val.x;
+				totals_shared[index + 1] = val.y;
+			} else if(7 == NumBits) {
+				uint index = 4 * tid;
+				index += index / WARP_SIZE;
+
+				uint4 val;
+				val.x = totals_shared[index];
+				val.y = totals_shared[index + 1];
+				val.z = totals_shared[index + 2];
+				val.w = totals_shared[index + 3];
+
+				val = IntraWarpScan128(tid, val, totals_shared, false, false,
+					0);
+
+				totals_shared[index] = val.x;
+				totals_shared[index + 1] = val.y;
+				totals_shared[index + 2] = val.z;
+				totals_shared[index + 3] = val.w;
+			}
+		}
 		__syncthreads();
 
-		uint exc = totals_shared[lane2] + shared[tid];
+		uint exc = totals_shared[lane2 + lane2 / WARP_SIZE] + shared[tid];
 		return exc;
 	}
 }
@@ -127,11 +160,10 @@ DEVICE2 void SortHist(uint* blockTotals_global, uint numTasks,
 	const int NumColumns = NumThreads / NumDigits;
 
 	__shared__ uint counts_shared[2 * NumThreads];
-	__shared__ uint totals_shared[NumDigits];
+	__shared__ uint totals_shared[NumThreads];
 	
 	uint tid = threadIdx.x;
 	uint lane2 = (NumDigits - 1) & tid;
-
 
 	// Figure out which interval of the block counts to assign to each column.
 	uint col = tid / NumDigits;
@@ -144,13 +176,10 @@ DEVICE2 void SortHist(uint* blockTotals_global, uint numTasks,
 	uint end = NumDigits * range.y;
 	uint stride = NumDigits;
 
-
-
 	////////////////////////////////////////////////////////////////////////////
 	// Upsweep pass. Divide the blocks up over the warps. We want warp 0 to 
 	// process the first section of digit counts, warp 1 process the second 
 	// section, etc.
-
 	uint laneCount = 0;
 	for(int i = start; i < end; i += stride)
 		laneCount += blockTotals_global[i];
@@ -161,12 +190,12 @@ DEVICE2 void SortHist(uint* blockTotals_global, uint numTasks,
 		counts_shared, totals_shared);
 
 	if(totalsScan_global && (tid < NumDigits))
-		totalsScan_global[tid] = totals_shared[tid];
+		totalsScan_global[tid] = totals_shared[tid + tid / WARP_SIZE];
 
 	// Iterate over the block totals once again, adding and inc'ing laneExc.
 	for(int i = start; i < end; i += stride) {
 		uint blockCount = blockTotals_global[i];
-		blockTotals_global[i] = laneExc;
+		blockTotals_global[i] = 4 * laneExc;
 		laneExc += blockCount;
 	}
 }
@@ -174,9 +203,9 @@ DEVICE2 void SortHist(uint* blockTotals_global, uint numTasks,
 
 #define GEN_SORTHIST_FUNC(Name, NumThreads, NumBits, BlocksPerSM)			\
 																			\
-extern "C" void __global__ Name(uint* blockTotals_global, uint numBlocks,	\
+extern "C" void __global__ Name(uint* blockTotals_global, uint numTasks,	\
 	uint* totalsScan_global) {												\
-	SortHist<NumThreads, NumBits>(blockTotals_global, numBlocks,			\
+	SortHist<NumThreads, NumBits>(blockTotals_global, numTasks,				\
 		totalsScan_global);													\
 }
 

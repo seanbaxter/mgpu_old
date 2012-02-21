@@ -7,4 +7,6 @@
 
 #define NUM_HIST_WARPS 32
 
+#define NUM_DOWNSWEEP_WARPS 4
+
 #define MAX_DEVICE_SMS 32

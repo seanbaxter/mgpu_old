@@ -48,8 +48,9 @@ inline T DivUp(T num, T den) {
 }
 template<typename T>
 T RoundUp(T x, T y) {
-//	return x + ((y - x) % y);
-	return ~(y - 1) & (x + y - 1);
+	int rem = x % y;
+	return rem ? (x + y - rem) : x;
+//	return ~(y - 1) & (x + y - 1);
 }
 
 template<typename T>

@@ -25,13 +25,6 @@ DEVICE void WriteKeysInplace(uint block, uint tid, uint* sorted_global,
 // adds, causing nvcc to generate suboptimal code, and failing to exploit VADD
 // for 3-parameter addition.
 
-DEVICE void StoreToGlobal(uint* global, uint scatter, uint value) {
-	*(uint*)((char*)(global) + scatter) = value;
-}
-DEVICE void StoreToGlobal2(uint* global, uint scatter, uint index, uint value) {
-	*(uint*)((char*)(global) + scatter + index) = value;
-}
-
 DEVICE void ScatterKeysSimple(uint tid, uint* sorted_global, uint bitOffset, 
 	uint numBits, const uint* compressed, const Values keys) {
 

@@ -31,8 +31,8 @@ sortStatus_t MgpuBenchmark(MgpuTerms& terms, sortEngine_t engine,
 		if(!terms.bitPass)
 			status = sortArray(engine, &data);
 		else
-			status = sortArrayEx(engine, &data, terms.numThreads, 8,
-				terms.bitPass, terms.useTransList);
+			status = sortArrayEx(engine, &data, terms.numThreads,
+				terms.valuesPerThread, terms.bitPass, terms.useTransList);
 		if(SORT_STATUS_SUCCESS != status) return status;
 	}
 	*elapsed = timer.Stop();

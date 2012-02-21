@@ -24,8 +24,8 @@ DEVICE2 volatile uint* PackedCounterRef(uint digit, uint tid,
 	volatile uint* counter;
 	if(8 == counterSize) {
 		if(strided) {
-			uint index = NumThreads * ((NumDigits / 4 - 1) & digit);
-			shift = 8 * (digit / (NumDigits / 4));
+			uint index = NumThreads * ((DIV_UP(NumDigits, 4) - 1) & digit);
+			shift = 8 * (digit / DIV_UP(NumDigits,  4));
 			counter = &counters_shared[index + tid];
 		} else {
 			uint index = NumThreads * (digit / 4);
@@ -51,7 +51,7 @@ DEVICE2 volatile uint* PackedCounterRef(uint digit, uint tid,
 			uint index = NumThreads * (digit / 2);
 			shift = 16 * (1 & digit);
 			counter = &counters_shared[index + tid];
-		}
+		} 
 	}
 	return counter;
 }
@@ -60,9 +60,8 @@ DEVICE2 volatile uint* PackedCounterRef(uint digit, uint tid,
 template<int NumDigits, int NumThreads>
 DEVICE2 uint IncPackedCounter(uint digit, uint tid,
 	volatile uint* counters_shared, int counterSize, bool strided, 
-	uint value) {
+	uint value, uint& shift) {
 
-	uint shift;
 	volatile uint* p = PackedCounterRef<NumDigits, NumThreads>(digit, tid,
 		counters_shared, counterSize, strided, shift);
 	uint counter = *p;
@@ -81,16 +80,55 @@ DEVICE2 uint GatherPackedCounter(uint digit, uint tid,
 	return *p;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////
+// MultiscanParams
+
+// Parameters and sizes for multiscan.
+
+template<int NumThreads, int NumBits>
+struct MultiscanParams {
+
+	static const int NumDigits = 1<< NumBits;
+	static const int NumCounters = NumDigits / 2;
+
+	static const int TotalCounters = NumThreads * NumCounters;
+	static const int SegLen = TotalCounters / NumThreads + 1;
+
+	// Each raking thread processes SegLen counters, so NumScanValues is total
+	// number of raking scan values. These values are colocated with the 
+	// column counters.
+	static const int NumScanValues = NumThreads * SegLen;
+	static const int NumRedValues = NumThreads / WARP_SIZE;
+
+	static const int TotalRedValues = WARP_SIZE * NumRedValues;
+	static const int RedFootprint = TotalRedValues + TotalRedValues / WARP_SIZE;
+
+	static const int ParallelScanSize = WARP_SIZE + WARP_SIZE / 2;
+
+	// Allocate at least this much shared memory per block to facilitate the
+	// parallel multiscan.
+	static const int ScratchSize = NumScanValues + RedFootprint +
+		ParallelScanSize;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+
+
+// recalcCounts = false: keep the thread-local per-digit scans in register.
+// recalcCounts = true: discard the thread-local per-digit scans prior to
+//		the parallel scan. The recompute the histogram counts after the
+//		parallel scan. This reduces register pressure.
+
+// reloadParallel = false: keep the multiple elements loaded per thread in the
+//		parallel scan in register.
+// reloadParallel = true: reload the multiple elements per thread in the 
+//		parallel scan to reduce register pressure.
 template<int NumThreads, int NumBits, int ValuesPerThread>
-DEVICE2 void MultiScanCounters(uint tid, const uint* digits, 
-	volatile uint* scratch_shared, uint* scatter) {
-
-	const int NumRakingThreads = NumThreads;
-	const int NumDigits = 1<< NumBits;
-
-	// Pack two counters per uint (16-bit packing).
-	const int NumCounters = NumDigits / 2;
-	const int TotalCounters = NumThreads * NumCounters;
+DEVICE2 void MultiScanCounters(uint tid, const uint* keys, uint bit, 
+	volatile uint* scratch_shared, uint* scatter, bool recalcCounts,
+	bool recalcDigits, bool reloadParallel) {
 
 	// Evenly divide the TotalCounters counters over all raking threads..
 	// However add 1 to make SegLen relatively prime to the number of banks to
@@ -115,18 +153,18 @@ DEVICE2 void MultiScanCounters(uint tid, const uint* digits,
 	// generate 2048 digit counters (for NumBits = 5), but they are scanned with
 	// sequential scans and just a single simple intra-warp parallel scan.
 
-	const int SegLen = TotalCounters / NumRakingThreads + 1;
-	const int NumScanValues = NumRakingThreads * SegLen;
-
-	const int NumRedValues = NumRakingThreads / WARP_SIZE;
-	const int TotalRedValues = WARP_SIZE * NumRedValues;
+	typedef MultiscanParams<NumThreads, NumBits> Params;
+	const int NumDigits = 1<< NumBits;
+	const int NumCounters = NumDigits / 2;
+	const int NumScanValues = Params::NumScanValues;
+	const int NumRedValues = Params::NumRedValues;
+	const int SegLen = Params::SegLen;
 
 	uint warp = tid / WARP_SIZE;
 
 	volatile uint* counters_shared = scratch_shared;
 	volatile uint* reduction_shared = scratch_shared + NumScanValues;
-	volatile uint* scan_shared = reduction_shared + 
-		(TotalRedValues + TotalRedValues / WARP_SIZE);
+	volatile uint* scan_shared = reduction_shared + Params::RedFootprint;
 
 	// Clear the counters.
 	#pragma unroll
@@ -134,17 +172,22 @@ DEVICE2 void MultiScanCounters(uint tid, const uint* digits,
 		counters_shared[i * NumThreads + tid] = 0;
 
 	// Clear the padding counters at the end.
-	scratch_shared[SegLen * NumRakingThreads - NumThreads + tid] = 0;
+	scratch_shared[SegLen * NumThreads - NumThreads + tid] = 0;
+
 
 	// Compute the digit counts and save the thread-local scan per digit.
 	// NOTE: may need to bfi into localScan to fight register pressure.
 	// Shift and add in a 4 for each digit occurence to eliminate some pointer
 	// arithmetic due to Fermi not having a mov/lea-like 4 * mul in STS/LDS.
+	uint digits[ValuesPerThread];
 	uint localScan[ValuesPerThread];
 	#pragma unroll
-	for(int v = 0; v < ValuesPerThread; ++v)
+	for(int v = 0; v < ValuesPerThread; ++v) {
+		digits[v] = bfe(keys[v], bit, NumBits);
+		uint shift;
 		localScan[v] = IncPackedCounter<NumDigits, NumThreads>(digits[v], tid,
-			counters_shared, 16, true, 4);
+			counters_shared, 16, true, 4, shift);
+	}
 	__syncthreads();
 
 	// Add up all the packed counters in this segment. We would prefer to load
@@ -193,12 +236,18 @@ DEVICE2 void MultiScanCounters(uint tid, const uint* digits,
 		x += scan_shared[WARP_SIZE + WARP_SIZE / 2 - 1]<< 16;
 
 		// Subtract out the threadVals to get an exclusive scan and store.
-		#pragma unroll
-		for(int i = NumRedValues - 1; i >= 0; --i) {
-			x -= threadVals[i];
-			reduction_shared[index + i] = x;
-		//	x -= reduction_shared[index + i];
-		//	reduction_shared[index + i] = x;
+		if(reloadParallel) {
+			#pragma unroll
+			for(int i = NumRedValues - 1; i >= 0; --i) {
+				x -= reduction_shared[index + i];
+				reduction_shared[index + i] = x;
+			}
+		} else {
+			#pragma unroll
+			for(int i = NumRedValues - 1; i >= 0; --i) {
+				x -= threadVals[i];
+				reduction_shared[index + i] = x;
+			}
 		}
 	}
 	__syncthreads();
@@ -215,17 +264,44 @@ DEVICE2 void MultiScanCounters(uint tid, const uint* digits,
 	__syncthreads();
 
 	// Gather the scanned offsets for each digit and add in the local offsets
-	// saved in localScan.
-	#pragma unroll
-	for(int v = 0; v < ValuesPerThread; ++v) {
-		uint shift;
-		uint digitScan = GatherPackedCounter<NumDigits, NumThreads>(digits[v],
-			tid, counters_shared, 16, true, shift);
+	// saved in localScan. We'd rather make this switch inside the loop, but
+	// the open64 compiler gives "Advisory: Loop was not unrolled, unexpected 
+	// control flow construct" warnings.
+	if(recalcCounts) {
+		#pragma unroll
+		for(int v = 0; v < ValuesPerThread; ++v) {
+			if(recalcDigits) digits[v] = bfe(keys[v], bit, NumBits);
+				
+			uint shift;
+			uint offset = IncPackedCounter<NumDigits, NumThreads>(digits[v], 
+				tid, counters_shared, 16, true, 4, shift);
 
-		scatter[v] = bfe(localScan[v] + digitScan, shift, 16);
+			scatter[v] = bfe(offset, shift, 16);
+		}
+	} else {
+		#pragma unroll
+		for(int v = 0; v < ValuesPerThread; ++v) {
+			if(recalcDigits) digits[v] = bfe(keys[v], bit, NumBits);
+				
+			uint shift;
+			uint offset = GatherPackedCounter<NumDigits, NumThreads>(
+				digits[v], tid, counters_shared, 16, true, shift);
+
+			scatter[v] = bfe(localScan[v] + offset, shift, 16);
+		}
 	}
+
 	__syncthreads();
 }
 
 
+////////////////////////////////////////////////////////////////////////////////
+//
 
+
+template<int NumThreads, int NumBits, int ValuesPerThread>
+DEVICE2 void LocalSort(uint tid, uint* keys, uint bit, 
+	volatile uint* scratch_shared, uint* scatter, bool recalcCounts,
+	bool recalcDigits, bool reloadParallel) {
+
+}

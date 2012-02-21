@@ -11,6 +11,7 @@ struct MgpuTerms {
 	int bitPass;		// Target number of bits per pass (MGPU only).
 						// If bitPass is zero, use the sortArray API.
 	int numThreads;		// Number of threads in the sort block (MGPU only).
+	int valuesPerThread;	// MGPU only.
 	int iterations;	
 	bool reset;			// Update from the input array each iteration.
 	bool earlyExit;

@@ -109,9 +109,9 @@ void Name(const uint* keys_global, uint bit, uint numElements, uint vt,		\
 // CountFuncLoop 
 
 template<int NumBits, int NumThreads, int InnerLoop, int Mode, 
-	bool ScanBlockCounts, bool SingleBlockTask>
+	bool SingleBlockTask>
 DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt, 
-	int taskQuot, int taskRem, int numTasks, uint* counts_global,
+	int taskQuot, int taskRem, int numBlocks, uint* counts_global,
 	uint* totals_global) {
 
 	const int NumDigits = 1<< NumBits;
@@ -151,7 +151,7 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 	} else {
 		// Derive the range for one task per count warp.
 		task = NumWarps * blockIdx.x + warp;
-		blockRange = ComputeTaskRange(task, taskQuot, taskRem, 1, numTasks);
+		blockRange = ComputeTaskRange(task, taskQuot, taskRem, 1, numBlocks);
 	}
 	
 	// Initialize the unpacked digit counters for each lane.
@@ -249,7 +249,6 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 				counts_pass[lane] = scan;
 			}
 		} else if(7 == NumBits) {
-
 			// Run an inclusive scan of the packed digit counts. The values are
 			// already adjacent so we can use the 0 type.
 			uint2 scan = IntraWarpScan64(lane, countPair, warpCounters_shared,
@@ -280,6 +279,8 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 			laneCount3 += countPair.y>> 16;
 		}
 	}
+	
+	uint* totals = totals_global + NumDigits * task;
 
 	if(SingleBlockTask) {
 		////////////////////////////////////////////////////////////////////////
@@ -301,8 +302,8 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 				for(int i = 0; i < NumWarps; ++i)
 					digitTotal += blockCounters_shared[i * WarpMem + tid];
 				
-				uint* totals = totals_global + NumDigits * task;
-				totals[tid] = digitTotal;
+				if(blockRange.x < blockRange.y) 
+					totals[tid] = digitTotal;
 			}
 		} else if(7 == NumBits) {
 			// laneCount0 and laneCount1 are 2 * lane and 2 * lane + 1.
@@ -325,32 +326,46 @@ DEVICE2 void CountFuncLoop(const uint* keys_global, uint bit, uint vt,
 					digitTotal.y += counts.y;
 				}
 
-				uint2* totals = (uint2*)(totals_global + NumDigits * task);
-				totals[tid] = digitTotal;
+				uint2* totals2 = (uint2*)totals;
+			
+				if(blockRange.x < blockRange.y) 
+					totals2[tid] = digitTotal;
 			}
 		}
 
-	} else {
+	} else if(blockRange.x < blockRange.y) {
+		
+		////////////////////////////////////////////////////////////////////////
+		// Store the task's digit counters (digit counters for this warp only)
+		// to global memory for the histogram pass.
+		if(NumBits <= 5) {
+			// laneCount0 is the low part and laneCount1 is the high part.
+			warpCounters_shared[lane] = laneCount0;
+			warpCounters_shared[NumChannels + lane] = laneCount1;
+			if(lane < NumDigits)
+				totals[lane] = warpCounters_shared[lane];
 
-
-
+		} else if(6 == NumBits) {
+			totals[lane] = laneCount0;
+			totals[32 + lane] = laneCount1;
+		} else if(7 == NumBits) {
+			uint2* totals2 = (uint2*)totals;
+			totals2[lane] = make_uint2(laneCount0, laneCount2);
+			totals2[32 + lane] = make_uint2(laneCount1, laneCount3);
+		}
 	}
-
-
-
 }
 
 #define GEN_COUNT_LOOP(Name, NumThreads, NumBits, InnerLoop, Mode,			\
-	ScanBlockCounts, SingleBlockTask, BlocksPerSM)							\
+	SingleBlockTask, BlocksPerSM)											\
 																			\
 extern "C" __global__ __launch_bounds__(NumThreads, BlocksPerSM)			\
 void Name(const uint* keys_global, uint bit, uint vt, int taskQuot,			\
-	int taskRem, int numTasks, uint* counts_global,							\
+	int taskRem, int numBlocks, uint* counts_global,						\
 	uint* totals_global) {													\
 																			\
-	CountFuncLoop<NumBits, NumThreads, InnerLoop, Mode, ScanBlockCounts,	\
-		SingleBlockTask>(													\
-		keys_global, bit, vt, taskQuot, taskRem, numTasks,					\
+	CountFuncLoop<NumBits, NumThreads, InnerLoop, Mode, SingleBlockTask>(	\
+		keys_global, bit, vt, taskQuot, taskRem, numBlocks,					\
 		counts_global, totals_global);										\
 }
 

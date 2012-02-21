@@ -1,14 +1,17 @@
 #pragma once
 
-DEVICE void SortScatter1(uint tid, Values digits, uint numThreads,
-	uint scatter[4], uint* scratch_shared, uint* debug_global) {
+#include "common.cu"
 
-	const int NumValues = VALUES_PER_THREAD * numThreads;
-	const int NumWarps = numThreads / WARP_SIZE;
+template<int NumThreads, int ValuesPerThread>
+DEVICE2 void SortScatter1(uint tid, const uint* keys, uint bit, 
+	volatile uint* scratch_shared, uint* scatter, bool recalcDigits) {
+
+	const int NumValues = NumThreads * ValuesPerThread;
+	const int NumWarps = NumThreads / WARP_SIZE;
 
 	// Allocate 1 int for each thread to store its digit count. These are
 	// strided for fast parallel scan access, so consume 33 values per warp.
-	const int ScanSize = numThreads + NumWarps;
+	const int ScanSize = NumThreads + NumWarps;
 	volatile uint* predInc_shared = (volatile uint*)scratch_shared;
 
 	// In the tid < WARP_SIZE part, do a sequential scan with NumWarps elements
@@ -21,14 +24,17 @@ DEVICE void SortScatter1(uint tid, Values digits, uint numThreads,
 	// const int ParallelScanSize = WARP_SIZE + 16;
 	volatile uint* parallelScan_shared = predInc_shared + ScanSize + 16;
 
-
 	uint warp = tid / WARP_SIZE;
 
 	// Compute the number of set bits.
 	uint predInc = 0;
+
+	uint digits[ValuesPerThread];
 	#pragma unroll
-	for(int v = 0; v < VALUES_PER_THREAD; ++v)
+	for(int v = 0; v < ValuesPerThread; ++v) {
+		digits[v] = bfe(keys[v], bit, 1);
 		predInc += digits[v];
+	}
 
 	// Reserve space for the scan, with each warp distanced out 33 elements to 
 	// avoid bank conflicts.
@@ -104,28 +110,22 @@ DEVICE void SortScatter1(uint tid, Values digits, uint numThreads,
 	// Before this thread, there are setExc encountered set bits. This implies
 	// that all the other values in the preceding threads are cleared bits. This
 	// count is the offset for the first cleared bit key in this thread.
-	uint exc0 = VALUES_PER_THREAD * tid - setExc;
+	uint exc0 = 4 * (ValuesPerThread * tid - setExc);
 
 	// The offset for the first set bit key in this thread comes after all the
 	// cleared bit keys in the entire block (NUM_VALUES - setTotal) plus the
 	// number of preceding set bits.
-	uint exc1 = NumValues - setTotal + setExc;
+	uint exc1 = 4 * (NumValues - setTotal + setExc);
 
 	// Pack exc0 into the low short and exc1 into the high short.
 	uint next = bfi(exc0, exc1, 16, 16);
 
 	#pragma unroll
-	for(int v = 0; v < VALUES_PER_THREAD / 2; ++v) {
-		uint b = 16 * digits[2 * v];
-		uint offset1 = bfe(next, b, 16);
-		next = shl_add(1, b, next);
-
-		b = 16 * digits[2 * v + 1];
-		uint offset2 = bfe(next, b, 16);
-		next = shl_add(1, b, next);
-
-		// Pack offset1 and offset2 together and store in scatter.
-		scatter[v] = bfi(offset1, offset2, 16, 16);
+	for(int v = 0; v < ValuesPerThread; ++v) {
+		if(recalcDigits) digits[v] = bfe(keys[v], bit, 1);
+		uint b = 16 * digits[v];
+		uint offset = bfe(next, b, 16);
+		next = shl_add(4, b, next);
+		scatter[v] = offset;
 	}
 }
-

@@ -13,6 +13,8 @@ const int NumCountWarps = NumCountThreads / WARP_SIZE;
 
 const int NumHistThreads = 1024;
 
+const int NumDownsweepThreads = 128;
+
 void EasyRadixSort(int numBits, const std::vector<uint>& source,
 	std::vector<uint>& dest) {
 		
@@ -34,11 +36,11 @@ void EasyRadixSort(int numBits, const std::vector<uint>& source,
 	}
 
 	for(int i(0); i < count; ++i) {
-		uint x = source[i];
-		int offset = scan[Mask & x]++;
+		uint x = source[i];int offset = scan[Mask & x]++;
 		dest[offset] = x;
 	}
 }
+
 
 
 bool TestSort(CuContext* context, int numBits, int numBlocks, 
@@ -46,15 +48,42 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 
 	const int NumValues = numSortThreads * valuesPerThread;
 	const int NumDigits = 1<< numBits;
+	const int NumChannels = NumDigits / 2;
 
-	ModulePtr sortModule;
+	int numElements = NumValues * numBlocks;
+
+	printf("Loading %d kernels.\n", numBits);
+
+	ModulePtr countModule, histModule, downsweepModule, sortModule;
+	FunctionPtr countFunc, histFunc, downsweepFunc, sortFunc;
+
 	CUresult result = context->LoadModuleFilename(
+		"../../src/cubin/count.cubin", &countModule);
+	
+	result = context->LoadModuleFilename(
+		"../../src/cubin/sorthist.cubin", &histModule);
+
+	result = context->LoadModuleFilename(
 		"../../src/cubin/sort2.cubin", &sortModule);
 
+	result = context->LoadModuleFilename(
+		"../../src/cubin/sortdownsweep.cubin", &downsweepModule);
+
 	char funcName[128];
-	sprintf(funcName, "MultiScan%d_%d_%d", numBits, valuesPerThread,
+	sprintf(funcName, "CountBucketsLoop_%d", numBits);
+	result = countModule->GetFunction(funcName, 
+		make_int3(NumCountThreads, 1, 1), &countFunc);
+
+	sprintf(funcName, "SortHist_%d", numBits);
+	result = histModule->GetFunction(funcName,
+		make_int3(1024, 1, 1), &histFunc);
+
+	sprintf(funcName, "SortDownsweep_%d", numBits);
+	result = downsweepModule->GetFunction(funcName, 
+		make_int3(NumDownsweepThreads, 1, 1), &downsweepFunc);
+
+	sprintf(funcName, "RadixSort_%d_%d_%d", numBits, valuesPerThread,
 		numSortThreads);
-	FunctionPtr sortFunc;
 	result = sortModule->GetFunction(funcName,
 		make_int3(numSortThreads, 1, 1), &sortFunc);
 
@@ -68,31 +97,132 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 
 	std::tr1::uniform_int<uint> r(0, NumDigits - 1);
 
-	std::vector<uint> counts(NumDigits);
-	std::vector<uint> host(NumValues);
+	std::vector<uint> counts(NumDigits * numBlocks);
+	std::vector<uint> host(NumValues * numBlocks);
 
-	for(int i(0); i < NumValues; ++i) {
-		host[i] = r(mt19937);
-		++counts[host[i]];
+	for(int b(0); b < numBlocks; ++b) {
+		uint index = b * NumValues;
+		for(int i(index); i < index + NumValues; ++i) {
+			host[i] = r(mt19937);
+			++counts[b * NumDigits + host[i]];
+		}
 	}
 
+	
 	std::vector<uint> digitScan(NumDigits);
 	int last = 0;
+
 	for(int i(0); i < NumDigits; ++i) {
 		digitScan[i] = last;
-		last += digitScan[i];
+		for(int b(0); b < numBlocks; ++b) {
+			last += counts[i + b * NumDigits];
+		}
 	}
 
-	DeviceMemPtr deviceSource, deviceScatter;
+	DeviceMemPtr deviceSource;
 	result = context->MemAlloc(host, &deviceSource);
-	result = context->MemAlloc<uint>(NumValues, &deviceScatter);
 
 	size_t offset;
 	result = cuTexRefSetAddress(&offset, keys_texture_in, deviceSource->Handle(),
 		4 * NumValues);
 
+
+	////////////////////////////////////////////////////////////////////////////
+	// Generate counts.
+
+	printf("Generating %d counts.\n", numBits);
+
+	int numSMs = context->Device()->NumSMs();
+	int numTasks = std::min(countFunc->BlocksPerSM() * numSMs, numBlocks);
+	int numCountBlocks = DivUp(numTasks, NumCountThreads / WarpSize);
+
+	div_t d = div(numBlocks, numTasks);
+
+	DeviceMemPtr deviceCounts, deviceTaskOffsets;
+	result = context->MemAlloc<uint>(numBlocks * NumChannels, &deviceCounts);
+	result = context->MemAlloc<uint>(numTasks * NumDigits, &deviceTaskOffsets);
+
 	CuCallStack callStack;
-	callStack.Push(deviceSource, 0, deviceScatter);
+	callStack.Push(deviceSource, 0, NumValues / WARP_SIZE, d.quot, d.rem,
+		numBlocks, deviceCounts, deviceTaskOffsets);
+	result = countFunc->Launch(numCountBlocks, 1, callStack);
+
+	std::vector<uint> countsHost, taskOffsetsHost;
+	deviceCounts->ToHost(countsHost);
+	deviceTaskOffsets->ToHost(taskOffsetsHost);
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// Run the histogram pass.
+
+	printf("Generating %d hist.\n", numBits);
+
+	
+	DeviceMemPtr totalScan;
+	result = context->MemAlloc<uint>(NumDigits, &totalScan);
+
+	callStack.Reset();
+	callStack.Push(deviceTaskOffsets, numTasks, totalScan);
+	histFunc->Launch(1, 1, callStack);
+
+	std::vector<uint> taskOffsetsHost2;
+	deviceTaskOffsets->ToHost(taskOffsetsHost2);
+
+	std::vector<uint> totalScanHost;
+	totalScan->ToHost(totalScanHost);
+
+	////////////////////////////////////////////////////////////////////////////
+	// Run the downsweep pass.
+
+	printf("Generating %d downsweep.\n", numBits);
+
+	DeviceMemPtr deviceGlobalScan;
+	result = context->MemAlloc<uint>(numBlocks * NumDigits, &deviceGlobalScan);
+
+	const int ColumnWidth = std::min(WarpSize, NumDigits);
+	const int NumColumns = NumDownsweepThreads / ColumnWidth;
+	const int numDownsweepBlocks = DivUp(numTasks, NumColumns);
+
+	callStack.Reset();
+	callStack.Push(deviceTaskOffsets, d.quot, d.rem, numBlocks, NumValues, 
+		deviceCounts, deviceGlobalScan);
+	downsweepFunc->Launch(numDownsweepBlocks, 1, callStack);
+
+	std::vector<uint> globalScanHost;
+	deviceGlobalScan->ToHost(globalScanHost);
+
+
+	////////////////////////////////////////////////////////////////////////////
+	// Run the sort pass
+
+	printf("Generating %d sort.\n", numBits);
+
+	DeviceMemPtr sortedDevice;
+	result = context->MemAlloc<uint>(numElements, &sortedDevice);
+	
+	result = cuTexRefSetAddress(&offset, keys_texture_in,
+		deviceSource->Handle(), 4 * numElements);
+
+	callStack.Reset();
+	callStack.Push(deviceSource, deviceGlobalScan, 0, sortedDevice);
+
+	result = sortFunc->Launch(numBlocks, 1, callStack);
+
+	std::vector<uint> sortedHost;
+	sortedDevice->ToHost(sortedHost);
+
+
+
+
+
+
+	int i = 0;
+
+/*
+
+
+
+
 
 	sortFunc->Launch(1, 1, callStack);
 
@@ -332,11 +462,79 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 			exit(0);
 		}
 	}
-
-	return 0;	*/
+*/
+	return 0;	
 }
 
 int main(int argc,  char** argv) {
+/*
+	int valuesPerThread = 24;
+	int numValues = valuesPerThread * WarpSize;
+	std::vector<uint> shared(numValues + numValues / 8);
+
+	std::vector<uint> banks(valuesPerThread);
+	
+	for(int i(0); i < numValues; ++i) {
+		shared[i + i / 8] = i;
+	}
+
+	for(int tid(0); tid < 32; ++tid) {
+		printf("tid = %2d:\n", tid);
+
+		int index = valuesPerThread * tid;
+		index += index / 8;
+
+		for(int v(0); v < 8; ++v) {
+			int x = shared[index];
+			int bank = index % 32;
+			banks[v] |= 1<< bank;
+			printf("\t%3d (%2d)\n", x, bank);
+			++index;
+		}
+
+		++index;
+		for(int v(0); v < 8; ++v) {
+			int x = shared[index];
+			int bank = index % 32;
+			banks[8 + v] |= 1<< bank;
+			printf("\t%3d (%2d)\n", x, bank);
+			++index;
+		}
+
+		++index;
+		for(int v(0); v < 8; ++v) {
+			int x = shared[index];
+			int bank = index % 32;
+			banks[16 + v] |= 1<< bank;
+			printf("\t%3d (%2d)\n", x, bank);
+			++index;
+		}
+
+	}
+	for(int tid(0); tid < 32; ++tid) {
+		int index = valuesPerThread * tid;
+		int index2 = index + index / 8;
+		int bank = index2 % 32;
+		printf("%2d: %3d %3d %2d\n", tid, index, index2, bank);		
+	}
+	return 0;
+*/
+
+
+
+
+
+
+	for(int i(0); i < 35; ++i) {
+		printf("%d %d\n", i, RoundUp(i, 13));
+
+	}
+
+
+
+
+
+
 
 	cuInit(0);
 
@@ -346,8 +544,8 @@ int main(int argc,  char** argv) {
 	ContextPtr context;
 	result = CreateCuContext(device, 0, &context);
 
-	for(int numBits = 5; numBits <= 5; ++numBits) {
-		TestSort(context, numBits, 1, 64, 16);
+	for(int numBits = 1; numBits <= 7; ++numBits) {
+		TestSort(context, numBits, 150, 64, 24);
 	}
 
 }

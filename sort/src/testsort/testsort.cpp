@@ -8,6 +8,8 @@
 
 const int MaxCUDPPElements = 65535 * 512;
 
+const int MaxBlockSize = 3072;
+
 
 // Need to sort fewer elements as the number of values increases, to fit
 // everything in video memory.
@@ -141,6 +143,7 @@ struct BenchmarkTerms {
 	int numBits;
 	int bitPass;
 	int numThreads;
+	int valuesPerThread;
 	int valueCount;
 	int numIterations;
 	int numTests;
@@ -150,7 +153,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 	Throughput& cudpp) {
 
 	// Run both MGPU and B40C sorts, and compare against each other.
-	int capacity = RoundUp(terms.count, 2048);
+	int capacity = RoundUp(terms.count, MaxBlockSize);
 
 	std::vector<uint> keysHost(terms.count), valuesHost[6];
 	DeviceMemPtr keysDevice, valuesDevice[6], 
@@ -163,6 +166,7 @@ bool Benchmark(BenchmarkTerms& terms, Throughput& mgpu, Throughput& b40c,
 	mgpuTerms.valueCount = terms.valueCount;
 	mgpuTerms.count = terms.count;
 	mgpuTerms.numThreads = terms.numThreads;
+	mgpuTerms.valuesPerThread = terms.valuesPerThread;
 	mgpuTerms.bitPass = terms.bitPass;
 
 	B40cTerms b40cTerms = { 0 };
@@ -386,41 +390,44 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 	const char* tableSuffix) {
 
 	for(int valueCount(0); valueCount <= 0; ++valueCount) {
-		for(int numThreads(128); numThreads <= 128; numThreads *= 2) {
+		for(int numThreads(64); numThreads <= 128; numThreads *= 2) {
+			for(int vt(16); vt <= 24; vt += 8) {
 			
-			// Formulate a table name like sort_128_8_key_simple_table
-			printf("sortloop_%d_8_", numThreads);
-			switch(valueCount) {
-				case -1: printf("index_"); break;
-				case 0: printf("key_"); break;
-				case 1: printf("single_"); break;
-				default: printf("multi_%d_", valueCount); break;
-			}
-			// Only benchmark simple storage for now
-			printf("simple_");
+				// Formulate a table name like sort_128_8_key_simple_table
+				printf("sort_%d_%d_", numThreads, vt);
+				switch(valueCount) {
+					case -1: printf("index_"); break;
+					case 0: printf("key_"); break;
+					case 1: printf("single_"); break;
+					default: printf("multi_%d_", valueCount); break;
+				}
+				// Only benchmark simple storage for now
+				printf("simple_");
 
-			printf("%s\n", tableSuffix);
+				printf("%s\n", tableSuffix);
 
-			for(int bitPass(1); bitPass <= 6; ++bitPass) {
-				BenchmarkTerms terms;
-				terms.context = context;
-				terms.engine = engine;
-				terms.cudppHandle = 0;
-				terms.count = testSizes[abs(valueCount)];
-				terms.numBits = (32 % bitPass) ? (32 - (32 % bitPass)) : 32;
-				terms.bitPass = bitPass;
-				terms.numThreads = numThreads;
-				terms.valueCount = valueCount;
-				terms.numIterations = numIterations;
-				terms.numTests = numTests;
+				for(int bitPass(1); bitPass <= 7; ++bitPass) {
+					BenchmarkTerms terms;
+					terms.context = context;
+					terms.engine = engine;
+					terms.cudppHandle = 0;
+					terms.count = testSizes[abs(valueCount)];
+					terms.numBits = (32 % bitPass) ? (32 - (32 % bitPass)) : 32;
+					terms.bitPass = bitPass;
+					terms.numThreads = numThreads;
+					terms.valuesPerThread = vt;
+					terms.valueCount = valueCount;
+					terms.numIterations = numIterations;
+					terms.numTests = numTests;
 
-				Throughput mgpu = { 0 }, b40c = { 0 }, cudpp = { 0 };
-				bool success = Benchmark(terms, mgpu, b40c, cudpp);
-				if(!success) return false;
+					Throughput mgpu = { 0 }, b40c = { 0 }, cudpp = { 0 };
+					bool success = Benchmark(terms, mgpu, b40c, cudpp);
+					if(!success) return false;
 
-				printf("%d bits:%8.2lf, %7.2lf M/s\n", bitPass,
-					mgpu.elementsPerSec / 1.0e6,
-					mgpu.normElementsPerSec / 1.0e6);
+					printf("%d bits:%8.2lf, %7.2lf M/s\n", bitPass,
+						mgpu.elementsPerSec / 1.0e6,
+						mgpu.normElementsPerSec / 1.0e6);
+				}
 			}
 		}
 	}
@@ -429,6 +436,7 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 
 void BenchmarkBitPassLarge(CuContext* context, sortEngine_t engine) {
 	const int LargePass[7] = {
+		// 35000000,
 		35000000,
 		27000000,
 		16000000,
@@ -437,7 +445,7 @@ void BenchmarkBitPassLarge(CuContext* context, sortEngine_t engine) {
 		8000000,
 		7000000
 	};
-	BenchmarkBitPass(context, engine, LargePass, 8, 4, "large");
+	BenchmarkBitPass(context, engine, LargePass, 16, 5, "large");
 }
 
 void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
@@ -458,13 +466,6 @@ void BenchmarkBitPassSmall(CuContext* context, sortEngine_t engine) {
 
 int main(int argc, char** argv) {
 
-	for(int tid(0); tid < 64; ++tid) {
-		int index = 17 * tid;
-		int bank = index % 32;
-		printf("%2d %3d %2d\n", tid, index, bank);
-	}
-	return 0;
-
 	cuInit(0);
 	
 	DevicePtr device;
@@ -483,8 +484,8 @@ int main(int argc, char** argv) {
 			sortStatusString(status));
 		return 0;
 	}
-	ComparisonBenchmark(context, engine, cudppHandle);
-//	BenchmarkBitPassLarge(context, engine);
+//	ComparisonBenchmark(context, engine, cudppHandle);
+	BenchmarkBitPassLarge(context, engine);
 //	BenchmarkBitPassSmall(context, engine);
 	sortReleaseEngine(engine);
 	return 0;

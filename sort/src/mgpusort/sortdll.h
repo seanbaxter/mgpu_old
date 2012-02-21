@@ -16,6 +16,11 @@ struct sortEngine_d : public CuBase {
 		FunctionPtr func[MAX_BITS];
 	};
 
+	struct DownsweepKernel {
+		ModulePtr module;
+		FunctionPtr func[MAX_BITS];
+	};
+
 	// Sort kernels have a large number of permutations. Load these on demand 
 	// after encountering a sort request.
 	struct SortKernel {
@@ -38,14 +43,17 @@ struct sortEngine_d : public CuBase {
 	int restoreSourceSize;
 	int restoreTargetOffset;
 
+	// 2 bytes per digit per sort block.
+	DeviceMemPtr countBuffer;
+
 	// 4 bytes per digit per task.
 	DeviceMemPtr taskOffsets;
 
-	// 4 bytes for each digit.
+	// 4 bytes per digit.
 	DeviceMemPtr digitTotalsScan;
 
-	// 2 bytes per digit per sort block.
-	DeviceMemPtr countBuffer;
+	// 4 bytes per digit per sort block.
+	DeviceMemPtr scatterOffsets;
 
 	// As particular kernels are required, load the modules and functions and
 	// keep them here.
@@ -53,19 +61,22 @@ struct sortEngine_d : public CuBase {
 	
 	std::auto_ptr<HistKernel> hist;
 
-	// The outer index is the block size - 128 or 256 threads.
-	// The inner index is the value behavior of the sort kernel:
+	std::auto_ptr<DownsweepKernel> downsweep;
+
+	// Index 0: block size - 64 or 128 threads.
+	// Index 1: values per thread - 16 or 24.
+	// Index 2: value counts.
 	//		0 - sort keys only
 	//		1 - sort keys and emit indices (for first pass)
 	//		2 - sort keys and single values
 	//		3 - sort keys and multiple values
-	std::auto_ptr<SortKernel> sort[2][4];
+	std::auto_ptr<SortKernel> sort[2][2][4];
 };
 
 typedef intrusive_ptr2<sortEngine_d> EnginePtr;
 
 struct SortTable { 
-	char pass[6]; 
+	char pass[7]; 
 	int numSortThreads;
 	int valuesPerThread;
 	bool useTransList;
