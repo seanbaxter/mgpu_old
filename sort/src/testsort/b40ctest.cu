@@ -1,6 +1,6 @@
 #include "benchmark.h"
-#include "../b40c/b40c/util/ping_pong_storage.cuh"
-#include "../b40c/b40c/radix_sort/enactor.cuh"
+#include "../B40C/b40c/util/ping_pong_storage.cuh"
+#include "../B40C/b40c/radix_sort/enactor.cuh"
 
 
 ////////////////////////////////////////////////////////////////////////////////

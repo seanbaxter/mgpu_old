@@ -89,12 +89,12 @@ DEVICE2 void SortFunc(const uint* keys_global_in,
 			__syncthreads();
 		}
 
-		// Load and scatter to global memory.
+		// Load and scatter to global memory
+		keys_global_out += tid;
 		#pragma unroll
 		for(int v = 0; v < ValuesPerThread; ++v) {
 			uint digit = bfe(keys[v], bit, NumBits);
-
-			uint index = 4 * (NumThreads * v + tid);
+			uint index = 4 * NumThreads * v;
 			uint scatter = ExtraScatterArray ? globalScatter_shared[digit] : 
 				scratch_shared[digit];
 

@@ -20,9 +20,6 @@
 #define NUM_THREADS (NUM_WARPS * WARP_SIZE)
 #endif
 
-#ifndef NO_VIDEO_INSTRUCTIONS
-#define USE_VIDEO_INSTRUCTIONS
-#endif
 
 #include <device_functions.h>
 #include <vector_functions.h>
@@ -40,7 +37,11 @@ typedef unsigned __int64 uint64;
 // retrieve numBits bits from x starting at bit
 DEVICE uint bfe(uint x, uint bit, uint numBits) {
 	uint ret;
+#if __CUDA_ARCH__ >= 200
 	asm("bfe.u32 %0, %1, %2, %3;" : "=r"(ret) : "r"(x), "r"(bit), "r"(numBits));
+#else
+	ret = ((1<< numBits) - 1) & (x>> bit);
+#endif
 	return ret;
 }
 
@@ -48,8 +49,14 @@ DEVICE uint bfe(uint x, uint bit, uint numBits) {
 // insert the first numBits of y into x starting at bit
 DEVICE uint bfi(uint x, uint y, uint bit, uint numBits) {
 	uint ret;
+#if __CUDA_ARCH__ >= 200
 	asm("bfi.b32 %0, %1, %2, %3, %4;" : 
 		"=r"(ret) : "r"(y), "r"(x), "r"(bit), "r"(numBits));
+#else
+	uint mask = ((1<< numBits) - 1)<< bit;
+	ret = x & ~mask;
+	ret |= mask & (y<< bit);
+#endif
 	return ret;
 }
 
@@ -62,14 +69,14 @@ DEVICE uint prmt(uint a, uint b, uint index) {
 }
 
 DEVICE2 uint shl_add(uint a, uint b, uint c) {
-#ifdef USE_VIDEO_INSTRUCTIONS
 	uint ret;
+#if __CUDA_ARCH__ >= 200
 	asm("vshl.u32.u32.u32.clamp.add %0, %1, %2, %3;" :
 		"=r"(ret) : "r"(a), "r"(b), "r"(c));
-	return ret;
 #else
-	return (a<< b) + c;
+	ret = (a<< b) + c;
 #endif
+	return ret;
 }
 
 DEVICE2 uint64 shl_add(uint a, uint b, uint64 c) {
@@ -83,37 +90,37 @@ DEVICE uint shl_add_c(uint a, uint b, uint c) {
 }
 
 DEVICE uint shr_add(uint a, uint b, uint c) {
-#ifdef USE_VIDEO_INSTRUCTIONS
 	uint ret;
+#if __CUDA_ARCH__ >= 200
 	asm("vshr.u32.u32.u32.clamp.add %0, %1, %2, %3;" : 
 		"=r"(ret) : "r"(a), "r"(b), "r"(c));
-	return ret;
 #else
-	return (a>> b) + c;
+	ret = (a>> b) + c;
 #endif
+	return ret;
 }
 
 DEVICE uint mul_add(uint a, uint b, uint c) {
-#ifdef USE_VIDEO_INSTRUCTIONS
 	uint ret;
+#if __CUDA_ARCH__ >= 200
 	asm("vmad.u32.u32.u32 %0, %1, %2, %3;" : 
 		"=r"(ret) : "r"(a), "r"(b), "r"(c));
-	return ret;
 #else
-	return (a * b) + c;
+	ret = (a * b) + c;
 #endif
+	return ret;
 }
 
-DEVICE uint imad(uint a, uint b, uint c) {
-#ifdef USE_VIDEO_INSTRUCTIONS
+DEVICE uint add3(uint a, uint b, uint c) {
 	uint ret;
-	asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(ret) : "r"(a), "r"(b), "r"(c));
-	return ret;
+#if __CUDA_ARCH__ >= 200
+	asm("vadd.u32.u32.u32.add %0, %1, %2, %3;" :
+		"=r"(ret) : "r"(a), "r"(b), "r"(c));
 #else
-	return a * b + c;
+	ret = a + b + c;
 #endif
+	return ret;
 }
-
 
 DEVICE uint GetByte(uint a, uint i) {
 	return prmt(a, 0, 0x4440 + i);

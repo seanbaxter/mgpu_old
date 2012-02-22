@@ -65,8 +65,7 @@ DEVICE2 uint IncPackedCounter(uint digit, uint tid,
 	volatile uint* p = PackedCounterRef<NumDigits, NumThreads>(digit, tid,
 		counters_shared, counterSize, strided, shift);
 	uint counter = *p;
-	*p = counter + (value<< shift);
-
+	*p = shl_add(value, shift, counter);
 	return counter;
 }
 
@@ -194,11 +193,22 @@ DEVICE2 void MultiScanCounters(uint tid, const uint* keys, uint bit,
 	// them once and create an exclusive sequential scan in register array, but
 	// there aren't enough registers to allow this. Instead, we load them a 
 	// second time after the parallel scan and do the running sum.
-	uint x = 0;
 	volatile uint* seg_shared = scratch_shared + SegLen * tid;
+/*	uint x = 0;
 	#pragma unroll
 	for(int i = 0; i < SegLen; ++i)
 		x += seg_shared[i];
+	*/
+	uint x = seg_shared[0];
+	if(2 == SegLen) x += seg_shared[1];
+	else {
+		#pragma unroll
+		for(int i = 1; i < SegLen; i += 2) {
+			uint a = seg_shared[i];
+			uint b = seg_shared[i + 1];
+			x = add3(x, a, b);
+		}
+	}
 
 	// Store the counters with stride.
 	reduction_shared[tid + warp] = x;
