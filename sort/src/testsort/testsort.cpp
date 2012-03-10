@@ -390,7 +390,7 @@ bool BenchmarkBitPass(CuContext* context, sortEngine_t engine,
 	const char* tableSuffix) {
 
 	for(int valueCount(0); valueCount <= 0; ++valueCount) {
-		for(int numThreads(64); numThreads <= 128; numThreads *= 2) {
+		for(int numThreads(128); numThreads <= 128; numThreads *= 2) {
 			for(int vt(16); vt <= 24; vt += 8) {
 			
 				// Formulate a table name like sort_128_8_key_simple_table
@@ -490,9 +490,5 @@ int main(int argc, char** argv) {
 	sortReleaseEngine(engine);
 	return 0;
 
-
-
 	cudppDestroy(cudppHandle);
-
-
 }

@@ -5,7 +5,8 @@
 
 const bool LoadKeysTexture = true;
 
-const int MaxBlockSize = 3072;
+// 2 * 3072 is divisible by both 2048 and 3072.
+const int MaxBlockSize = 2 * 3072;
 const int MinBlockSize = 1024;
 
 const int MaxTasks = 20 * 32 * 16;

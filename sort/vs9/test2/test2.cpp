@@ -137,7 +137,7 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 	int numCountBlocks = DivUp(numTasks, NumCountThreads / WarpSize);
 
 	div_t d = div(numBlocks, numTasks);
-
+/*
 	DeviceMemPtr deviceCounts, deviceTaskOffsets;
 	result = context->MemAlloc<uint>(numBlocks * NumChannels, &deviceCounts);
 	result = context->MemAlloc<uint>(numTasks * NumDigits, &deviceTaskOffsets);
@@ -210,6 +210,24 @@ bool TestSort(CuContext* context, int numBits, int numBlocks,
 
 	std::vector<uint> sortedHost;
 	sortedDevice->ToHost(sortedHost);
+*/
+
+	printf("Generating %d sort.\n", numBits);
+
+	DeviceMemPtr sortedDevice;
+	result = context->MemAlloc<uint>(numElements, &sortedDevice);
+	
+	result = cuTexRefSetAddress(&offset, keys_texture_in,
+		deviceSource->Handle(), 4 * numElements);
+
+	callStack.Reset();
+	callStack.Push(deviceSource, deviceGlobalScan, 0, sortedDevice);
+
+	result = sortFunc->Launch(numBlocks, 1, callStack);
+
+	std::vector<uint> sortedHost;
+	sortedDevice->ToHost(sortedHost);
+
 
 
 

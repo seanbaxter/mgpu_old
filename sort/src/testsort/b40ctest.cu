@@ -9,6 +9,7 @@
 template<typename Storage, typename Enactor>
 cudaError_t B40cSortStorage(Storage& s, Enactor& e, int numBits, 
 	int numElements) {
+		
 	const b40c::radix_sort::ProbSizeGenre SIZE = b40c::radix_sort::UNKNOWN_SIZE;
 	switch(numBits) {
 		case 1: return e.template Sort<0, 1, SIZE>(s, numElements);

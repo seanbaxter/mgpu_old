@@ -18,7 +18,7 @@
 	</Platforms>
 	<ToolFiles>
 		<DefaultToolFile
-			FileName="NvCudaRuntimeApi.v4.0.rules"
+			FileName="NvCudaRuntimeApi.rules"
 		/>
 	</ToolFiles>
 	<Configurations>
@@ -37,12 +37,11 @@
 			/>
 			<Tool
 				Name="Cudart Build Rule"
-				NvccPath="$(CUDA_PATH)\bin\nvcc.exe"
-				RequiredIncludes="$(CUDA_PATH)\include"
-				Include="../../src/b40c; ../../src/cudpp2/"
+				NvccPath="$(CUDA_PATH)bin\nvcc.exe"
+				RequiredIncludes="$(CUDA_PATH)include"
+				Include="../../src/b40c"
 				Arch1="20"
 				Arch2="0"
-				HostDebugInfo="true"
 				Optimization="0"
 				Runtime="3"
 			/>
@@ -120,12 +119,6 @@
 			/>
 			<Tool
 				Name="Cudart Build Rule"
-				Include="../../src/b40c; ../../src/cudpp2/"
-				Arch1="20"
-				Arch2="0"
-				HostDebugInfo="true"
-				Optimization="0"
-				Runtime="3"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -203,14 +196,8 @@
 			/>
 			<Tool
 				Name="Cudart Build Rule"
-				AdditionalOptions=""
-				NvccPath="$(CUDA_PATH)\bin\nvcc.exe"
-				RequiredIncludes="$(CUDA_PATH)\include"
-				Include="../../src/b40c"
-				NvccCompilation="0"
-				Arch1="0"
+				Arch1="20"
 				Arch2="0"
-				Arch3="20"
 				ExtraNvccOptions="--open64"
 				Runtime="2"
 			/>
@@ -291,12 +278,6 @@
 			/>
 			<Tool
 				Name="Cudart Build Rule"
-				Include="../../src/b40c"
-				NvccCompilation="0"
-				Arch1="0"
-				Arch2="0"
-				Arch3="20"
-				Runtime="2"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -433,6 +414,22 @@
 		<File
 			RelativePath="..\..\src\testsort\b40ctest.cu"
 			>
+			<FileConfiguration
+				Name="Debug|Win32"
+				>
+				<Tool
+					Name="Cudart Build Rule"
+					Include="..\b40c"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|Win32"
+				>
+				<Tool
+					Name="Cudart Build Rule"
+					Include="../../src/b40c"
+				/>
+			</FileConfiguration>
 		</File>
 		<File
 			RelativePath="..\..\src\cudpp2\radixsort_app.cu"
