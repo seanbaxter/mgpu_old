@@ -1,7 +1,7 @@
 #pragma once
 
 #include "sortscan1.cu"
-#include "sortscan3.cu"
+// #include "sortscan3.cu"
 #include "sortmultiscan.cu"
 
 template<int ValuesPerThread>

@@ -49,10 +49,36 @@ DEVICE uint ComputePrmtCodes(const uint* keys, uint bit, uint2& bucketsPacked,
 	return predInc;
 }
 
+DEVICE void SortScatter3_8(uint4 scanOffsets, uint2 bucketsPacked, 
+	uint2 localOffsets, uint scatter[4]) {
+
+	// use the first 4 buckets (packed into the four nibbles of bucketsPacked.x)
+	// to gather the corresponding offsets from the scan terms
+	uint scan1Low = prmt(scanOffsets.x, scanOffsets.y, bucketsPacked.x);
+	uint scan1High = prmt(scanOffsets.z, scanOffsets.w, bucketsPacked.x);
+
+	// interleave the values together into packed WORDs
+	// add the offsets for each value within the warp to the warp offsets
+	// within the block
+	scatter[0] = prmt(scan1Low, scan1High, 0x5140) + 
+		ExpandUint8Low(localOffsets.x);
+	scatter[1] = prmt(scan1Low, scan1High, 0x7362) + 
+		ExpandUint8High(localOffsets.x);
+
+	// Repeat the above instructions for values 4-7.
+	uint scan2Low = prmt(scanOffsets.x, scanOffsets.y, bucketsPacked.y);
+	uint scan2High = prmt(scanOffsets.z, scanOffsets.w, bucketsPacked.y);
+
+	scatter[2] = prmt(scan2Low, scan2High, 0x5140) +
+		ExpandUint8Low(localOffsets.y);
+	scatter[3] = prmt(scan2Low, scan2High, 0x7362) + 
+		ExpandUint8High(localOffsets.y);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // MultiScan3BitPrmt
-
+/*
 DEVICE uint4 MultiScan3BitPrmt(uint tid, uint2 digitCounts, uint numThreads,
 	uint2& threadOffset, uint* scratch_shared) {
 
@@ -200,7 +226,7 @@ DEVICE uint4 MultiScan3BitPrmt(uint tid, uint2 digitCounts, uint numThreads,
 	
 	return scanOffsets;
 }
-
+*/
 
 ////////////////////////////////////////////////////////////////////////////////
 // Get3BitPrmtScatterOffsets
@@ -208,53 +234,33 @@ DEVICE uint4 MultiScan3BitPrmt(uint tid, uint2 digitCounts, uint numThreads,
 // Compute packed scatter offsets for an array of 8, 16, or 24 keys. Runs just
 // a single multiscan for any of these configurations.
 template<int ValuesPerThread>
-DEVICE2 void Get3BitPrmtScatterOffsets(const uint* keys, uint bit, 
+DEVICE2 void Get3BitPrmtScatterOffsets(uint tid, const uint* keys, uint bit, 
 	uint* scratch_shared, uint* packedScatter) {
 
-	// 
+	const int NumSets = ValuesPerThread / 8;
+	uint2 bucketsPacked[NumSets];
+	uint2 offsetsPacked[NumSets];
 
+	uint2 digitTotals = make_uint2(0, 0);
 
-
-}
-DEVICE uint ComputePrmtCodes(const uint* keys, uint bit, uint2& bucketsPacked, 
-	uint2& offsetsPacked) {
-
-	// predInc is the set of counts of encountered digits.
-	uint predInc = 0;
-
-	#pragma unroll
-	for(int v = 0; v < 8; ++v) {
-		uint digit = bfe(keys[v], bit, 3);
-		uint shift = 4 * digit;
-
-		// Insert the number of already encountered instances of this digit
-		// to offsetsPacked.
-		uint encountered = predInc>> shift;
-
-		if(0 == v) {
-			predInc = 1<< shift;
-			offsetsPacked.x = 0;
-			bucketsPacked.x = digit;
-		} else if(v < 4) {
-			offsetsPacked.x = bfi(offsetsPacked.x, encountered, 8 * v, 4);
-			bucketsPacked.x = bfi(bucketsPacked.x, digit, 4 * v, 4);
-		} else if(4 == v) {
-			offsetsPacked.y = 0x0f & encountered;
-			bucketsPacked.y = digit;
-		} else {
-			offsetsPacked.y = bfi(offsetsPacked.y, encountered, 8 * (v - 4), 4);
-			bucketsPacked.y = bfi(bucketsPacked.y, digit, 4 * (v - 4), 4);
-		}
-		if(v) predInc = shl_add(1, shift, predInc);
+	#pragma unroll 
+	for(int i = 0; i < NumSets; ++i) {
+		uint predInc = ComputePrmtCodes(keys + 8 * i, bit, bucketsPacked,
+			offsetsPacked);
+		uint2 unpacked = Expand8Uint4To8Uint8(predInc);
+		digitTotals.x += unpacked.x;
+		digitTotals.y += unpacked.y;
 	}
 
-	return predInc;
+	uint2 threadOffset;
+	uint4 scanOffsets = MultiScan3BitPrmt(tid, digitTotals, threadOffset, 
+		scratch_shared);
 }
 
 
 
 
-
+/*
 // scanOffsets are packed offsets for the first value of each bucket within the
 // warp. They are split into high and low bytes, and packed like this:
 // (0L, 1L, 2L, 3L), (4L, 5L, 6L, 7L), (0H, 1H, 2H, 3H), (4H, 5H, 6H, 7H).
@@ -284,30 +290,20 @@ DEVICE void SortScatter3_8(uint4 scanOffsets, uint2 bucketsPacked,
 		ExpandUint8Low(localOffsets.y);
 	scatter[3] = prmt(scan2Low, scan2High, 0x7362) + 
 		ExpandUint8High(localOffsets.y);
-}*/
+}
+*/
 
 
-
-/*
-DEVICE uint4 MultiScan3BitPrmt(uint tid, uint2 digitCounts, uint numThreads,
-	uint2& threadOffset, uint* scratch_space) {
-
-
-
-
-
-// TDOO: use a single warp in the reduction. This doubles the sequential
+// TODO: use a single warp in the reduction. This doubles the sequential
 // scan legnth from 4 elements to 8, but slightly simplifies the parallel scan
 // (11 operations) and lets it execute on just one warp rather than 2.
 
 // Should be a net savings of 11 ld/st pairs, at the cost of lower effective
 // occupancy.
 
-
-// MultiScan3_1Warp supports blocks with up to 2048 values.
+// Has two kinds of 
 DEVICE uint4 MultiScan3_1Warp(uint tid, uint2 predInc, uint numThreads, 
-	uint2 bucketsPacked, uint2& offsetsPacked, uint* scratch_shared,
-	uint* debug_global) {
+	uint2& offsetsPacked, uint* scratch_shared, uint* debug_global) {
 
 	const int NumWarps = numThreads / WARP_SIZE;
 
@@ -433,11 +429,11 @@ DEVICE uint4 MultiScan3_1Warp(uint tid, uint2 predInc, uint numThreads,
 	}
 	__syncthreads();
 
-	predInc.x = scan[0];
-	predInc.y = scan[ScanSize];
-
-	offsetsPacked.x += prmt(predInc.x, predInc.y, bucketsPacked.x);
-	offsetsPacked.y += prmt(predInc.x, predInc.y, bucketsPacked.y);
+	// Return the scanned byte-packed counts of digits within the raking scan
+	// segment. These must be extracted by the caller with prmt and added to 
+	// bucketsPacked.
+	offsetsPacked.x = scan[0];
+	offsetsPacked.y = scan[ScanSize];
 
 	uint4 scanOffsets;
 	scan = parallelScan_shared + tid / StreamLen;
@@ -452,6 +448,7 @@ DEVICE uint4 MultiScan3_1Warp(uint tid, uint2 predInc, uint numThreads,
 	return scanOffsets;
 }
 
+/*
 DEVICE uint4 MultiScan3_2Warp(uint tid, uint2 predInc, uint numThreads, 
 	uint2 bucketsPacked, uint2& offsetsPacked, uint* scratch_shared,
 	uint* debug_global) {
