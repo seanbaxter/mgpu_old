@@ -69,6 +69,8 @@ DEVICE uint4 GetRangeBallot64(volatile uint* offsets_shared, uint lane,
 // RangeBinarySearch
 // This function performs a lower_bound or upper_bound within the shared mem
 // range. It closely follows the STL <algorithm> versions of these functions.
+// count is used for debugging and returns the number of iterations executed in
+// this call.
 
 // pass kind = 0 for lower_bound, kind = 1 for upper_bound.
 template<typename T>
@@ -170,18 +172,6 @@ DEVICE uint CombineSearchInterval(uint2 range, uint repeated) {
 	return combined;	
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-
-// Search from 
-template<typename T>
-DEVICE2 uint SharedBinarySearch(T key, uint digit, const uint* ranges_shared,
-	const T* aData, int kind, bool adjust) {
-
-
-
-
-}
 
 
 /*

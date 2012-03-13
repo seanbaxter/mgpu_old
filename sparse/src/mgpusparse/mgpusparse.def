@@ -1,0 +1,15 @@
+LIBRARY	"mgpusparse"
+EXPORTS
+	sparseStatusString
+	sparseCreate
+	sparseInc
+	sparseRelease
+	sparseQuerySupport
+	sparseMatCreate
+	sparseMatDestroy
+	sparseMatEngine
+	sparseMatVecSMul
+	sparseMatVecDMul
+	sparseMatVecCMul
+	sparseMatVecZMul
+	 

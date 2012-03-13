@@ -20,47 +20,7 @@ std::tr1::mt19937 mt19937;
 
 const int NumValues = 1024;
 
-template<typename T, typename Pr = std::less<T> > 
-class Foo {
-public:
-	Foo(const Pr& pred = Pr()) : _pred(pred) { }
-private:
-	const Pr& _pred;
-};
-
-
 int main(int argc, char** argv) {
-	Foo<int> f;
-/*
-	int numThreads = 256;
-	int vt = 4;
-	int warpSize = 32;
-	int numValues = numThreads * vt;
-	
-	int width = 4 * warpSize;
-	int spacing = numValues / width;
-
-	printf("Gather every %dth thread value 0:\n", spacing);
-	for(int i(0); i < width; ++i) {
-		int index = spacing * i + 0;
-		int hash = index + index / warpSize;
-		printf("%d: %d (%d - %d)\n", i, index, hash, hash % warpSize);
-	}
-*/
-
-	for(int tid(0); tid < 32; ++tid) {
-		uint index = tid + 9;
-		uint i2 = index + index / 32;
-		printf("%d: %d %d (%d)\n", tid, index, i2, 31 & i2);
-
-	}
-	return 0;
-
-
-
-
-
-
 	cuInit(0);
 
 	DevicePtr device;

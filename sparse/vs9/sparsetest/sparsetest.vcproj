@@ -34,6 +34,8 @@
 			/>
 			<Tool
 				Name="Cudart Build Rule"
+				NvccPath="$(CUDA_PATH_V4_1)\bin\nvcc.exe"
+				RequiredIncludes="$(CUDA_PATH_V4_1)\include"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -110,6 +112,8 @@
 			/>
 			<Tool
 				Name="Cudart Build Rule"
+				NvccPath="$(CUDA_PATH_V4_1)\bin\nvcc.exe"
+				RequiredIncludes="$(CUDA_PATH_V4_1)\include"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
