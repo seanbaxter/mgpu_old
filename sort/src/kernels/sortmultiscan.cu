@@ -6,12 +6,6 @@
 // strided is false to put digits in order (0, 1), (2, 3), (4, 5), etc.
 // strided is true to put digits in order (0, 16), (1, 17), (2, 18), etc.
 
-template<int X> struct LogPow2Const { 
-	static const int value = LogPow2Const<X / 2>::value + 1;
-};
-template<> struct LogPow2Const<1> { 
-	static const int value = 0;
-};
 
 template<int NumDigits, int NumThreads>
 DEVICE2 volatile uint* PackedCounterRef(uint digit, uint tid, 

@@ -40,6 +40,7 @@
 				NvccPath="$(CUDA_PATH)bin\nvcc.exe"
 				RequiredIncludes="$(CUDA_PATH)include"
 				Include="../../src/b40c"
+				NvccCompilation="0"
 				Arch1="20"
 				Arch2="0"
 				Optimization="0"

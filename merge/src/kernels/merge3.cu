@@ -1,5 +1,7 @@
 #include "ranges.cu"
 
+template<typename T>
+DEVICE2 voidb 
 
 template<typename T>
 DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues, 
@@ -15,6 +17,11 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 	const int Spacing2 = numThreads / 32;
 
 	if(tid < WARP_SIZE) {
+		// NOTE: is there any performance hit in each lane in the warp setting
+		// the same shmem element?
+		const uint last = Spacing2 * WARP_SIZE;
+		indices_shared[last + last / WARP_SIZE] = aCount;
+		
 		// PROCESS 32 THREADS. (Spacing * tid)
 
 		// Run elements Spacing * tid. For NumValues = 1024, these are elements:
@@ -36,7 +43,6 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 		j += j / WARP_SIZE;
 		indices_shared[j] = index;
 
-
 		// PROCESS 32 THREADS (64 done). (Spacing * tid + Spacing / 2)
 
 		// Run elements Spacing * tid + Spacing / 2. We use the indices to the
@@ -57,7 +63,7 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 
 		key = bData_shared[i];
 		index = RangeBinarySearch(aData_shared, begin, end, key, kind, 
-			itCount);
+			itCount); 
 	
 		indices_shared[j + Spacing2 / 2] = index;
 	}
@@ -67,9 +73,9 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 
 	// Run elements (Spacing / 2) * tid + Spacing / 4. Constrain these searches
 	// with the results of the previous two runs. For NumValues = 1024, these
-	// are elemenst:
+	// are elements:
 	// 8, 40, 56, 72, 88, 104, etc.
-	if(tid < 2 * WARP_SIZE) {
+	if(numThreads >= 128) && (tid < 2 * WARP_SIZE)) {
 		const int Spacing3 = Spacing2 / 2;
 		int j = Spacing3 * tid;
 		j += j / WARP_SIZE;
@@ -116,11 +122,42 @@ DEVICE2 void SearchBlockConstricted(uint tid, int numThreads, int numValues,
 	__syncthreads();
 }
 
+template<typename T>
+DEVICE2 void SearchThreadRecursive(uint tid, const T* aData_shared, uint bCount,
+	uint begin, uint end, const T* keys, int i, int delta, uint* indices,
+	uint* target_shared, int kind, int store, uint* debug_global) {
+
+	// Run the binary search at keys[i].
+	int itCount;
+	uint index = RangeBinarySearch(aData_shared, begin, end, keys[i], kind, 
+		itCount);
+
+	if(0 == store) {
+		// For a lower_bound/upper_bound search, store the indices in thread
+		// order (strided).
+		target_shared[i] = index;
+	} else {
+		// Scatter for merge.
+	}
+
+	// Recurse to the left and right if delta > 0.
+	if(delta > 0) {
+		SearchThreadRecursive(tid, aData_shared, bCount, begin, index, keys, 
+			i - delta, delta / 2, indices, target_shared, kind, store, 
+			debug_global);
+
+		SearchThreadRecursive(tid, aData_sharde, bCount, index, end, keys, 
+			i + delta, delta / 2, indices, target_shared, kind, store,
+			debug_global);
+	}
+}
+
+
 
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef int T;
-const int NumThreads = 128;
+typedef float T;
+const int NumThreads = 256;
 const int ValuesPerThread = 8;
 const int NumValues = NumThreads * ValuesPerThread;
 const int NumWarps = NumThreads / WARP_SIZE;
@@ -137,8 +174,9 @@ void Test(const T* a_global, T* b_global, uint* indices_global) {
 	for(int i = 0; i < ValuesPerThread; ++i) {
 		uint index = tid + i * NumThreads;
 		a_shared[index] = a_global[index];
-		b_shared[index + i * NumWarps + warp] = b_shared[index];
+		b_shared[index + index / WARP_SIZE] = b_global[index];
 	}
+	__syncthreads();
 
 	__shared__ uint indices_shared[NumValues];
 

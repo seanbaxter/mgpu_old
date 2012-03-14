@@ -2,7 +2,8 @@
 
 #include "sortscan1.cu"
 // #include "sortscan3.cu"
-#include "sortmultiscan.cu"
+// #include "sortmultiscan.cu"
+#include "sortcompact.cu"
 
 template<int ValuesPerThread>
 struct StridedDenom {

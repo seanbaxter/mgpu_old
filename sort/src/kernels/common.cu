@@ -34,6 +34,14 @@ typedef __int64 int64;
 typedef unsigned __int64 uint64;
 
 
+template<int X> struct LogPow2Const { 
+	static const int value = LogPow2Const<X / 2>::value + 1;
+};
+template<> struct LogPow2Const<1> { 
+	static const int value = 0;
+};
+
+
 // retrieve numBits bits from x starting at bit
 DEVICE uint bfe(uint x, uint bit, uint numBits) {
 	uint ret;

@@ -18,7 +18,20 @@ typedef unsigned __int64 uint64;
 
 std::tr1::mt19937 mt19937;
 
-const int NumValues = 1024;
+const int NumThreads = 256;
+const int ValuesPerThread = 8;
+const int NumValues = NumThreads * ValuesPerThread;
+
+typedef float T;
+
+float Random(float low, float high) {
+	std::tr1::uniform_real<float> r(low, high);
+	return r(mt19937);
+}
+int Random(int low, int high) {
+	std::tr1::uniform_int<int> r(low, high);
+	return r(mt19937);
+}
 
 int main(int argc, char** argv) {
 	cuInit(0);
@@ -33,14 +46,11 @@ int main(int argc, char** argv) {
 	result = context->LoadModuleFilename("../../src/cubin/merge.cubin", &module);
 
 	// Allocate values.
-	std::tr1::uniform_int<int> r1(0, 50);
 	
-	std::tr1::uniform_int<int> r2(10, 100);
-
-	std::vector<int> valuesHostA(NumValues), valuesHostB(NumValues);
+	std::vector<T> valuesHostA(NumValues), valuesHostB(NumValues);
 	for(int i(0); i < NumValues; ++i) {
-		valuesHostA[i] = r1(mt19937);
-		valuesHostB[i] = r2(mt19937);
+		valuesHostA[i] = Random((T)0, (T)100);
+		valuesHostB[i] = Random((T)25, (T)100);
 	}
 	std::sort(valuesHostA.begin(), valuesHostA.end());
 	std::sort(valuesHostB.begin(), valuesHostB.end());
@@ -50,19 +60,20 @@ int main(int argc, char** argv) {
 	result = context->MemAlloc(valuesHostB, &valuesDeviceB);
 
 	DeviceMemPtr indicesDevice;
-	result = context->MemAlloc<int2>(NumValues, &indicesDevice);
+	result = context->MemAlloc<int>(NumValues, &indicesDevice);
 
 	FunctionPtr func;
-	module->GetFunction("SearchBlockInt", make_int3(256, 1, 1), &func);
+	module->GetFunction("Test", make_int3(NumThreads, 1, 1), &func);
 
 	CuCallStack callStack;
-	callStack.Push(valuesDeviceA, make_int2(0, NumValues),
-		valuesDeviceB, make_int2(0, NumValues), indicesDevice);
+	callStack.Push(valuesDeviceA, valuesDeviceB, indicesDevice);
 
 	func->Launch(1, 1, callStack);
 
-	std::vector<int2> indicesHost;
+	std::vector<int> indicesHost;
 	indicesDevice->ToHost(indicesHost);
+
+	int i = 0;
 
 	/*
 	for(int i(0); i < 64; ++i) {
